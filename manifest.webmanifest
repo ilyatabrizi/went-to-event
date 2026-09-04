@@ -1,0 +1,27 @@
+{
+  "name": "Went To Event",
+  "short_name": "Went To Event",
+  "description": "Discover events near you, join in two taps, and keep a record of the good ones.",
+  "id": "/went-to-event/",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "portrait",
+  "background_color": "#0B0A0C",
+  "theme_color": "#0B0A0C",
+  "categories": ["events", "social", "lifestyle"],
+  "icons": [
+    { "src": "assets/icons/favicon_192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "assets/icons/favicon_512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "assets/icons/favicon_512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Discover", "short_name": "Discover", "url": "./?go=discover",
+      "icons": [{ "src": "assets/icons/favicon_192.png", "sizes": "192x192" }] },
+    { "name": "My tickets", "short_name": "Tickets", "url": "./?go=tickets",
+      "icons": [{ "src": "assets/icons/favicon_192.png", "sizes": "192x192" }] },
+    { "name": "Publish an event", "short_name": "Publish", "url": "./?go=create",
+      "icons": [{ "src": "assets/icons/favicon_192.png", "sizes": "192x192" }] }
+  ]
+}

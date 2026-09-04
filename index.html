@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=5">
+<title>Went To Event — discover events near you</title>
+<meta name="description" content="Went To Event — discover events near you, join in two taps, and keep a record of the good ones. Publish your own in four steps.">
+<meta name="theme-color" content="#0B0A0C">
+<meta name="color-scheme" content="dark">
+
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Went To Event">
+<link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
+<link rel="icon" href="assets/icons/favicon_32.png" sizes="32x32">
+<link rel="icon" href="assets/icons/favicon_192.png" sizes="192x192">
+<link rel="shortcut icon" href="assets/icons/favicon.ico">
+
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Went To Event">
+<meta property="og:title" content="Went To Event">
+<meta property="og:description" content="Discover events near you, join in two taps, and keep a record of the good ones.">
+<meta property="og:image" content="assets/icons/e_icon_1024.png">
+<meta name="twitter:card" content="summary_large_image">
+
+<link rel="preconnect" href="https://images.unsplash.com" crossorigin>
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+
+<div id="stage">
+  <div id="device">
+
+    <!-- the ground content scrolls on; chrome floats above it -->
+    <main id="app" tabindex="-1"></main>
+
+    <!-- scroll-edge effect where floating chrome overlaps content -->
+    <div class="edge-top" aria-hidden="true"></div>
+
+    <!-- pushed screens get a translucent bar; tab roots do not -->
+    <header class="topbar" id="topbar"></header>
+
+    <!-- one dock, whichever screen needs it -->
+    <div class="dock" id="dock" hidden></div>
+
+    <nav class="tabbar" id="tabbar" role="tablist" aria-label="Main"></nav>
+
+    <div class="toast-dock" id="toastDock" aria-live="polite" role="status"></div>
+    <div id="sheetRoot"></div>
+
+    <!-- the veil lifts once the first screen has painted -->
+    <div class="boot" id="boot" aria-hidden="true">
+      <div class="boot-mark">
+        <div class="boot-glow"></div>
+        <img src="assets/icons/e_icon_rounded_512.png" alt="" width="88" height="88">
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script type="module" src="js/app.js"></script>
+<noscript>
+  <div style="padding:48px 26px;text-align:center;font:400 15px/1.6 system-ui;color:#F4F1EC">
+    <h1 style="font:700 30px/1.1 system-ui;letter-spacing:-.03em">Went To Event</h1>
+    <p style="color:#8A848F">This preview needs JavaScript switched on.</p>
+  </div>
+</noscript>
+</body>
+</html>
