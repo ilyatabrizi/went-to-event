@@ -52,8 +52,13 @@ export function discoverBody() {
       <div style="margin-top:22px">
         ${sectionHead('Browse by category')}
         <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px">
-          ${CATS.map(c => {
-            const n = cityEvents().filter(e => e.cat === c.key).length;
+          ${(() => {
+            const counted = CATS.map(c => ({ ...c, n: cityEvents().filter(e => e.cat === c.key).length }));
+            /* Curated order, but the empty ones sink — a tile that opens an
+               empty list is a dead end, and in a generated city several are. */
+            return counted.sort((a, b) => (b.n > 0) - (a.n > 0));
+          })().map(c => {
+            const n = c.n;
             return `<button class="press-sm" data-act="cat" data-cat="${c.key}"
               style="display:flex;align-items:center;gap:10px;padding:14px 13px;border-radius:var(--r-md);
                      background:rgba(244,241,236,.05);border:1px solid var(--hair);text-align:left">
@@ -61,7 +66,8 @@ export function discoverBody() {
                      background:rgba(244,241,236,.07);color:var(--bone)">${ico(c.icon, 17)}</span>
               <span style="flex:1;min-width:0">
                 <span class="t-head" style="font-size:14px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(c.label)}</span>
-                <span class="t-sub" style="font-size:11.5px">${n} ${n === 1 ? 'event' : 'events'}</span>
+                <span class="t-sub" style="font-size:11.5px${n ? '' : ';opacity:.55'}">${
+                  n ? `${n} ${n === 1 ? 'event' : 'events'}` : 'Nothing yet'}</span>
               </span>
             </button>`;
           }).join('')}

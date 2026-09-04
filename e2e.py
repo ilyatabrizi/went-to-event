@@ -198,6 +198,10 @@ def run(shots_only=False):
         tap(page, '[data-tab="discover"]', 520)
         check('discover opened', top(page) == 'discover')
         check('category grid', in_top(page, '[data-act="cat"]') >= 15)
+        check('populated categories lead the grid', page.evaluate(
+            "(()=>{const t=[...document.querySelectorAll('#discoverBody [data-act=\"cat\"]')]"
+            ".map(b=>b.textContent.includes('Nothing yet'));"
+            "return t.indexOf(true) === -1 || t.lastIndexOf(false) < t.indexOf(true)})()"))
         page.fill('#searchInput', 'yoga')
         page.wait_for_timeout(320)
         check('search narrows the list', 'result' in page.locator('#discoverBody').inner_text())
@@ -268,6 +272,9 @@ def run(shots_only=False):
         tap(page, '[data-tab="profile"]', 520)
         check('profile opened', top(page) == 'profile')
         check('three profile tabs', in_top(page, '[data-segkey]') == 3)
+        check('counts agree with their nouns',
+              'Posts' not in page.locator('#app').inner_text()
+              or '1 Posts' not in page.locator('#app').inner_text())
         check('publish CTA present', in_top(page, '[data-act="create"]') == 1)
         audit(page, 'profile')
         shot(page, '10-profile')

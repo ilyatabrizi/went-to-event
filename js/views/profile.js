@@ -1,7 +1,7 @@
 import { state, allPosts, me } from '../store.js';
 import { USERS } from '../data/people.js';
 import { byId } from '../data/events.js';
-import { esc, compact } from '../util.js';
+import { esc, compact, plural } from '../util.js';
 import { ico } from '../icons.js';
 import { avatar, verified, eventRow, postCard, segmented, empty, sectionHead, cover } from '../ui/parts.js';
 import { cityEvents } from './home.js';
@@ -60,7 +60,8 @@ export function profileView() {
         <div style="border-radius:var(--r-full);padding:3px;background:var(--ink)">${avatar(me, 82)}</div>
         <div style="flex:1;padding-bottom:4px">
           <div class="row" style="justify-content:space-around">
-            ${[[mine.length, 'Posts'], [compact(u.followers), 'Followers'], [countFollowing() + countHosts(), 'Following']]
+            ${[[mine.length, plural(mine.length, 'Post')], [compact(u.followers), 'Followers'],
+               [countFollowing() + countHosts(), 'Following']]
               .map(([n, l]) => `<div class="stat"><b>${n}</b><span>${l}</span></div>`).join('')}
           </div>
         </div>
@@ -143,7 +144,8 @@ export function userProfileView({ key }) {
         <div style="border-radius:var(--r-full);padding:3px;background:var(--ink)">${avatar(key, 82)}</div>
         <div style="flex:1;padding-bottom:4px">
           <div class="row" style="justify-content:space-around">
-            ${[[posts.length, 'Posts'], [compact(u.followers), 'Followers'], [compact(u.following), 'Following']]
+            ${[[posts.length, plural(posts.length, 'Post')], [compact(u.followers), 'Followers'],
+               [compact(u.following), 'Following']]
               .map(([n, l]) => `<div class="stat"><b>${n}</b><span>${l}</span></div>`).join('')}
           </div>
         </div>
