@@ -11,6 +11,7 @@
 
 const V = 'wte-v1';
 const IMGS = 'wte-img-v1';
+const MARK = '__wte_install_kind__';
 
 const SHELL = [
   './', './index.html', './manifest.webmanifest', './css/app.css',
@@ -25,15 +26,33 @@ const SHELL = [
 ];
 
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(V)
-    .then(c => Promise.allSettled(SHELL.map(u => c.add(new Request(u, { cache: 'reload' })))))
-    .then(() => self.skipWaiting()));
+  e.waitUntil((async () => {
+    /* Was a worker here before us? An existing cache is the only durable
+       signal, so record the answer in the cache rather than a variable — an
+       install and its activate are not guaranteed to run in the same worker
+       instance. */
+    const cold = (await caches.keys()).length === 0;
+    const c = await caches.open(V);
+    await Promise.allSettled(SHELL.map(u => c.add(new Request(u, { cache: 'reload' }))));
+    await c.put(MARK, new Response(cold ? 'cold' : 'update'));
+    await self.skipWaiting();
+  })());
 });
 
 self.addEventListener('activate', e => {
-  e.waitUntil(caches.keys()
-    .then(ks => Promise.all(ks.filter(k => k !== V && k !== IMGS).map(k => caches.delete(k))))
-    .then(() => self.clients.claim()));
+  e.waitUntil((async () => {
+    const ks = await caches.keys();
+    await Promise.all(ks.filter(k => k !== V && k !== IMGS).map(k => caches.delete(k)));
+
+    /* Claim clients only when REPLACING a worker. Claiming on a first install
+       hijacks requests the page already had in flight — on a first visit that
+       killed every cover image mid-flight. On a cold install control passes at
+       the next navigation, which is soon enough and costs nothing. If the
+       marker is missing we assume cold, because that is the safe direction. */
+    const c = await caches.open(V);
+    const mark = await c.match(MARK);
+    if (mark && (await mark.text()) === 'update') await self.clients.claim();
+  })());
 });
 
 self.addEventListener('message', e => {

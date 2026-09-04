@@ -181,9 +181,17 @@ function lazyImages() {
     img.removeAttribute('data-lazy');
     img.loading = 'lazy'; img.decoding = 'async';
     const show = () => img.classList.add('in');
-    if (img.complete && img.naturalWidth) show();
-    else { img.addEventListener('load', show, { once: true });
-           img.addEventListener('error', () => img.remove(), { once: true }); }
+    if (img.complete && img.naturalWidth) return show();
+    img.addEventListener('load', show, { once: true });
+    img.addEventListener('error', () => {
+      /* One retry, then give up quietly. Removing the element would throw away
+         the photo permanently over a hiccup; leaving it hidden means the brand
+         gradient underneath is what shows, which is the designed fallback. */
+      if (img.dataset.retried) return;
+      img.dataset.retried = '1';
+      const src = img.src;
+      setTimeout(() => { img.src = src.includes('?') ? src + '&r=1' : src + '?r=1'; }, 900);
+    }, { once: true });
   });
 }
 
@@ -620,8 +628,10 @@ function start() {
    not here. */
 const LOCAL = ['localhost', '127.0.0.1', '::1'].includes(location.hostname);
 if ('serviceWorker' in navigator && !LOCAL && location.protocol === 'https:') {
+  /* After load AND a beat, so the first screen's images are already on the wire
+     before a worker exists to get in their way. */
   window.addEventListener('load', () =>
-    navigator.serviceWorker.register('sw.js').catch(() => {}));
+    setTimeout(() => navigator.serviceWorker.register('sw.js').catch(() => {}), 1500));
 } else if ('serviceWorker' in navigator && LOCAL) {
   navigator.serviceWorker.getRegistrations()
     .then(rs => rs.forEach(r => r.unregister())).catch(() => {});
