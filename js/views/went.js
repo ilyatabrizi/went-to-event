@@ -40,27 +40,27 @@ export function qrSVG(ref, size = 33) {
 
 export const ticketRef = t => 'WTE-' + String(hashStr(t.eventId + '-' + t.tier + '-' + t.qty) % 900000 + 100000);
 
-export function ticketsView() {
+export function wentView() {
   const upcoming = state.myTickets.filter(t => !t.past);
   const past = state.myTickets.filter(t => t.past);
-  const list = state.ticketTab === 'upcoming' ? upcoming : past;
+  const list = state.wentTab === 'upcoming' ? upcoming : past;
 
   return `
   <div class="pad" style="padding-top:calc(max(var(--top),12px) + 6px)">
-    <h1 class="t-display" style="margin:0 0 16px">Tickets</h1>
-    ${segmented('tickettab', [
+    <h1 class="t-display" style="margin:0 0 16px">Went</h1>
+    ${segmented('wenttab', [
       { key:'upcoming', label:`Upcoming${upcoming.length ? ' · ' + upcoming.length : ''}` },
       { key:'past',     label:'Past' },
-    ], state.ticketTab)}
+    ], state.wentTab)}
 
     <div style="margin-top:20px">
       ${list.length ? `<div class="stack" style="--gap:12px">${list.map(ticketCard).join('')}</div>`
         : empty('ticket',
-            state.ticketTab === 'upcoming' ? 'No tickets yet' : 'Nothing in the past',
-            state.ticketTab === 'upcoming'
+            state.wentTab === 'upcoming' ? 'No tickets yet' : 'Nothing in the past',
+            state.wentTab === 'upcoming'
               ? 'When you RSVP or buy a ticket it lands here, ready to scan at the door.'
               : 'Events you have been to will collect here — that is the “went” part.',
-            { act:'tab" data-tab="discover', label:'Find something' })}
+            { act:'tab" data-tab="explore', label:'Find something' })}
     </div>
   </div>`;
 }

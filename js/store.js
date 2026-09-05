@@ -15,11 +15,11 @@ export const state = {
   /* navigation */
   tab: 'home', homeFeed: 'foryou',
 
-  /* discovery */
+  /* explore */
   query: '', cat: null, whenIdx: 0, priceIdx: 0, sortIdx: 0,
 
   /* selection + flows */
-  eventId: 1, tierIdx: 0, qty: 1, methodIdx: 0, ticketTab: 'upcoming',
+  eventId: 1, tierIdx: 0, qty: 1, methodIdx: 0, wentTab: 'upcoming',
   threadUser: null, profileUser: null, profileTab: 'posts', settingsKey: null,
   publishedId: null,
 

@@ -17,9 +17,9 @@
     { "src": "assets/icons/favicon_512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ],
   "shortcuts": [
-    { "name": "Discover", "short_name": "Discover", "url": "./?go=discover",
+    { "name": "Explore", "short_name": "Explore", "url": "./?go=explore",
       "icons": [{ "src": "assets/icons/favicon_192.png", "sizes": "192x192" }] },
-    { "name": "My tickets", "short_name": "Tickets", "url": "./?go=tickets",
+    { "name": "Events you went to", "short_name": "Went", "url": "./?go=went",
       "icons": [{ "src": "assets/icons/favicon_192.png", "sizes": "192x192" }] },
     { "name": "Publish an event", "short_name": "Publish", "url": "./?go=create",
       "icons": [{ "src": "assets/icons/favicon_192.png", "sizes": "192x192" }] }

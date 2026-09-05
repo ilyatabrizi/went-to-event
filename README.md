@@ -5,7 +5,7 @@ in two taps, keep a record of the good ones — and publish your own in four ste
 
 **Live:** https://ilyatabrizi.github.io/went-to-event/
 **Local:** `python3 serve.py` → http://localhost:8141
-**Tests:** `python3 e2e.py` → 91 checks + screenshots into `docs/shots/`
+**Tests:** `python3 e2e.py` → 105 checks + screenshots into `docs/shots/`
 
 Built by Alpha Agency. Installable on iOS and Android; works offline once opened.
 
@@ -54,18 +54,19 @@ on everything:
 
 ## What is in it
 
-Five tabs, eighteen screens.
+Five tabs — **Home · Explore · Chat · Went · You** — and eighteen screens.
 
 **Home** — city header, For You / Following, a "happening soon" rail, a scored
 feed that says *why* each event is there, and posts from people you follow.
-**Discover** — search, fifteen categories, a filter sheet (when / price / sort),
+**Explore** — search, fifteen categories, a filter sheet (when / price / sort),
 free-this-week and closest-to-you rails.
 **Event** — hero, glass when/where card, host with follow, who's going, tiers,
 a location schematic, more from the host, similar events, report.
 **Booking** — tier picker, quantity, checkout with three payment methods, a
 booking fee that membership waives, confirmation, and a QR pass.
 **Chat** — conversation list with search, threads that reply back.
-**Tickets** — upcoming and past, the pass with a scannable-looking code.
+**Went** — what you are going to and what you have been to, split Upcoming /
+Past, each opening a pass with a scannable-looking code.
 **You** — profile with posts/saved/going, the publish CTA, membership, and a
 nested settings tree (account, notifications, privacy, blocked, muted, payment,
 appearance, help, legal, about).
@@ -91,10 +92,10 @@ js/
   ui/parts.js         event card, row, rail card, avatars, post card, empties
   ui/toast.js         ui/haptics.js
   data/               geo (countries, categories, covers), people, events
-  views/              home discover pickers detail booking tickets chat
+  views/              home explore pickers detail booking went chat
                       profile create settings
 sw.js                 network-first for app files, cache-first for cover images
-e2e.py                91 checks in real Chrome, screenshots into docs/shots/
+e2e.py                105 checks in real Chrome, screenshots into docs/shots/
 serve.py              local preview on :8141, no-store
 ```
 
@@ -111,6 +112,11 @@ register on localhost at all.
 underneath every one. A blocked, slow or 404'd image degrades to the palette
 rather than to a grey hole. Swap `IMG` in `js/data/geo.js` for client imagery
 when there is any.
+
+**The manifest's three shortcuts actually route.** Long-pressing the installed
+icon offers Explore, Went and Publish; each arrives as `?go=`, is honoured at
+boot, and then has its query scrubbed so a reload or a shared link doesn't keep
+re-firing a jump nobody asked for. `e2e.py` walks all three.
 
 ## Placeholder, and deliberately so
 

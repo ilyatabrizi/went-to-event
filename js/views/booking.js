@@ -198,5 +198,5 @@ export function confirmView() {
 }
 
 export const confirmDock = () => `<div class="dock-row">
-  <button class="btn btn-ghost press" data-act="tab" data-tab="discover" style="flex:none;width:124px">Explore</button>
+  <button class="btn btn-ghost press" data-act="tab" data-tab="explore" style="flex:none;width:124px">Explore</button>
   <button class="btn press" data-act="viewticket" style="flex:1">View ticket</button></div>`;

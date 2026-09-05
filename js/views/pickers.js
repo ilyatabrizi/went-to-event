@@ -6,7 +6,7 @@ import { COUNTRIES } from '../data/geo.js';
 import { esc, clamp, reduceMotion } from '../util.js';
 import { ico } from '../icons.js';
 import { openSheet, closeSheet } from '../ui/sheet.js';
-import { WHEN, PRICE, SORT, filtersActive } from './discover.js';
+import { WHEN, PRICE, SORT, filtersActive } from './explore.js';
 import { tap } from '../ui/haptics.js';
 
 const ITEM_H = 42;

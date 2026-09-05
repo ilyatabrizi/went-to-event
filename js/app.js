@@ -13,12 +13,12 @@ import * as hap from './ui/haptics.js';
 import { setHaptics } from './ui/haptics.js';
 
 import { homeView, cityName, cityEvents } from './views/home.js';
-import { discoverView, discoverBody } from './views/discover.js';
+import { exploreView, exploreBody } from './views/explore.js';
 import { openLocationPicker, openFilterSheet } from './views/pickers.js';
 import { detailView, detailDock } from './views/detail.js';
 import { bookingView, bookingDock, checkoutView, checkoutDock,
          confirmView, confirmDock, curTier } from './views/booking.js';
-import { ticketsView, ticketView } from './views/tickets.js';
+import { wentView, ticketView } from './views/went.js';
 import { chatView, threadView, threadDock } from './views/chat.js';
 import { profileView, userProfileView } from './views/profile.js';
 import { settingsView, premiumView, premiumDock, notificationsView,
@@ -34,9 +34,9 @@ initToast($('#toastDock'));
 
 const TABS = [
   { key:'home',     label:'Home',     icon:'home'    },
-  { key:'discover', label:'Discover', icon:'compass' },
+  { key:'explore',  label:'Explore',  icon:'compass' },
   { key:'chat',     label:'Chat',     icon:'chat'    },
-  { key:'tickets',  label:'Tickets',  icon:'ticket'  },
+  { key:'went',     label:'Went',     icon:'ticket'  },
   { key:'profile',  label:'You',      icon:'user'    },
 ];
 
@@ -60,8 +60,8 @@ setHaptics(state.haptics);
 const router = new Router(app, { onChange: sync });
 
 const VIEWS = {
-  home: homeView, discover: discoverView, chat: chatView,
-  tickets: ticketsView, profile: profileView,
+  home: homeView, explore: exploreView, chat: chatView,
+  went: wentView, profile: profileView,
   detail: detailView, booking: bookingView, checkout: checkoutView,
   confirm: confirmView, ticket: ticketView, thread: threadView,
   userprofile: userProfileView, settings: settingsView,
@@ -157,7 +157,7 @@ function afterRender(name, params) {
   if (name === 'thread') {
     app.scrollTop = app.scrollHeight;
   }
-  if (name === 'discover' && state._focusSearch) {
+  if (name === 'explore' && state._focusSearch) {
     state._focusSearch = false;
     const i = $('#searchInput');
     if (i) { i.focus(); const v = i.value; i.value = ''; i.value = v; }
@@ -226,7 +226,7 @@ function segPills() {
 
 function onSegChange(id, key) {
   if (id === 'homefeed')   { state.homeFeed = key; save(); softRefresh(); }
-  if (id === 'tickettab')  { state.ticketTab = key; softRefresh(); }
+  if (id === 'wenttab')  { state.wentTab = key; softRefresh(); }
   if (id === 'profiletab') { state.profileTab = key; softRefresh(); }
 }
 
@@ -303,18 +303,18 @@ document.addEventListener('click', e => {
     break;
   case 'filter:open':
     hap.tap();
-    openFilterSheet({ onApply: () => patchDiscover() });
+    openFilterSheet({ onApply: () => patchExplore() });
     break;
   case 'filter:clear':
     state.whenIdx = state.priceIdx = state.sortIdx = 0; state.cat = null; state.query = '';
     router.refresh(); break;
   case 'cat':
     hap.tap(); state.cat = d.cat; state.query = '';
-    if (router.top.name !== 'discover') setTab('discover'); else router.refresh();
+    if (router.top.name !== 'explore') setTab('explore'); else router.refresh();
     break;
   case 'cat:clear':     state.cat = null; router.refresh(); break;
   case 'search:clear':  { state.query = ''; const i = $('#searchInput');
-                        if (i) { i.value = ''; i.focus(); } patchDiscover();
+                        if (i) { i.value = ''; i.focus(); } patchExplore();
                         const c = t.closest('.field').querySelector('[data-act="search:clear"]');
                         if (c) c.style.display = 'none'; break; }
 
@@ -407,7 +407,7 @@ document.addEventListener('input', e => {
   if (!k) return;
   if (k === 'search') {
     state.query = e.target.value;
-    patchDiscover();
+    patchExplore();
     const c = e.target.closest('.field').querySelector('[data-act="search:clear"]');
     if (c) c.style.display = e.target.value ? 'flex' : 'none';
   } else if (k === 'chatsearch') {
@@ -449,9 +449,9 @@ document.addEventListener('keydown', e => {
 
 /* Only the results list re-renders while typing — re-rendering the screen
    would blur the input on every keystroke. */
-function patchDiscover() {
-  const b = $('#discoverBody');
-  if (b) { b.innerHTML = discoverBody(); lazyImages(); }
+function patchExplore() {
+  const b = $('#exploreBody');
+  if (b) { b.innerHTML = exploreBody(); lazyImages(); }
 }
 
 /* ---------------------------------------------------------------- flows */
@@ -609,8 +609,27 @@ function composePostSheet() {
 }
 
 /* ---------------------------------------------------------------- boot */
+
+/* The manifest advertises three long-press shortcuts, which arrive as
+   ?go=<tab|create>. A shortcut that quietly opens Home is worse than no
+   shortcut at all, so honour it — then scrub the param, so a reload or a
+   shared link doesn't keep re-firing a jump the person didn't ask for. */
+function openShortcut() {
+  let want;
+  try { want = new URLSearchParams(location.search).get('go'); } catch { return false; }
+  if (!want) return false;
+  try { history.replaceState(null, '', location.pathname); } catch {}
+
+  if (TABS.some(t => t.key === want)) { setTab(want); return true; }
+  if (want === 'create') {
+    setTab('home');                       // something real to go back to
+    state.create = blankDraft(); go('create'); return true;
+  }
+  return false;
+}
+
 function start() {
-  setTab(state.tab && VIEWS[state.tab] ? state.tab : 'home');
+  if (!openShortcut()) setTab(state.tab && VIEWS[state.tab] ? state.tab : 'home');
   window.addEventListener('resize', () => movePill(false));
 
   const lift = () => {

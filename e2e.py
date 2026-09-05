@@ -193,26 +193,42 @@ def run(shots_only=False):
         audit(page, 'ticket')
         shot(page, '05-ticket')
 
-        # --------------------------------------------------------- discover
-        print('\ndiscover')
-        tap(page, '[data-tab="discover"]', 520)
-        check('discover opened', top(page) == 'discover')
+        # ------------------------------------------------------------- went
+        # The tab that holds what you are going to and what you have been to.
+        print('\nwent')
+        tap(page, '[data-tab="went"]', 520)
+        check('went opened', top(page) == 'went')
+        check('the booking landed in Upcoming', in_top(page, '[data-act="ticket"]') >= 1)
+        tap(page, '[data-seg="wenttab"] [data-segkey="past"]', 420)
+        check('past is empty and says so', 'Nothing in the past'
+              in page.locator('#app').inner_text())
+        tap(page, '[data-seg="wenttab"] [data-segkey="upcoming"]', 420)
+        check('upcoming comes back', in_top(page, '[data-act="ticket"]') >= 1)
+        audit(page, 'went')
+        shot(page, '05b-went')
+        tap(page, '[data-act="ticket"]', 520)
+        check('a card opens its pass', top(page) == 'ticket')
+
+        # ---------------------------------------------------------- explore
+        print('\nexplore')
+        tap(page, '[data-tab="explore"]', 520)
+        check('explore opened', top(page) == 'explore')
         check('category grid', in_top(page, '[data-act="cat"]') >= 15)
         check('populated categories lead the grid', page.evaluate(
-            "(()=>{const t=[...document.querySelectorAll('#discoverBody [data-act=\"cat\"]')]"
+            "(()=>{const t=[...document.querySelectorAll('#exploreBody [data-act=\"cat\"]')]"
             ".map(b=>b.textContent.includes('Nothing yet'));"
             "return t.indexOf(true) === -1 || t.lastIndexOf(false) < t.indexOf(true)})()"))
         page.fill('#searchInput', 'yoga')
         page.wait_for_timeout(320)
-        check('search narrows the list', 'result' in page.locator('#discoverBody').inner_text())
+        check('search narrows the list', 'result' in page.locator('#exploreBody').inner_text())
         page.fill('#searchInput', 'zzzznothing')
         page.wait_for_timeout(320)
-        check('a dead search explains itself', 'No matches' in page.locator('#discoverBody').inner_text())
+        check('a dead search explains itself', 'No matches' in page.locator('#exploreBody').inner_text())
         tap(page, '[data-act="search:clear"]')
         tap(page, '[data-act="cat"][data-cat="Music"]', 480)
-        check('category filter applies', 'Music' in page.locator('#discoverBody').inner_text())
-        audit(page, 'discover')
-        shot(page, '06-discover')
+        check('category filter applies', 'Music' in page.locator('#exploreBody').inner_text())
+        audit(page, 'explore')
+        shot(page, '06-explore')
 
         # filters live in a sheet that must drag and close
         tap(page, '[data-act="filter:open"]', 620)
@@ -373,6 +389,17 @@ def run(shots_only=False):
               any(i.get('purpose') == 'maskable' for i in m.get('icons', [])))
         check('manifest offers shortcuts', len(m.get('shortcuts', [])) >= 3)
         check('service worker served', ctx.request.get(f'{BASE}/sw.js').ok)
+
+        # Every shortcut the manifest advertises must actually land somewhere.
+        # They used to be read by nothing at all and quietly opened Home.
+        for url, want in [(s_['url'], s_['url'].split('go=')[-1])
+                          for s_ in m.get('shortcuts', [])]:
+            page.goto(f'{BASE}/{url.lstrip("./")}', wait_until='networkidle')
+            page.wait_for_timeout(1200)
+            check(f'shortcut ?go={want} lands on {want}', top(page) == want,
+                  f'got {top(page)!r}')
+            check(f'shortcut ?go={want} scrubs the query',
+                  'go=' not in page.evaluate('location.search'))
 
         # ------------------------------------------------- reduced motion
         print('\nreduced motion')

@@ -41,7 +41,7 @@ export function results() {
 
 /* Only the body re-renders while typing — re-rendering the whole screen would
    blur the input on every keystroke. */
-export function discoverBody() {
+export function exploreBody() {
   const list = results();
   const q = state.query.trim();
 
@@ -102,12 +102,12 @@ export function discoverBody() {
   </div>`;
 }
 
-export function discoverView() {
+export function exploreView() {
   const n = filtersActive();
   return `
   <div class="pad" style="padding-top:calc(max(var(--top),12px) + 6px)">
     <div class="row" style="justify-content:space-between;margin-bottom:14px">
-      <h1 class="t-display" style="margin:0">Discover</h1>
+      <h1 class="t-display" style="margin:0">Explore</h1>
       <button class="gbtn press" data-act="picker" aria-label="Change city">${ico('globe', 19)}</button>
     </div>
 
@@ -130,6 +130,6 @@ export function discoverView() {
         `<button class="pill press" data-act="cat" data-cat="${c.key}">${ico(c.icon, 15)} ${esc(c.label)}</button>`).join('')}
     </div>
 
-    <div id="discoverBody">${discoverBody()}</div>
+    <div id="exploreBody">${exploreBody()}</div>
   </div>`;
 }

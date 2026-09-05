@@ -82,7 +82,7 @@ export function homeView() {
           ${unread ? `<i style="position:absolute;top:5px;right:5px;width:8px;height:8px;border-radius:50%;
              background:var(--ember);box-shadow:0 0 0 2px rgba(11,10,12,.9)"></i>` : ''}
         </button>
-        <button class="gbtn press" data-act="tab" data-tab="discover" aria-label="Search">${ico('search', 19)}</button>
+        <button class="gbtn press" data-act="tab" data-tab="explore" aria-label="Search">${ico('search', 19)}</button>
       </div>
     </div>
 
@@ -114,7 +114,7 @@ export function homeView() {
           ${rest.slice(0, 8).map(eventCard).join('')}
         </div>` : empty('users', 'Nothing here yet',
           'Follow a few hosts or friends and their events land in this feed.',
-          { act:'tab" data-tab="discover', label:'Browse ' + cityName() })}
+          { act:'tab" data-tab="explore', label:'Browse ' + cityName() })}
     </div>
 
     ${posts.length ? `
