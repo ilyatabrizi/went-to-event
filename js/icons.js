@@ -85,7 +85,7 @@ export { FILL };
 /* A verification badge needs two colours: a filled disc and a check knocked out
    of it. Running the stroke icon through icoFill floods the disc and swallows
    the check, which is why this is its own shape. */
-export const badge = (size = 14, fill = 'var(--gold)', tick = '#0B0A0C') => `
+export const badge = (size = 14, fill = 'var(--act)', tick = '#0B0A0C') => `
 <svg width="${size}" height="${size}" viewBox="0 0 24 24" aria-hidden="true" style="flex:none">
   <circle cx="12" cy="12" r="9.4" fill="${fill}"/>
   <path d="m8.1 12.3 2.6 2.6 5.2-5.6" fill="none" stroke="${tick}"
@@ -93,10 +93,15 @@ export const badge = (size = 14, fill = 'var(--gold)', tick = '#0B0A0C') => `
 </svg>`;
 
 /* The brand mark, inline, so it never waits on a network round trip. */
-export const markSVG = (size = 34, colour = 'var(--bone)') => `
+export const markSVG = (size = 34, colour = 'var(--ink)') => `
 <svg width="${size}" height="${size}" viewBox="0 0 1024 1024" aria-hidden="true">
   <g transform="matrix(0.79929,0,0,-0.79929,188.694,733.403)">
     <path fill="${colour}" d="M580 235H175Q180 175 217.0 141.0Q254 107 308 107Q386 107 419 174H570Q546 94 478.0 42.5Q410 -9 311 -9Q231 -9 167.5 26.5Q104 62 68.5 127.0Q33 192 33 277Q33 363 68.0 428.0Q103 493 166.0 528.0Q229 563 311 563Q390 563 452.5 529.0Q515 495 549.5 432.5Q584 370 584 289Q584 259 580 235ZM439 329Q438 383 400.0 415.5Q362 448 307 448Q255 448 219.5 416.5Q184 385 176 329Z"/>
   </g>
   <circle cx="759.43" cy="683.90" r="49.5" fill="var(--ember)"/>
 </svg>`;
+
+/* The house calls these icon()/iconFill(); ico()/icoFill() stay for anything
+   still spelling them the old way. */
+export const icon = ico;
+export const iconFill = icoFill;

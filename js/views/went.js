@@ -1,17 +1,21 @@
-import { state } from '../store.js';
-import { byId } from '../data/events.js';
-import { esc, money, hashStr } from '../util.js';
-import { ico } from '../icons.js';
-import { cover, segmented, empty, sectionHead } from '../ui/parts.js';
+/* Went — what you are going to, and what you have been to. The tab the product
+   is named after, so it holds the record, not just the tickets. */
+
+import { state, save } from "../store.js";
+import { byId } from "../data/events.js";
+import { esc, money, hashStr, plural } from "../util.js";
+import { icon } from "../icons.js";
+import { cover, sectionHead, empty, lazyImages, pageTitle } from "../parts.js";
+import { segmented, toast } from "../ui.js";
+import { go, refresh } from "../router.js";
 
 /* A real, scannable-looking matrix generated from the ticket's own reference —
    deterministic, so the same ticket always shows the same code. Not a working
-   QR payload; it is a preview, and it says so on the pass. */
+   QR payload; it is a preview, and the pass says so. */
 export function qrSVG(ref, size = 33) {
   const h = hashStr(ref);
   let s = h || 1;
   const rand = () => { s ^= s << 13; s ^= s >>> 17; s ^= s << 5; s >>>= 0; return s / 4294967296; };
-  const cells = [];
   const grid = [];
   for (let y = 0; y < size; y++) { grid[y] = []; for (let x = 0; x < size; x++) grid[y][x] = rand() > 0.5; }
 
@@ -30,132 +34,126 @@ export function qrSVG(ref, size = 33) {
   };
   finder(0, 0); finder(size - 7, 0); finder(0, size - 7);
 
+  const cells = [];
   for (let y = 0; y < size; y++) for (let x = 0; x < size; x++)
     if (grid[y][x]) cells.push(`<rect x="${x}" y="${y}" width="1" height="1"/>`);
 
   return `<svg class="qr" viewBox="0 0 ${size} ${size}" shape-rendering="crispEdges" role="img"
     aria-label="Ticket QR code"><rect width="${size}" height="${size}" fill="#F7F2E9"/>
-    <g fill="#0E0B10">${cells.join('')}</g></svg>`;
+    <g fill="#0E0B10">${cells.join("")}</g></svg>`;
 }
 
-export const ticketRef = t => 'WTE-' + String(hashStr(t.eventId + '-' + t.tier + '-' + t.qty) % 900000 + 100000);
+export const ticketRef = (t) =>
+  "WTE-" + String(hashStr(t.eventId + "-" + t.tier + "-" + t.qty) % 900000 + 100000);
 
-export function wentView() {
-  const upcoming = state.myTickets.filter(t => !t.past);
-  const past = state.myTickets.filter(t => t.past);
-  const list = state.wentTab === 'upcoming' ? upcoming : past;
+/* ------------------------------------------------------------- the list */
+export default function went() {
+  const upcoming = state.myTickets.filter((t) => !t.past);
+  const past = state.myTickets.filter((t) => t.past);
+  const list = state.wentTab === "upcoming" ? upcoming : past;
 
-  return `
-  <div class="pad" style="padding-top:calc(max(var(--top),12px) + 6px)">
-    <h1 class="t-display" style="margin:0 0 16px">Went</h1>
-    ${segmented('wenttab', [
-      { key:'upcoming', label:`Upcoming${upcoming.length ? ' · ' + upcoming.length : ''}` },
-      { key:'past',     label:'Past' },
-    ], state.wentTab)}
-
-    <div style="margin-top:20px">
-      ${list.length ? `<div class="stack" style="--gap:12px">${list.map(ticketCard).join('')}</div>`
-        : empty('ticket',
-            state.wentTab === 'upcoming' ? 'No tickets yet' : 'Nothing in the past',
-            state.wentTab === 'upcoming'
-              ? 'When you RSVP or buy a ticket it lands here, ready to scan at the door.'
-              : 'Events you have been to will collect here — that is the “went” part.',
-            { act:'tab" data-tab="explore', label:'Find something' })}
+  const html = `
+  <div class="wrap">
+    ${pageTitle("Went")}
+    <div style="margin-top:18px">
+      ${segmented("wenttab", [
+        { key: "upcoming", label: `Upcoming${upcoming.length ? " · " + upcoming.length : ""}` },
+        { key: "past", label: `Past${past.length ? " · " + past.length : ""}` },
+      ], state.wentTab)}
     </div>
+
+    <section class="section">
+      ${list.length
+        ? `<div class="stack">${list.map(passCard).join("")}</div>`
+        : empty("ticket",
+            state.wentTab === "upcoming" ? "Nothing booked yet" : "Nothing in the past",
+            state.wentTab === "upcoming"
+              ? "When you RSVP or buy a ticket it lands here, ready to scan at the door."
+              : "Events you have been to collect here — that is the “went” part.",
+            { href: "#/explore", label: "Find something" })}
+    </section>
   </div>`;
+
+  return { html, mount: (el) => lazyImages(el) };
 }
 
-function ticketCard(t, i) {
+function passCard(t) {
   const ev = byId(t.eventId);
+  const i = state.myTickets.indexOf(t);
   const tier = ev.tiers[Math.min(t.tier, ev.tiers.length - 1)];
-  return `<button class="card press-sm" data-act="ticket" data-idx="${state.myTickets.indexOf(t)}"
-    style="width:100%;display:block;text-align:left;padding:0">
-    <div class="row" style="padding:13px;gap:12px">
-      <div style="width:64px;height:64px;border-radius:var(--r-sm);overflow:hidden;position:relative;flex:none">
-        ${cover(ev)}<div class="cover-scrim" style="opacity:.45"></div>
-      </div>
-      <div style="flex:1;min-width:0">
-        <div class="row" style="gap:6px;margin-bottom:3px">
-          <span class="chip chip-solid" style="height:20px;font-size:10px;padding:0 7px">
-            ${t.past ? 'Attended' : 'Confirmed'}</span>
-        </div>
-        <div class="t-head" style="font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(ev.title)}</div>
-        <div class="t-sub" style="font-size:12.5px">${esc(ev.dateLong)} · ${esc(ev.timeRange)}</div>
-      </div>
-      <span style="color:var(--ash);flex:none">${ico('qr', 20)}</span>
-    </div>
-    <div class="row" style="padding:10px 13px;gap:8px;background:rgba(244,241,236,.035);
-         box-shadow:inset 0 1px 0 var(--hair)">
-      <span class="t-sub" style="font-size:12px;flex:1">${t.qty} × ${esc(tier.name)}</span>
-      <span class="t-sub" style="font-size:12px;font-variant-numeric:tabular-nums">${ticketRef(t)}</span>
-    </div>
-  </button>`;
+  return `
+  <a class="card" href="#/pass/${i}" style="overflow:hidden;display:block">
+    <span class="row" style="padding:12px;gap:13px">
+      <span class="cover" style="width:64px;height:64px;border-radius:var(--r-sm);flex:none">
+        ${cover(ev, { w: 260 })}</span>
+      <span class="row-copy">
+        <span class="badge" style="align-self:flex-start;margin-bottom:5px;background:var(--wash)">
+          ${t.past ? "Attended" : "Confirmed"}</span>
+        <span class="row-t clip">${esc(ev.title)}</span>
+        <span class="row-s clip">${esc(ev.dateLong)} · ${esc(ev.timeRange)}</span>
+      </span>
+      <span class="row-go">${icon("qr")}</span>
+    </span>
+    <span class="spread" style="padding:11px 16px;background:var(--wash)">
+      <span class="row-s">${t.qty} × ${esc(tier.name)}</span>
+      <span class="row-s money" style="letter-spacing:.08em">${ticketRef(t)}</span>
+    </span>
+  </a>`;
 }
 
-/* the pass itself */
-export function ticketView({ idx }) {
-  const t = state.myTickets[idx];
-  if (!t) return empty('ticket', 'Ticket not found', 'This ticket is no longer in your wallet.');
+/* --------------------------------------------------------------- the pass */
+export function pass({ idx }) {
+  const t = state.myTickets[+idx];
+  if (!t) {
+    return {
+      html: `<div class="wrap">${empty("ticket", "Ticket not found",
+        "This one is no longer in your wallet.", { href: "#/went", label: "Back to Went" })}</div>`,
+      tabs: false, bar: { back: true, title: "Ticket" },
+    };
+  }
   const ev = byId(t.eventId);
   const tier = ev.tiers[Math.min(t.tier, ev.tiers.length - 1)];
   const ref = ticketRef(t);
 
-  return `
-  <div class="pad" style="padding-top:calc(max(var(--top),12px) + 58px)">
-    <div class="pass" style="box-shadow:0 30px 70px -24px rgba(0,0,0,.9)">
-      <div style="padding:20px 20px 16px;text-align:center">
-        <div class="t-cap" style="color:rgba(14,11,16,.66);margin-bottom:10px">Went To Event</div>
-        <div class="t-title" style="color:#0E0B10;margin-bottom:5px;text-wrap:balance">${esc(ev.title)}</div>
-        <div style="color:rgba(14,11,16,.74);font-size:13.5px">${esc(ev.dateLong)} · ${esc(ev.timeRange)}</div>
+  const html = `
+  <div class="wrap">
+    <div class="pass">
+      <div class="pass-head">
+        <div class="pass-t">${esc(ev.title)}</div>
+        <div class="pass-s">${esc(ev.venue)} · ${esc(ev.address)}</div>
       </div>
-
-      <div class="pass-notch" style="position:relative;margin:0"><i style="margin-left:-11px"></i><i style="margin-right:-11px"></i></div>
-
-      <div style="padding:20px">
-        <div style="max-width:224px;margin:0 auto 14px;padding:11px;background:#F7F2E9;border-radius:14px;
-             box-shadow:0 2px 10px rgba(14,11,16,.12)">${qrSVG(ref)}</div>
-        <div style="text-align:center;font-size:13px;font-weight:680;letter-spacing:.1em;color:#0E0B10;
-             font-variant-numeric:tabular-nums">${ref}</div>
-        <div style="text-align:center;font-size:11px;color:rgba(14,11,16,.66);margin-top:5px">
-          Show this at the door · preview code</div>
-
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:20px;
-             padding-top:16px;border-top:1px solid rgba(14,11,16,.12)">
-          ${[['Ticket', tier.name], ['Quantity', String(t.qty)],
-             ['Venue', ev.venue], ['Paid', money(tier.price * t.qty)]].map(([k, v]) => `
-            <div>
-              <div style="font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:rgba(14,11,16,.66);
-                   font-weight:640;margin-bottom:3px">${esc(k)}</div>
-              <div style="font-size:14px;font-weight:620;color:#0E0B10;overflow:hidden;
-                   text-overflow:ellipsis;white-space:nowrap">${esc(v)}</div>
-            </div>`).join('')}
+      <div class="pass-rip"><span class="pass-dash"></span></div>
+      <div class="pass-body">
+        ${qrSVG(ref)}
+        <div class="pass-ref">${ref}</div>
+        <div class="pass-grid">
+          <div><div class="pass-k">When</div><div class="pass-v">${esc(ev.dateLong)}</div></div>
+          <div><div class="pass-k">Doors</div><div class="pass-v">${esc(ev.timeRange.split(" – ")[0])}</div></div>
+          <div><div class="pass-k">Ticket</div><div class="pass-v">${esc(tier.name)}</div></div>
+          <div><div class="pass-k">Admits</div><div class="pass-v">${t.qty}</div></div>
         </div>
       </div>
     </div>
 
-    <div class="row" style="margin-top:16px;gap:9px;justify-content:center;color:var(--ash)">
-      ${ico('eye', 14)}<span class="t-sub" style="font-size:11.5px">Turn your brightness up before you scan</span>
-    </div>
-
-    <div class="stack" style="--gap:9px;margin-top:22px">
-      <button class="row press-sm" data-act="event" data-id="${ev.id}"
-        style="width:100%;padding:13px 14px;gap:11px;border-radius:var(--r-md);
-               background:rgba(244,241,236,.045);border:1px solid var(--hair);text-align:left">
-        ${ico('pin', 18)}<span class="t-head" style="font-size:14px;flex:1">Event details</span>
-        <span style="color:var(--ash)">${ico('fwd', 16)}</span>
-      </button>
-      <button class="row press-sm" data-act="toast" data-msg="Added to Apple Wallet"
-        style="width:100%;padding:13px 14px;gap:11px;border-radius:var(--r-md);
-               background:rgba(244,241,236,.045);border:1px solid var(--hair);text-align:left">
-        ${ico('wallet', 18)}<span class="t-head" style="font-size:14px;flex:1">Add to Apple Wallet</span>
-        <span style="color:var(--ash)">${ico('fwd', 16)}</span>
-      </button>
-      <button class="row press-sm" data-act="share"
-        style="width:100%;padding:13px 14px;gap:11px;border-radius:var(--r-md);
-               background:rgba(244,241,236,.045);border:1px solid var(--hair);text-align:left">
-        ${ico('share', 18)}<span class="t-head" style="font-size:14px;flex:1">Share with a friend</span>
-        <span style="color:var(--ash)">${ico('fwd', 16)}</span>
-      </button>
-    </div>
+    <p class="tiny" style="text-align:center;padding-top:18px">
+      The code is generated for the preview and will not scan at a real door.</p>
   </div>`;
+
+  return {
+    html, tabs: false,
+    bar: { back: true, title: "Your ticket" },
+    dock: `<div class="dock-row">
+      <button class="btn btn-soft" type="button" id="share" style="flex:1">${icon("share", 17)} Share</button>
+      <a class="btn btn-primary" href="#/event/${ev.id}" style="flex:1">Event</a>
+    </div>`,
+    mount(el) {
+      el.querySelector("#share")?.addEventListener("click", async () => {
+        const data = { title: ev.title, text: `I am going to ${ev.title}.`, url: location.href };
+        try {
+          if (navigator.share) await navigator.share(data);
+          else { await navigator.clipboard.writeText(location.href); toast("Link copied", "check"); }
+        } catch {}
+      });
+    },
+  };
 }

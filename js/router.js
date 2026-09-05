@@ -1,254 +1,107 @@
-/* A push/pop stack with an interactive edge-swipe back gesture.
+/* Hash routing. Five tabs plus the pages they open, each a function that
+   returns HTML — or `{ html, mount }` when a view needs wiring once it is on
+   the page. */
 
-   Spatial consistency: a screen that entered from the right leaves to the
-   right. The parent underneath moves at 30% of the child's travel — the iOS
-   parallax that tells you the old screen is still there, just behind. */
+import { $ } from "./util.js";
+import { closeSheet } from "./ui.js";
 
-import { Animatable, SPRING, spring } from './ui/motion.js';
-import { clamp, project, Velocity, reduceMotion } from './util.js';
-import { closeSheet, sheetOpen } from './ui/sheet.js';
+const routes = [];
+let current = null;
 
-const EDGE = 26;          // px from the left edge that arms the gesture
-const PARALLAX = 0.3;
+export const route = (pattern, view) => routes.push({ pattern, view });
 
-export class Router {
-  constructor(mount, { onChange } = {}) {
-    this.mount = mount;
-    this.stack = [];        // [{ name, params, node, scroll }]
-    this.onChange = onChange;
-    this.busy = false;
-    this._armSwipe();
-  }
-
-  get top() { return this.stack[this.stack.length - 1]; }
-  get depth() { return this.stack.length; }
-
-  /* Jump a mid-flight transition to its end state. Called before every
-     navigation so a spring that never settled — a backgrounded tab, a
-     reduced-motion switch mid-animation — can't strand the stack. */
-  _settle() {
-    const p = this._pending;
-    if (!p) return;
-    this._pending = null;
-    p.anim.stop();
-    p.done();
-  }
-
-  /* Replace the whole stack — used by the tab bar, which is a lateral move,
-     not a push, so it must not animate as one. */
-  setRoot(name, render, params = {}) {
-    this._settle();
-    this.stack.forEach(s => s.node.remove());
-    this.stack = [];
-    const node = this._make(name, render, params);
-    node.style.transform = 'translate3d(0,0,0)';
-    this.mount.appendChild(node);
-    this.stack.push({ name, params, node, render, scroll: 0 });
-    this.mount.scrollTop = 0;
-    this.onChange && this.onChange(this);
-  }
-
-  push(name, render, params = {}) {
-    /* An impatient double-tap on a card should open one screen, not two. Same
-       screen, same params, within a moment of the last push: ignore it. */
-    const sig = name + '|' + JSON.stringify(params);
-    const now = performance.now();
-    if (sig === this._lastSig && now - (this._lastAt || 0) < 500) return;
-    this._lastSig = sig; this._lastAt = now;
-
-    this._settle();                 // never refuse a tap because a spring is mid-flight
-    const prev = this.top;
-    if (prev) prev.scroll = this.mount.scrollTop;
-    const node = this._make(name, render, params);
-    const w = this.mount.offsetWidth;
-    node.style.transform = `translate3d(${w}px,0,0)`;
-    this.mount.appendChild(node);
-    this.stack.push({ name, params, node, render, scroll: 0 });
-    this.mount.scrollTop = 0;
-    this.onChange && this.onChange(this);
-
-    if (reduceMotion()) {
-      node.style.transform = 'translate3d(0,0,0)';
-      if (prev) prev.node.style.display = 'none';
-      return;
+const match = (hash) => {
+  const path = (hash.replace(/^#/, "") || "/").split("?")[0];
+  for (const r of routes) {
+    if (r.pattern === path) return { view: r.view, params: {} };
+    if (r.pattern.includes(":")) {
+      const p = r.pattern.split("/"), q = path.split("/");
+      if (p.length !== q.length) continue;
+      const params = {};
+      const ok = p.every((seg, i) =>
+        seg.startsWith(":") ? ((params[seg.slice(1)] = decodeURIComponent(q[i])), true) : seg === q[i]);
+      if (ok) return { view: r.view, params };
     }
-    this.busy = true;
-    const anim = new Animatable(w, v => {
-      node.style.transform = `translate3d(${v}px,0,0)`;
-      if (prev) {
-        prev.node.style.transform = `translate3d(${-(w - v) * PARALLAX}px,0,0)`;
-        prev.node.style.filter = `brightness(${1 - (1 - v / w) * 0.35})`;
-      }
-    });
-    const done = () => {
-      this._pending = null;
-      this.busy = false;
-      node.style.transform = 'translate3d(0,0,0)';
-      if (prev) {
-        prev.node.style.display = 'none';
-        prev.node.style.filter = '';
-        prev.node.style.transform = 'translate3d(0,0,0)';
-      }
-    };
-    this._pending = { anim, done };
-    anim.to(0, { ...SPRING.ui, onEnd: done });
   }
+  return null;
+};
 
-  pop(velocity = 0) {
-    this._settle();
-    if (this.stack.length < 2) return false;
-    const cur = this.stack.pop();
-    const prev = this.top;
-    const w = this.mount.offsetWidth;
-    prev.node.style.display = '';
-    this.onChange && this.onChange(this);
+/* Going back to a list should land where you left it, not at the top. Going
+   forward into a new screen should always start at the top. */
+const scrollMemory = new Map();
+let backing = false;
+addEventListener("popstate", () => { backing = true; });
 
-    const finish = () => {
-      this._pending = null;
-      cur.node.remove();
-      prev.node.style.filter = '';
-      prev.node.style.transform = 'translate3d(0,0,0)';
-      this.mount.scrollTop = prev.scroll || 0;
-      this.busy = false;
-    };
-    if (reduceMotion()) { finish(); return true; }
+export async function render() {
+  const view = $("#view");
+  const hit = match(location.hash) || match("#/");
 
-    this.busy = true;
-    const from = this._readX(cur.node);
-    const anim = new Animatable(from, v => {
-      cur.node.style.transform = `translate3d(${v}px,0,0)`;
-      prev.node.style.transform = `translate3d(${-(w - v) * PARALLAX}px,0,0)`;
-      prev.node.style.filter = `brightness(${1 - (1 - v / w) * 0.35})`;
-    });
-    this._pending = { anim, done: finish };
-    anim.to(w, { ...SPRING.ui, onEnd: finish }, velocity);
-    return true;
+  /* Views hang clocks and listeners off their mount; this is their chance to
+     take them down while their nodes are still on the page. */
+  if (current) {
+    document.dispatchEvent(new CustomEvent("view:leaving"));
+    scrollMemory.set(current, scrollY);
   }
+  current = (location.hash || "#/").split("?")[0];
+  closeSheet();
 
-  popTo(name) {
-    this._settle();
-    while (this.stack.length > 1 && this.top.name !== name) {
-      this.stack.pop().node.remove();
-    }
-    const t = this.top;
-    t.node.style.display = '';
-    t.node.style.transform = 'translate3d(0,0,0)';
-    t.node.style.filter = '';
-    this.mount.scrollTop = t.scroll || 0;
-    this.onChange && this.onChange(this);
-  }
+  /* Home runs a full-bleed hero under the bar; every other view starts below
+     it. Reset before mounting, because home's own mount is what turns it on. */
+  $("#shell").dataset.hero = "0";
 
-  /* Re-render the screen one below the top, so a pop returns to a screen that
-     already reflects what just changed. Refreshing after the pop instead would
-     mutate the stack while its animation is still running. */
-  refreshBelow() {
-    const t = this.stack[this.stack.length - 2];
-    if (!t) return;
-    const fresh = this._make(t.name, t.render, t.params);
-    fresh.style.transform = t.node.style.transform || 'translate3d(0,0,0)';
-    fresh.style.display = t.node.style.display;
-    fresh.style.filter = t.node.style.filter;
-    t.node.replaceWith(fresh);
-    t.node = fresh;
-  }
+  const out = await hit.view(hit.params);
+  const res = typeof out === "string" ? { html: out } : out;
 
-  /* Re-render the screen on top in place, keeping scroll position. Used when
-     state changed but the user did not navigate. */
-  refresh() {
-    const t = this.top;
-    if (!t) return;
-    const scroll = this.mount.scrollTop;
-    const fresh = this._make(t.name, t.render, t.params);
-    fresh.style.transform = t.node.style.transform || 'translate3d(0,0,0)';
-    t.node.replaceWith(fresh);
-    t.node = fresh;
-    this.mount.scrollTop = scroll;
-    this.onChange && this.onChange(this);
-  }
+  /* Every render gets a FRESH container, and mount() is handed that rather
+     than #view itself. Setting #view.innerHTML would leave any listener a view
+     bound to #view still attached — so after two visits a single tap fires the
+     handler twice, and a toggle lands back where it started. Listeners die
+     with the node they were bound to. */
+  const screen = document.createElement("div");
+  screen.className = "screen";
+  screen.innerHTML = res.html;
+  view.replaceChildren(screen);
 
-  _make(name, render, params) {
-    const node = document.createElement('section');
-    node.className = 'screen';
-    node.dataset.screen = name;
-    node.innerHTML = render(params) || '';
-    return node;
-  }
+  view.classList.remove("view-in");
+  void view.offsetWidth;                        // restart the entrance
+  view.classList.add("view-in");
 
-  _readX(node) {
-    const m = new DOMMatrixReadOnly(getComputedStyle(node).transform);
-    return m.m41 || 0;
-  }
+  /* The bar and the dock belong to the view, not to the shell — a screen that
+     cannot say what its own back button and primary action are ends up with
+     the previous screen's. They are painted before mount, so a view's own
+     wiring can find its dock in the DOM. */
+  document.dispatchEvent(new CustomEvent("view:chrome", {
+    detail: { path: current, bar: res.bar, dock: res.dock, tabs: res.tabs !== false },
+  }));
 
-  /* ---- interactive edge swipe ----------------------------------------- */
-  _armSwipe() {
-    const m = this.mount;
-    const vel = new Velocity();
-    let active = false, startX = 0, startY = 0, decided = false, cur = null, prev = null, w = 0;
+  if (res.mount) res.mount(screen);
 
-    m.addEventListener('pointerdown', e => {
-      if (this.busy || this.stack.length < 2 || sheetOpen()) return;
-      if (e.clientX - m.getBoundingClientRect().left > EDGE) return;
-      active = true; decided = false;
-      startX = e.clientX; startY = e.clientY;
-      vel.reset(); vel.add(e.clientX);
-      w = m.offsetWidth;
-      cur = this.top; prev = this.stack[this.stack.length - 2];
-    }, { passive: true });
-
-    m.addEventListener('pointermove', e => {
-      if (!active) return;
-      const dx = e.clientX - startX, dy = e.clientY - startY;
-      if (!decided) {
-        if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return;   // hysteresis
-        if (Math.abs(dy) > Math.abs(dx)) { active = false; return; } // it was a scroll
-        decided = true;
-        prev.node.style.display = '';
-        m.style.overflowY = 'hidden';
-      }
-      const x = clamp(dx, 0, w);
-      vel.add(e.clientX);
-      cur.node.style.transform = `translate3d(${x}px,0,0)`;
-      prev.node.style.transform = `translate3d(${-(w - x) * PARALLAX}px,0,0)`;
-      prev.node.style.filter = `brightness(${1 - (1 - x / w) * 0.35})`;
-      e.preventDefault();
-    }, { passive: false });
-
-    const end = () => {
-      if (!active) return;
-      active = false;
-      m.style.overflowY = '';
-      if (!decided) return;
-      const v = vel.get();
-      const x = this._readX(cur.node);
-      /* Decide on the velocity SIGN, not the position — a fast short flick
-         should still commit. */
-      const projected = x + project(v);
-      if (v > 120 || projected > w * 0.42) {
-        this.stack.pop();
-        this.busy = true;
-        const anim = new Animatable(x, val => {
-          cur.node.style.transform = `translate3d(${val}px,0,0)`;
-          prev.node.style.transform = `translate3d(${-(w - val) * PARALLAX}px,0,0)`;
-          prev.node.style.filter = `brightness(${1 - (1 - val / w) * 0.35})`;
-        });
-        this.onChange && this.onChange(this);
-        anim.to(w, { ...SPRING.flick, onEnd: () => {
-          cur.node.remove();
-          prev.node.style.filter = '';
-          prev.node.style.transform = 'translate3d(0,0,0)';
-          m.scrollTop = prev.scroll || 0;
-          this.busy = false;
-        } }, v);
-      } else {
-        const anim = new Animatable(x, val => {
-          cur.node.style.transform = `translate3d(${val}px,0,0)`;
-          prev.node.style.transform = `translate3d(${-(w - val) * PARALLAX}px,0,0)`;
-          prev.node.style.filter = `brightness(${1 - (1 - val / w) * 0.35})`;
-        });
-        anim.to(0, { ...SPRING.ui, onEnd: () => { prev.node.style.display = 'none'; prev.node.style.filter = ''; } }, v);
-      }
-    };
-    m.addEventListener('pointerup', end);
-    m.addEventListener('pointercancel', end);
-  }
+  const y = scrollMemory.get(current);
+  scrollTo({ top: backing && y ? y : 0, behavior: "instant" });
+  backing = false;
+  document.dispatchEvent(new CustomEvent("view:rendered", { detail: { path: current } }));
 }
+
+export function startRouter() {
+  addEventListener("hashchange", render);
+  if (!location.hash) location.replace("#/");
+  render();
+}
+
+export const go = (hash) => {
+  /* Assigning the hash it already has fires no hashchange, so a view that
+     "navigates" to itself would silently do nothing. Anything re-rendering the
+     screen it is already on wants refresh(), and this catches the rest. */
+  if (("#" + (location.hash.replace(/^#/, "") || "/")) === hash) return refresh();
+  location.hash = hash;
+};
+
+/* Re-render the current route in place, keeping the scroll position — for a
+   view whose own state changed but whose address did not. */
+export async function refresh() {
+  const y = scrollY;
+  await render();
+  scrollTo({ top: y, behavior: "instant" });
+}
+export const back = () => history.length > 1 ? history.back() : go("#/");
+export const path = () => current;

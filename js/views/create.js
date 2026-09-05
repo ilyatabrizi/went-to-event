@@ -1,18 +1,22 @@
-/* Publishing an event is the product's reason to exist, so the flow is four
-   short steps with a visible spine and a live preview of the thing being made. */
+/* Publishing is the product's reason to exist, so the flow is four short steps
+   with a visible spine and a live preview of the card being made. */
 
-import { state } from '../store.js';
-import { CATS, catIcon, catLabel } from '../data/geo.js';
-import { esc, money, amount } from '../util.js';
-import { ico } from '../icons.js';
-import { cover, sectionHead } from '../ui/parts.js';
-import { cityName } from './home.js';
+import { state, save, me } from "../store.js";
+import { CATS, catIcon, catLabel } from "../data/geo.js";
+import { addEvent, nextId, byId } from "../data/events.js";
+import { esc, money, amount } from "../util.js";
+import { icon } from "../icons.js";
+import { cityName } from "../place.js";
+import { cover, sectionHead, lazyImages, note } from "../parts.js";
+import { toast } from "../ui.js";
+import { go, refresh } from "../router.js";
+import { haptic, commit } from "../motion.js";
 
-export const STEPS = ['The basics', 'When', 'Where', 'Entry'];
+export const STEPS = ["The basics", "When", "Where", "Entry"];
 
 export const blankDraft = () => ({
-  step: 0, title: '', cat: 'Nightlife', date: '', time: '', venue: '',
-  city: cityName(), paid: false, price: '', about: '',
+  step: 0, title: "", cat: "Nightlife", date: "", time: "", venue: "",
+  city: cityName(), paid: false, price: "", about: "",
 });
 
 export function stepValid(d) {
@@ -22,166 +26,243 @@ export function stepValid(d) {
   return true;
 }
 
-export function createView() {
+export default function create() {
+  if (!state.create) state.create = blankDraft();
   const d = state.create;
-  const pct = ((d.step + 1) / STEPS.length) * 100;
+  const last = d.step === STEPS.length - 1;
 
   const preview = {
-    id: 777, cat: d.cat, title: d.title || 'Your event',
-    when: (d.date || 'Date TBC') + (d.time ? ' · ' + d.time : ''),
-    venue: d.venue || 'Venue TBC', going: 1, friends: [],
-    minPrice: d.paid ? (parseFloat(d.price) || 0) : 0,
+    id: 777, cat: d.cat, title: d.title || "Your event",
+    when: (d.date || "Date TBC") + (d.time ? " · " + d.time : ""),
+    venue: d.venue || "Venue TBC", going: 1, friends: [],
+    minPrice: d.paid ? parseFloat(d.price) || 0 : 0,
+    userMade: true,
   };
 
   const body = [
-    /* 0 — basics */ `
-      <div class="label">What is it called?</div>
+    /* 0 — the basics */ `
       <div class="field">
-        <input data-input="c_title" value="${esc(d.title)}" maxlength="60" enterkeyhint="next"
-          placeholder="Warehouse Sessions Vol. 10" aria-label="Event title" autofocus>
+        <label for="f_title">What is it called?</label>
+        <input id="f_title" data-f="title" value="${esc(d.title)}" maxlength="60"
+          enterkeyhint="next" placeholder="Warehouse Sessions Vol. 10">
       </div>
-      <div class="t-sub" id="titleCount" style="font-size:11.5px;margin:6px 0 0 2px">${d.title.length}/60</div>
-
-      <div class="label" style="margin-top:22px">Category</div>
-      <div style="display:flex;flex-wrap:wrap;gap:8px">
-        ${CATS.map(c => `<button class="pill press" data-act="c:cat" data-cat="${c.key}"
-          aria-pressed="${d.cat === c.key ? 'true' : 'false'}">${ico(c.icon, 15)} ${esc(c.label)}</button>`).join('')}
+      <div style="padding-top:22px">
+        <div class="label" style="padding-bottom:11px">What kind of event</div>
+        <div class="rail" style="padding-inline:0;margin-inline:0;flex-wrap:wrap;overflow:visible">
+          ${CATS.map((c) => `
+            <button class="chip" type="button" data-cat="${c.key}"
+              aria-pressed="${c.key === d.cat}">${icon(c.icon)}${esc(c.label)}</button>`).join("")}
+        </div>
       </div>
-
-      <div class="label" style="margin-top:22px">Tell people what it is</div>
-      <div class="field field-area">
-        <textarea data-input="c_about" maxlength="400" rows="4"
-          placeholder="Four rooms, one warehouse, house and techno until sunrise…"
-          aria-label="Description">${esc(d.about)}</textarea>
+      <div class="field" style="padding-top:22px">
+        <label for="f_about">Tell people what to expect</label>
+        <textarea id="f_about" data-f="about" rows="4" maxlength="400"
+          placeholder="Four rooms, one raw shell on the waterfront…">${esc(d.about)}</textarea>
+        <span class="field-note">Optional, but events with a description get roughly twice the RSVPs.</span>
       </div>`,
 
     /* 1 — when */ `
-      <div class="label">Date</div>
-      <div class="field">${ico('cal', 18)}
-        <input data-input="c_date" value="${esc(d.date)}" placeholder="Sat, 14 Sep" aria-label="Date"></div>
-
-      <div class="label" style="margin-top:20px">Start time</div>
-      <div class="field">${ico('clock', 18)}
-        <input data-input="c_time" value="${esc(d.time)}" placeholder="9:00 PM" aria-label="Start time"></div>
-
-      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:14px">
-        ${['Tonight', 'Tomorrow', 'Sat, 14 Sep', 'Sun, 15 Sep'].map(x =>
-          `<button class="pill press" data-act="c:date" data-v="${esc(x)}">${esc(x)}</button>`).join('')}
+      <div class="field">
+        <label for="f_date">Which day?</label>
+        <input id="f_date" data-f="date" value="${esc(d.date)}" maxlength="30"
+          placeholder="Sat, 14 Sep">
       </div>
-      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px">
-        ${['7:00 PM', '8:00 PM', '9:00 PM', '10:00 PM'].map(x =>
-          `<button class="pill press" data-act="c:time" data-v="${esc(x)}">${esc(x)}</button>`).join('')}
-      </div>`,
+      <div class="field" style="padding-top:18px">
+        <label for="f_time">What time?</label>
+        <input id="f_time" data-f="time" value="${esc(d.time)}" maxlength="30"
+          placeholder="9:00 PM – 2:00 AM">
+      </div>
+      <div style="padding-top:22px">${note("Dates are free text in the preview. A real build would use a picker and store a timestamp.")}</div>`,
 
     /* 2 — where */ `
-      <div class="label">Venue</div>
-      <div class="field">${ico('pin', 18)}
-        <input data-input="c_venue" value="${esc(d.venue)}" placeholder="Pier 70" aria-label="Venue"></div>
-
-      <div class="label" style="margin-top:20px">City</div>
-      <button class="field press" data-act="picker" style="width:100%;text-align:left">
-        ${ico('globe', 18)}<span class="t-body" style="flex:1">${esc(d.city)}</span>
-        <span style="color:var(--ash)">${ico('down', 16)}</span>
-      </button>
-
-      <div class="row" style="margin-top:20px;gap:10px;padding:13px 14px;border-radius:var(--r-md);
-           background:rgba(244,241,236,.045);border:1px solid var(--hair)">
-        <span style="color:var(--ash);display:flex;flex:none">${ico('info', 18)}</span>
-        <span class="t-sub" style="font-size:12.5px">Only people browsing ${esc(d.city)} will see this in
-          their feed. You can change the city before you publish.</span>
+      <div class="field">
+        <label for="f_venue">Where is it?</label>
+        <input id="f_venue" data-f="venue" value="${esc(d.venue)}" maxlength="60"
+          placeholder="Pier 70">
+      </div>
+      <div class="card card-pad row" style="margin-top:18px">
+        <span class="ico">${icon("pin")}</span>
+        <span class="row-copy">
+          <span class="row-t">${esc(d.city)}</span>
+          <span class="row-s">Published to this city’s feed</span>
+        </span>
       </div>`,
 
     /* 3 — entry */ `
-      <div class="label">Entry</div>
+      <div class="label" style="padding-bottom:11px">Is it free or ticketed?</div>
       <div class="dock-row">
-        <button class="btn ${d.paid ? 'btn-ghost' : ''} press" data-act="c:free" style="flex:1;height:46px;font-size:14.5px">Free</button>
-        <button class="btn ${d.paid ? '' : 'btn-ghost'} press" data-act="c:paid" style="flex:1;height:46px;font-size:14.5px">Ticketed</button>
+        <button class="btn ${d.paid ? "btn-soft" : "btn-primary"}" type="button" data-paid="0"
+          style="flex:1;min-height:48px">Free</button>
+        <button class="btn ${d.paid ? "btn-primary" : "btn-soft"}" type="button" data-paid="1"
+          style="flex:1;min-height:48px">Ticketed</button>
       </div>
-
       ${d.paid ? `
-        <div class="label" style="margin-top:20px">Price per ticket</div>
-        <div class="field">
-          <span class="t-head" style="color:var(--ash)">$</span>
-          <input data-input="c_price" value="${esc(d.price)}" inputmode="decimal" placeholder="25" aria-label="Price">
+        <div class="field" style="padding-top:20px">
+          <label for="f_price">Price per ticket</label>
+          <input id="f_price" data-f="price" value="${esc(d.price)}" inputmode="decimal"
+            maxlength="6" placeholder="25">
         </div>
-        <div class="row" style="margin-top:14px;gap:10px;padding:13px 14px;border-radius:var(--r-md);
-             background:rgba(244,241,236,.045);border:1px solid var(--hair)">
-          <span style="color:var(--ash);display:flex;flex:none">${ico('wallet', 18)}</span>
-          <span class="t-sub" style="font-size:12.5px">You keep
-            <b style="color:var(--bone)" id="payoutValue">${amount(Math.max(0, (parseFloat(d.price) || 0) * 0.94))}</b>
-            per ticket. Payouts land 24 hours after the event.</span>
-        </div>`
-      : `<div class="row" style="margin-top:16px;gap:10px;padding:13px 14px;border-radius:var(--r-md);
-             background:rgba(244,241,236,.045);border:1px solid var(--hair)">
-          <span style="color:var(--ash);display:flex;flex:none">${ico('users', 18)}</span>
-          <span class="t-sub" style="font-size:12.5px">Free events collect RSVPs so you know how many to expect.</span>
-        </div>`}
-
-      <div style="margin-top:26px">
-        ${sectionHead('How it will look')}
-        <article class="card">
-          <div class="cover" style="aspect-ratio:5/3">
-            ${cover(preview)}<div class="cover-scrim"></div>
-            <div class="cover-top"><span class="chip">${ico(catIcon(d.cat), 13)}${esc(catLabel(d.cat))}</span></div>
-            <div class="cover-bot"><div class="t-title">${esc(preview.title)}</div></div>
-          </div>
-          <div style="padding:12px 14px 13px">
-            <div class="row" style="gap:8px">
-              <span class="t-sub" style="color:var(--bone);font-weight:600">${esc(preview.when)}</span>
-              <span class="t-sub">·</span>
-              <span class="t-sub" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(preview.venue)}</span>
-              <span class="t-head" id="previewPrice" style="font-size:15px">${money(preview.minPrice)}</span>
-            </div>
-          </div>
-        </article>
-      </div>`,
+        <div class="card card-pad stack" style="gap:10px;margin-top:18px">
+          <div class="spread"><span class="small">Ticket price</span>
+            <span class="money" id="p_gross">${amount(parseFloat(d.price) || 0)}</span></div>
+          <div class="spread"><span class="small">Platform fee · 8%</span>
+            <span class="money" id="p_fee">−${amount((parseFloat(d.price) || 0) * 0.08)}</span></div>
+          <div class="spread" style="padding-top:10px;border-top:1px solid var(--line)">
+            <span class="strong">You keep</span>
+            <span class="strong money" id="p_net">${amount((parseFloat(d.price) || 0) * 0.92)}</span></div>
+        </div>` : `
+        <div style="padding-top:20px">${note("Free events cost you nothing to publish, and nothing per RSVP.")}</div>`}`,
   ][d.step];
 
-  return `
-  <div class="pad" style="padding-top:calc(max(var(--top),12px) + 58px)">
-    <div class="row" style="justify-content:space-between;margin-bottom:8px">
-      <span class="t-cap ash">Step ${d.step + 1} of ${STEPS.length}</span>
-      <span class="t-cap ash">${esc(STEPS[d.step])}</span>
+  const html = `
+  <div class="wrap">
+    <div class="step-bar">
+      ${STEPS.map((_, i) => `<span class="step-seg${i <= d.step ? " on" : ""}"><i></i></span>`).join("")}
     </div>
-    <div class="prog" style="margin-bottom:24px"><i style="width:${pct}%"></i></div>
-    <h1 class="t-display" style="margin:0 0 20px;text-wrap:balance">${[
-      'What are you putting on?', 'When does it happen?', 'Where is it?', 'How do people get in?',
-    ][d.step]}</h1>
-    ${body}
+    <div class="label">Step ${d.step + 1} of ${STEPS.length}</div>
+    <h1 class="display d-2" style="margin-top:8px">${STEPS[d.step]}</h1>
+
+    <section class="section">${body}</section>
+
+    <section class="section">
+      ${sectionHead("How it will look")}
+      <div class="ev-wrap">
+        <div class="ev">
+          <div class="cover">${cover(preview)}
+            <span class="ev-top"><span class="ev-chips">
+              <span class="badge">${icon(catIcon(d.cat), 12)}${esc(catLabel(d.cat))}</span></span></span>
+            <span class="ev-title">${esc(preview.title)}</span>
+          </div>
+          <div class="ev-body">
+            <span class="ev-when">${icon("clock", 14)}
+              <span class="clip">${esc(preview.when)} · ${esc(preview.venue)}</span></span>
+            <span class="ev-foot">
+              <span class="small">1 going</span>
+              <span class="ev-price">${preview.minPrice === 0 ? "Free" : `from ${money(preview.minPrice)}`}</span>
+            </span>
+          </div>
+        </div>
+      </div>
+    </section>
   </div>`;
+
+  return {
+    html, tabs: false,
+    bar: { back: true, title: "Publish an event" },
+    dock: `<div class="dock-row">
+      ${d.step > 0 ? `<button class="btn btn-soft" type="button" id="prev"
+        style="flex:none;width:56px" aria-label="Back a step">${icon("back", 18)}</button>` : ""}
+      <button class="btn btn-primary" type="button" id="next" style="flex:1"
+        ${stepValid(d) ? "" : "disabled"}>${last ? "Publish event" : "Continue"}</button>
+    </div>`,
+    mount(el) {
+      lazyImages(el);
+
+      /* Typing repaints the preview and the Continue button, but must never
+         re-render the screen — that would blur the field on every keystroke. */
+      el.addEventListener("input", (e) => {
+        const f = e.target.dataset.f;
+        if (!f) return;
+        d[f] = e.target.value;
+        const next = document.querySelector("#next");
+        if (next) next.disabled = !stepValid(d);
+        paintPreview(el, d);
+      });
+
+      el.addEventListener("click", (e) => {
+        const c = e.target.closest("[data-cat]");
+        if (c) { haptic(6); d.cat = c.dataset.cat; save(); refresh(); return; }
+        const p = e.target.closest("[data-paid]");
+        if (p) { haptic(6); d.paid = p.dataset.paid === "1"; save(); refresh(); }
+      });
+
+      document.querySelector("#prev")?.addEventListener("click", () => {
+        d.step = Math.max(0, d.step - 1); save(); refresh();
+      });
+      document.querySelector("#next")?.addEventListener("click", () => {
+        if (!stepValid(d)) return;
+        if (d.step < STEPS.length - 1) { d.step++; haptic(8); save(); refresh(); return; }
+        publish(d);
+      });
+    },
+  };
 }
 
-export const createDock = () => {
-  const d = state.create;
-  const last = d.step === STEPS.length - 1;
-  return `<div class="dock-row">
-    ${d.step > 0 ? `<button class="btn btn-ghost press" data-act="c:back" style="flex:none;width:104px">Back</button>` : ''}
-    <button class="btn ${last ? 'btn-ember' : ''} press" data-act="${last ? 'c:publish' : 'c:next'}"
-      style="flex:1" ${stepValid(d) ? '' : 'disabled'}>${last ? 'Publish event' : 'Continue'}</button>
-  </div>`;
-};
+function paintPreview(el, d) {
+  /* The payout is the reason this step exists, so it tracks the field on every
+     keystroke. A figure that only catches up on the next render is silently
+     wrong exactly while somebody is reading it. */
+  const n = parseFloat(d.price) || 0;
+  const gross = el.querySelector("#p_gross"), fee = el.querySelector("#p_fee"),
+        net = el.querySelector("#p_net");
+  if (gross) gross.textContent = amount(n);
+  if (fee) fee.textContent = "−" + amount(n * 0.08);
+  if (net) net.textContent = amount(n * 0.92);
 
-export function publishedView() {
-  return `
-  <div class="pad" style="min-height:100%;display:flex;flex-direction:column;justify-content:center;
-       align-items:center;text-align:center;padding-top:calc(max(var(--top),12px) + 40px)">
-    <div style="width:96px;height:96px;border-radius:50%;display:grid;place-items:center;
-         background:rgba(255,91,61,.12);border:1px solid rgba(255,91,61,.3);color:var(--ember);margin-bottom:24px">
-      ${ico('sparkle', 42)}
-    </div>
-    <h1 class="t-display" style="margin:0 0 10px">It’s live.</h1>
-    <p class="t-body ash" style="margin:0 0 26px;max-width:290px">
-      Anyone browsing ${esc(cityName())} can find it now. Share the link and the RSVPs start arriving.
-    </p>
-    <div class="dock-row" style="width:100%">
-      <button class="btn btn-ghost press" data-act="share" style="flex:1;height:46px;font-size:14px">
-        ${ico('share', 17)} Share</button>
-      <button class="btn btn-ghost press" data-act="toast" data-msg="Invite sheet is next in the build"
-        style="flex:1;height:46px;font-size:14px">${ico('userplus', 17)} Invite</button>
-    </div>
-  </div>`;
+  const t = el.querySelector(".ev-title");
+  if (t) t.textContent = d.title || "Your event";
+  const w = el.querySelector(".ev-when .clip");
+  if (w) w.textContent = `${(d.date || "Date TBC") + (d.time ? " · " + d.time : "")} · ${d.venue || "Venue TBC"}`;
+  const p = el.querySelector(".ev-price");
+  if (p) {
+    const n = d.paid ? parseFloat(d.price) || 0 : 0;
+    p.textContent = n === 0 ? "Free" : `from ${money(n)}`;
+  }
 }
 
-export const publishedDock = () => `<div class="dock-row">
-  <button class="btn btn-ghost press" data-act="tab" data-tab="home" style="flex:none;width:110px">Done</button>
-  <button class="btn press" data-act="viewpublished" style="flex:1">View event</button></div>`;
+function publish(d) {
+  const price = d.paid ? parseFloat(d.price) || 0 : 0;
+  const ev = {
+    id: nextId(), cat: d.cat, title: d.title.trim(), host: "You", hostEvents: 1,
+    when: (d.date || "Date TBC") + (d.time ? " · " + d.time.split(" – ")[0] : ""),
+    dateLong: d.date || "Date TBC", timeRange: d.time || "Time TBC",
+    venue: d.venue || "Venue TBC", address: `${d.venue}, ${d.city}`, dist: 0.4,
+    going: 1, friends: [], userMade: true,
+    about: d.about.trim() || "A new event on Went To Event.",
+    tiers: price > 0
+      ? [{ name: "General", desc: "Standard entry", price }]
+      : [{ name: "RSVP", desc: "Free entry", price: 0 }],
+  };
+  addEvent(ev, d.city);
+  state.publishedId = ev.id;
+  state.create = null;
+  save(); commit();
+  go("#/published");
+}
+
+/* ------------------------------------------------------------ published */
+export function published() {
+  const ev = state.publishedId ? byId(state.publishedId) : null;
+  const html = `
+  <div class="wrap" style="padding-top:8vh">
+    <div style="display:grid;justify-items:center;text-align:center;gap:18px">
+      <span style="width:88px;height:88px;border-radius:50%;display:grid;place-items:center;
+        background:var(--ember-wash);box-shadow:inset 0 0 0 1px var(--ember-line);color:var(--ember)">
+        ${icon("check", 40)}</span>
+      <div>
+        <h1 class="display d-2">It is live.</h1>
+        <p class="title-sub" style="text-align:center;margin:0 auto">
+          ${esc(ev ? ev.title : "Your event")} is now in the ${esc(cityName())} feed.</p>
+      </div>
+    </div>
+
+    <div class="card card-pad stack" style="gap:11px;margin-top:30px">
+      <div class="spread"><span class="small">Where it shows</span><span class="strong">Explore & Home</span></div>
+      <div class="spread"><span class="small">Who can see it</span><span class="strong">Everyone in ${esc(cityName())}</span></div>
+      <div class="spread"><span class="small">You keep</span>
+        <span class="strong money">${ev && ev.minPrice > 0 ? amount(ev.minPrice * 0.92) + " per ticket" : "Nothing to collect"}</span></div>
+    </div>
+
+    <p class="tiny" style="text-align:center;padding-top:20px">
+      Nothing left this device — the event lives in this preview only.</p>
+  </div>`;
+
+  return {
+    html, tabs: false,
+    bar: { close: true, title: "" },
+    dock: `<div class="dock-row">
+      <button class="btn btn-soft" type="button" data-go="#/you" style="flex:none;width:112px">Done</button>
+      ${ev ? `<a class="btn btn-primary" href="#/event/${ev.id}" style="flex:1">See the event</a>` : ""}
+    </div>`,
+  };
+}

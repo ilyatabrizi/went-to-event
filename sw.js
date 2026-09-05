@@ -9,20 +9,21 @@
    Remote cover images: CACHE-FIRST. They never change at a given URL, they are
    the expensive part, and caching them is what makes the app usable on a plane. */
 
-const V = 'wte-v1';
-const IMGS = 'wte-img-v1';
+const V = 'wte-v2';
+const IMGS = 'wte-img-v2';
 const MARK = '__wte_install_kind__';
 
 const SHELL = [
-  './', './index.html', './manifest.webmanifest', './css/app.css',
-  './js/app.js', './js/router.js', './js/store.js', './js/util.js', './js/icons.js',
-  './js/ui/motion.js', './js/ui/sheet.js', './js/ui/toast.js', './js/ui/parts.js', './js/ui/haptics.js',
-  './js/data/geo.js', './js/data/people.js', './js/data/events.js',
-  './js/views/home.js', './js/views/explore.js', './js/views/pickers.js', './js/views/detail.js',
-  './js/views/booking.js', './js/views/went.js', './js/views/chat.js', './js/views/profile.js',
-  './js/views/settings.js', './js/views/create.js',
+  './', './index.html', './manifest.webmanifest', './css/app.css', './js/app.js',
+  './js/data/events.js', './js/data/geo.js', './js/data/people.js', './js/icons.js',
+  './js/install.js', './js/motion.js', './js/parts.js', './js/place.js', './js/router.js',
+  './js/store.js', './js/ui.js', './js/util.js', './js/views/booking.js',
+  './js/views/chat.js', './js/views/create.js', './js/views/detail.js',
+  './js/views/explore.js', './js/views/home.js', './js/views/pickers.js',
+  './js/views/profile.js', './js/views/settings.js', './js/views/went.js',
+  './assets/fonts/jakarta.woff2', './assets/fonts/fraunces.woff2',
   './assets/icons/favicon_192.png', './assets/icons/favicon_512.png',
-  './assets/icons/e_icon_rounded_512.png', './assets/icons/apple-touch-icon.png',
+  './assets/icons/apple-touch-icon.png'
 ];
 
 self.addEventListener('install', e => {

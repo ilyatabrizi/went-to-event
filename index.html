@@ -1,72 +1,75 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" dir="ltr">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=5">
-<title>Went To Event — discover events near you</title>
-<meta name="description" content="Went To Event — discover events near you, join in two taps, and keep a record of the good ones. Publish your own in four steps.">
+<title>Went To Event — what is on, and who is going</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="description" content="Went To Event — find what is on near you, join in two taps, keep a record of the good ones, and publish your own in four steps.">
 <meta name="theme-color" content="#0B0A0C">
 <meta name="color-scheme" content="dark">
-
 <link rel="manifest" href="manifest.webmanifest">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Went To Event">
+<link rel="icon" href="assets/icons/favicon.ico" sizes="any">
+<link rel="icon" href="assets/icons/favicon_192.png" sizes="192x192" type="image/png">
 <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
-<link rel="icon" href="assets/icons/favicon_32.png" sizes="32x32">
-<link rel="icon" href="assets/icons/favicon_192.png" sizes="192x192">
-<link rel="shortcut icon" href="assets/icons/favicon.ico">
-
-<meta property="og:type" content="website">
-<meta property="og:site_name" content="Went To Event">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Went To Event">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta property="og:title" content="Went To Event">
-<meta property="og:description" content="Discover events near you, join in two taps, and keep a record of the good ones.">
-<meta property="og:image" content="assets/icons/e_icon_1024.png">
-<meta name="twitter:card" content="summary_large_image">
+<meta property="og:description" content="What is on near you, and who is going. Join in two taps, or publish your own in four steps.">
+<meta property="og:type" content="website">
 
-<link rel="preconnect" href="https://images.unsplash.com" crossorigin>
+<link rel="preload" href="assets/fonts/jakarta.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="assets/fonts/fraunces.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="css/app.css">
+<link rel="preconnect" href="https://images.unsplash.com" crossorigin>
+
+<style>
+  /* Boot only. Inline, so the mark is on screen in the first frame — before
+     app.css, before a single font has landed. */
+  html,body{background:#0B0A0C;margin:0}
+  #boot{position:fixed;inset:0;z-index:999;display:grid;place-items:center;
+    background:#0B0A0C;transition:opacity .5s cubic-bezier(.22,.61,.36,1)}
+  #boot.gone{opacity:0;pointer-events:none}
+  .boot-stage{width:min(42vw,164px)}
+  .boot-stage svg{width:100%;height:auto;display:block}
+</style>
 </head>
 <body>
 
-<div id="stage">
-  <div id="device">
-
-    <!-- the ground content scrolls on; chrome floats above it -->
-    <main id="app" tabindex="-1"></main>
-
-    <!-- scroll-edge effect where floating chrome overlaps content -->
-    <div class="edge-top" aria-hidden="true"></div>
-
-    <!-- pushed screens get a translucent bar; tab roots do not -->
-    <header class="topbar" id="topbar"></header>
-
-    <!-- one dock, whichever screen needs it -->
-    <div class="dock" id="dock" hidden></div>
-
-    <nav class="tabbar" id="tabbar" role="tablist" aria-label="Main"></nav>
-
-    <div class="toast-dock" id="toastDock" aria-live="polite" role="status"></div>
-    <div id="sheetRoot"></div>
-
-    <!-- the veil lifts once the first screen has painted -->
-    <div class="boot" id="boot" aria-hidden="true">
-      <div class="boot-mark">
-        <div class="boot-glow"></div>
-        <img src="assets/icons/e_icon_rounded_512.png" alt="" width="88" height="88">
-      </div>
-    </div>
-
+<!-- The opening: the "e" settles, then the dot drops onto its baseline. -->
+<div id="boot" role="status" aria-label="Went To Event is opening">
+  <div class="boot-stage">
+    <svg viewBox="0 0 1024 1024" role="img" aria-label="Went To Event">
+      <g class="e-mark" transform="matrix(0.79929,0,0,-0.79929,188.694,733.403)">
+        <path fill="#F4F1EC" d="M580 235H175Q180 175 217.0 141.0Q254 107 308 107Q386 107 419 174H570Q546 94 478.0 42.5Q410 -9 311 -9Q231 -9 167.5 26.5Q104 62 68.5 127.0Q33 192 33 277Q33 363 68.0 428.0Q103 493 166.0 528.0Q229 563 311 563Q390 563 452.5 529.0Q515 495 549.5 432.5Q584 370 584 289Q584 259 580 235ZM439 329Q438 383 400.0 415.5Q362 448 307 448Q255 448 219.5 416.5Q184 385 176 329Z"/>
+      </g>
+      <circle class="e-dot" cx="759.43" cy="683.90" r="49.5" fill="#FF5B3D"/>
+    </svg>
   </div>
 </div>
 
+<div id="shell" data-hero="0" data-dock="0" data-tabs="1">
+  <header id="bar" class="bar"></header>
+
+  <main id="view" tabindex="-1"></main>
+
+  <!-- One primary action per screen, riding above the tab bar. -->
+  <div class="dock" id="dock" hidden></div>
+
+  <nav id="tabs" class="tabs" aria-label="Main">
+    <a class="tab" href="#/" data-tab="home"><span class="tab-ico"></span><span class="tab-label">Home</span></a>
+    <a class="tab" href="#/explore" data-tab="explore"><span class="tab-ico"></span><span class="tab-label">Explore</span></a>
+    <a class="tab" href="#/chat" data-tab="chat"><span class="tab-ico"></span><span class="tab-label">Chat</span></a>
+    <a class="tab" href="#/went" data-tab="went"><span class="tab-ico"></span><span class="tab-label">Went</span></a>
+    <a class="tab" href="#/you" data-tab="you"><span class="tab-ico"></span><span class="tab-label">You</span></a>
+    <span class="tabs-ink" id="tabs-ink" aria-hidden="true"></span>
+  </nav>
+
+  <div id="sheet-root"></div>
+  <div id="toast-root" aria-live="polite"></div>
+</div>
+
 <script type="module" src="js/app.js"></script>
-<noscript>
-  <div style="padding:48px 26px;text-align:center;font:400 15px/1.6 system-ui;color:#F4F1EC">
-    <h1 style="font:700 30px/1.1 system-ui;letter-spacing:-.03em">Went To Event</h1>
-    <p style="color:#8A848F">This preview needs JavaScript switched on.</p>
-  </div>
-</noscript>
 </body>
 </html>

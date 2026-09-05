@@ -1,202 +1,229 @@
-import { state } from '../store.js';
-import { byId } from '../data/events.js';
-import { esc, money, compact } from '../util.js';
-import { ico, badge } from '../icons.js';
-import { cover, sectionHead } from '../ui/parts.js';
+/* Choose a ticket → pay → confirmed. Three screens, and the running total is
+   visible on every one of them. */
 
-export const curTier = () => {
-  const ev = byId(state.eventId);
-  return ev.tiers[Math.min(state.tierIdx, ev.tiers.length - 1)];
-};
-const FEE = 2.5;   // per ticket, waived for members
-export const fees = () => {
-  const t = curTier();
-  return (t.price > 0 && !state.member) ? FEE * state.qty : 0;
-};
-export const total = () => curTier().price * state.qty + fees();
+import { state, save, isMember } from "../store.js";
+import { byId } from "../data/events.js";
+import { esc, money, amount, plural } from "../util.js";
+import { icon } from "../icons.js";
+import { sectionHead, cover, note, lazyImages } from "../parts.js";
+import { stepperHTML, stepper, toast } from "../ui.js";
+import { go, refresh } from "../router.js";
+import { haptic, commit } from "../motion.js";
 
-export const METHODS = [
-  { key:'apple', label:'Apple Pay',      sub:'Face ID',            icon:'apple' },
-  { key:'card',  label:'Visa •••• 4242', sub:'Expires 06/29',      icon:'card'  },
-  { key:'wallet',label:'WTE Balance',    sub:'$40.00 available',   icon:'wallet'},
+const FEE = 2.5;                      // per ticket, waived for members
+
+export const curTier = (ev) => ev.tiers[Math.min(state.tierIdx, ev.tiers.length - 1)];
+const feeFor = () => (state.member ? 0 : FEE * state.qty);
+const totalFor = (ev) => curTier(ev).price * state.qty + feeFor();
+
+const METHODS = [
+  { key: "apple", name: "Apple Pay", sub: "Face ID", ico: "apple" },
+  { key: "card", name: "Visa · 4242", sub: "Expires 09/29", ico: "card" },
+  { key: "wallet", name: "Went balance", sub: "$40.00 available", ico: "wallet" },
 ];
 
-/* ---- step 1: which ticket, how many ---- */
-export function bookingView() {
-  const ev = byId(state.eventId);
-  const free = ev.minPrice === 0;
-  return `
-  <div class="pad" style="padding-top:calc(max(var(--top),12px) + 58px)">
-    <div class="row" style="gap:12px;margin-bottom:22px">
-      <div style="width:62px;height:62px;border-radius:var(--r-sm);overflow:hidden;position:relative;flex:none">
-        ${cover(ev)}<div class="cover-scrim" style="opacity:.5"></div>
-      </div>
-      <div style="flex:1;min-width:0">
-        <div class="t-head" style="font-size:15.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(ev.title)}</div>
-        <div class="t-sub" style="font-size:13px">${esc(ev.dateLong)} · ${esc(ev.timeRange)}</div>
-        <div class="t-sub" style="font-size:13px">${esc(ev.venue)}</div>
-      </div>
-    </div>
+/* ------------------------------------------------------- 1. which ticket */
+export default function booking({ id }) {
+  const ev = byId(+id);
+  state.eventId = ev.id;
+  if (state.tierIdx >= ev.tiers.length) state.tierIdx = 0;
+  const free = ev.minPrice === 0 && ev.tiers.length === 1;
 
-    ${sectionHead(free ? 'Entry' : 'Choose a ticket')}
-    <div class="stack" style="--gap:9px" role="radiogroup" aria-label="Ticket type">
-      ${ev.tiers.map((t, i) => {
-        const on = i === state.tierIdx;
-        return `<button class="row press-sm" data-act="tier" data-idx="${i}" role="radio"
-          aria-checked="${on ? 'true' : 'false'}"
-          style="width:100%;padding:14px;gap:12px;border-radius:var(--r-md);text-align:left;
-                 background:${on ? 'rgba(255,91,61,.10)' : 'rgba(244,241,236,.045)'};
-                 border:1px solid ${on ? 'rgba(255,91,61,.34)' : 'var(--hair)'}">
-          <span style="width:21px;height:21px;flex:none;border-radius:50%;display:grid;place-items:center;
-                border:1.6px solid ${on ? 'var(--ember)' : 'var(--hair-2)'};
-                background:${on ? 'var(--ember)' : 'transparent'};color:#180804">
-            ${on ? ico('check', 13) : ''}</span>
-          <span style="flex:1;min-width:0">
-            <span class="t-head" style="font-size:15px;display:block">${esc(t.name)}</span>
-            <span class="t-sub" style="font-size:12.5px">${esc(t.desc)}</span>
-          </span>
-          <span class="t-head" style="font-size:15px">${money(t.price)}</span>
-        </button>`;
-      }).join('')}
-    </div>
+  const html = `
+  <div class="wrap">
+    <h1 class="title">${free ? "RSVP" : "Choose a ticket"}</h1>
+    <p class="title-sub">${esc(ev.title)} · ${esc(ev.dateLong)}</p>
 
-    <div class="row" style="margin-top:22px;justify-content:space-between">
-      <div>
-        <div class="t-head" style="font-size:15px">How many?</div>
-        <div class="t-sub" style="font-size:12.5px">Up to 10 per person</div>
+    <section class="section">
+      ${sectionHead(free ? "Entry" : "Ticket type")}
+      <div class="stack" style="gap:9px" role="radiogroup" aria-label="Ticket type">
+        ${ev.tiers.map((t, i) => `
+          <button class="card card-pad row" type="button" role="radio" data-tier="${i}"
+            aria-checked="${i === state.tierIdx}"
+            style="text-align:left;${i === state.tierIdx
+              ? "box-shadow:inset 0 0 0 2px var(--act),var(--shadow-2)" : ""}">
+            <span class="row-copy">
+              <span class="row-t">${esc(t.name)}</span>
+              <span class="row-s">${esc(t.desc)}</span>
+            </span>
+            <span class="strong money">${money(t.price)}</span>
+          </button>`).join("")}
       </div>
-      <div class="step">
-        <button class="press" data-act="qty" data-d="-1" ${state.qty <= 1 ? 'disabled' : ''} aria-label="One fewer">${ico('close', 15)}</button>
-        <span class="n" aria-live="polite">${state.qty}</span>
-        <button class="press" data-act="qty" data-d="1" ${state.qty >= 10 ? 'disabled' : ''} aria-label="One more">${ico('plus', 15)}</button>
-      </div>
-    </div>
+    </section>
 
-    ${!state.member && curTier().price > 0 ? `
-      <button class="row press-sm" data-act="premium" style="width:100%;margin-top:22px;gap:11px;padding:13px 14px;
-        border-radius:var(--r-md);background:rgba(201,168,106,.08);border:1px solid rgba(201,168,106,.24);text-align:left">
-        <span style="color:var(--gold);display:flex;flex:none">${ico('diamond', 19)}</span>
-        <span style="flex:1">
-          <span class="t-head" style="font-size:13.5px;display:block">Members pay no booking fee</span>
-          <span class="t-sub" style="font-size:12px">You would save ${money(FEE * state.qty)} on this order</span>
+    <section class="section">
+      ${sectionHead("How many")}
+      <div class="card card-pad spread">
+        <span class="row-copy">
+          <span class="row-t">Tickets</span>
+          <span class="row-s">Up to 10 per person</span>
         </span>
-        <span style="color:var(--ash)">${ico('fwd', 16)}</span>
-      </button>` : ''}
+        <span id="qty">${stepperHTML(state.qty)}</span>
+      </div>
+    </section>
+
+    ${!state.member ? `
+      <section class="section">
+        ${note(`A ${amount(FEE)} booking fee applies per ticket. Membership removes it.`)}
+      </section>` : ""}
+  </div>`;
+
+  return {
+    html, tabs: false,
+    bar: { back: true, title: "Booking" },
+    dock: dockFor(ev, `#/checkout/${ev.id}`, "Continue"),
+    mount(el) {
+      el.addEventListener("click", (e) => {
+        const b = e.target.closest("[data-tier]");
+        if (!b) return;
+        haptic(6);
+        state.tierIdx = +b.dataset.tier;
+        save();
+        refresh();
+      });
+      stepper(el.querySelector("#qty .stepper"), {
+        value: state.qty, min: 1, max: 10,
+        onChange(n) { state.qty = n; save(); paintDock(ev, `#/checkout/${ev.id}`, "Continue"); },
+      });
+    },
+  };
+}
+
+/* ------------------------------------------------------------ 2. checkout */
+export function checkout({ id }) {
+  const ev = byId(+id);
+  const t = curTier(ev);
+  const sub = t.price * state.qty;
+
+  const html = `
+  <div class="wrap">
+    <h1 class="title">Checkout</h1>
+    <p class="title-sub">${esc(ev.title)}</p>
+
+    <section class="section">
+      ${sectionHead("Paying with")}
+      <div class="stack" style="gap:9px" role="radiogroup" aria-label="Payment method">
+        ${METHODS.map((m, i) => `
+          <button class="card card-pad row" type="button" role="radio" data-method="${i}"
+            aria-checked="${i === state.methodIdx}"
+            style="text-align:left;${i === state.methodIdx
+              ? "box-shadow:inset 0 0 0 2px var(--act),var(--shadow-2)" : ""}">
+            <span class="ico">${icon(m.ico)}</span>
+            <span class="row-copy">
+              <span class="row-t">${esc(m.name)}</span>
+              <span class="row-s">${esc(m.sub)}</span>
+            </span>
+            ${i === state.methodIdx ? `<span class="row-go" style="color:var(--ink)">${icon("check", 18)}</span>` : ""}
+          </button>`).join("")}
+      </div>
+    </section>
+
+    <section class="section">
+      ${sectionHead("Summary")}
+      <div class="card card-pad stack" style="gap:11px">
+        <div class="spread"><span class="small">${esc(t.name)} × ${state.qty}</span>
+          <span class="money">${amount(sub)}</span></div>
+        <div class="spread"><span class="small">Booking fee${state.member ? " · waived" : ""}</span>
+          <span class="money" style="${state.member ? "color:var(--mute);text-decoration:line-through" : ""}">
+            ${amount(state.member ? FEE * state.qty : feeFor())}</span></div>
+        <div class="spread" style="padding-top:11px;border-top:1px solid var(--line)">
+          <span class="strong">Total</span>
+          <span class="strong money" style="font-size:17px">${amount(totalFor(ev))}</span></div>
+      </div>
+    </section>
+
+    <section class="section">
+      ${note("Payment is stubbed in this preview. Nothing is charged and no card is contacted.")}
+    </section>
+  </div>`;
+
+  return {
+    html, tabs: false,
+    bar: { back: true, title: "Checkout" },
+    dock: `<button class="btn btn-primary" type="button" data-pay="${ev.id}">
+      ${icon("lock", 17)} Pay ${amount(totalFor(ev))}</button>`,
+    mount(el) {
+      el.addEventListener("click", (e) => {
+        const b = e.target.closest("[data-method]");
+        if (!b) return;
+        haptic(6);
+        state.methodIdx = +b.dataset.method;
+        save();
+        refresh();
+      });
+    },
+  };
+}
+
+/* --------------------------------------------------------- 3. confirmed */
+export function confirm({ id }) {
+  const ev = byId(+id);
+  const t = curTier(ev);
+
+  const html = `
+  <div class="wrap" style="padding-top:8vh">
+    <div style="display:grid;justify-items:center;text-align:center;gap:18px">
+      <span id="mark" style="width:88px;height:88px;border-radius:50%;display:grid;place-items:center;
+        background:var(--ember-wash);box-shadow:inset 0 0 0 1px var(--ember-line);color:var(--ember)">
+        ${icon("check", 40)}</span>
+      <div>
+        <h1 class="display d-2">You are going.</h1>
+        <p class="title-sub" style="margin-inline:auto;text-align:center">
+          ${esc(ev.title)} · ${esc(ev.dateLong)}</p>
+      </div>
+    </div>
+
+    <div class="card card-pad stack" style="gap:11px;margin-top:30px">
+      <div class="spread"><span class="small">Ticket</span><span class="strong">${esc(t.name)}</span></div>
+      <div class="spread"><span class="small">How many</span>
+        <span class="strong">${state.qty} ${plural(state.qty, "ticket")}</span></div>
+      <div class="spread"><span class="small">Where</span><span class="strong">${esc(ev.venue)}</span></div>
+      <div class="spread" style="padding-top:11px;border-top:1px solid var(--line)">
+        <span class="small">Paid</span>
+        <span class="strong money">${amount(totalFor(ev))}</span></div>
+    </div>
+
+    <p class="tiny" style="text-align:center;padding-top:20px">
+      A copy would normally land in your email. Not in a preview.</p>
+  </div>`;
+
+  return {
+    html, tabs: false,
+    bar: { close: true, title: "" },
+    dock: `<div class="dock-row">
+      <button class="btn btn-soft" type="button" data-go="#/" style="flex:none;width:112px">Done</button>
+      <button class="btn btn-primary" type="button" data-go="#/pass/0" style="flex:1">View ticket</button>
+    </div>`,
+    mount(el) {
+      const mark = el.querySelector("#mark");
+      if (mark) {
+        mark.animate(
+          [{ transform: "scale(.5)", opacity: 0 }, { transform: "scale(1)", opacity: 1 }],
+          { duration: 520, easing: "cubic-bezier(.34,1.4,.64,1)", fill: "both" });
+      }
+    },
+  };
+}
+
+/* -------------------------------------------------------------- the dock */
+function dockFor(ev, href, label) {
+  return `<div class="dock-row">
+    <span class="row-copy" style="padding-left:6px">
+      <span class="row-s">${state.qty} × ${esc(curTier(ev).name)}</span>
+      <span class="row-t money" id="dockTotal">${amount(totalFor(ev))}</span>
+    </span>
+    <button class="btn btn-primary" type="button" data-go="${href}"
+      style="flex:none;width:150px">${label}</button>
   </div>`;
 }
 
-export const bookingDock = () => {
-  const t = curTier();
-  return `<button class="btn press" data-act="tocheckout"
-    style="justify-content:space-between;padding:0 22px">
-    <span>${t.price === 0 ? 'Confirm RSVP' : 'Continue'}</span>
-    <span style="opacity:.62">${money(t.price * state.qty)}</span></button>`;
-};
-
-/* ---- step 2: pay ---- */
-export function checkoutView() {
-  const ev = byId(state.eventId);
-  const t = curTier();
-  const paid = t.price > 0;
-  const f = fees();
-  return `
-  <div class="pad" style="padding-top:calc(max(var(--top),12px) + 58px)">
-    ${sectionHead('Order')}
-    <div class="card" style="padding:15px">
-      <div class="t-head" style="font-size:15.5px;margin-bottom:3px">${esc(ev.title)}</div>
-      <div class="t-sub" style="font-size:13px">${esc(ev.dateLong)} · ${esc(ev.timeRange)}</div>
-      <div style="height:1px;background:var(--hair);margin:13px 0"></div>
-      <div class="row" style="justify-content:space-between;margin-bottom:8px">
-        <span class="t-body">${esc(t.name)} × ${state.qty}</span>
-        <span class="t-body t-num">${money(t.price * state.qty)}</span>
-      </div>
-      ${paid ? `<div class="row" style="justify-content:space-between;margin-bottom:8px">
-        <span class="t-body ash">Booking fee${state.member ? ' · waived' : ''}</span>
-        <span class="t-body t-num ${state.member ? 'ash' : ''}"
-          style="${state.member ? 'text-decoration:line-through' : ''}">${money(FEE * state.qty)}</span>
-      </div>` : ''}
-      <div style="height:1px;background:var(--hair);margin:13px 0"></div>
-      <div class="row" style="justify-content:space-between">
-        <span class="t-head">Total</span>
-        <span class="t-head t-num" style="font-size:19px">${money(total())}</span>
-      </div>
-    </div>
-
-    ${paid ? `
-      <div style="margin-top:24px">
-        ${sectionHead('Pay with')}
-        <div class="stack" style="--gap:9px" role="radiogroup" aria-label="Payment method">
-          ${METHODS.map((m, i) => {
-            const on = i === state.methodIdx;
-            return `<button class="row press-sm" data-act="method" data-idx="${i}" role="radio"
-              aria-checked="${on ? 'true' : 'false'}"
-              style="width:100%;padding:13px 14px;gap:12px;border-radius:var(--r-md);text-align:left;
-                     background:${on ? 'rgba(255,91,61,.10)' : 'rgba(244,241,236,.045)'};
-                     border:1px solid ${on ? 'rgba(255,91,61,.34)' : 'var(--hair)'}">
-              <span style="width:38px;height:38px;flex:none;border-radius:11px;display:grid;place-items:center;
-                    background:rgba(244,241,236,.08)">${ico(m.icon, 18)}</span>
-              <span style="flex:1;min-width:0">
-                <span class="t-head" style="font-size:14.5px;display:block">${esc(m.label)}</span>
-                <span class="t-sub" style="font-size:12px">${esc(m.sub)}</span>
-              </span>
-              ${on ? `<span style="display:flex">${badge(20, 'var(--ember)', '#180804')}</span>` : ''}
-            </button>`;
-          }).join('')}
-        </div>
-      </div>` : `
-      <div class="row" style="margin-top:22px;gap:10px;padding:14px;border-radius:var(--r-md);
-           background:rgba(244,241,236,.045);border:1px solid var(--hair)">
-        <span style="color:var(--ash);display:flex;flex:none">${ico('info', 18)}</span>
-        <span class="t-sub" style="font-size:12.5px">This event is free. We hold your spot and send a
-          reminder three hours before it starts.</span>
-      </div>`}
-
-    <div class="row" style="margin-top:20px;gap:9px;justify-content:center;color:var(--ash)">
-      ${ico('lock', 14)}<span class="t-sub" style="font-size:11.5px">Payments are encrypted end to end</span>
-    </div>
-  </div>`;
+/* The quantity stepper changes the total without changing the screen, so the
+   dock is repainted in place rather than through a re-render. */
+function paintDock(ev) {
+  const out = document.querySelector("#dockTotal");
+  if (out) out.textContent = amount(totalFor(ev));
+  const sub = out?.previousElementSibling;
+  if (sub) sub.textContent = `${state.qty} × ${curTier(ev).name}`;
 }
 
-export const checkoutDock = () => {
-  const t = curTier();
-  return `<button class="btn press" data-act="pay">
-    ${t.price > 0 ? 'Pay ' + money(total()) : 'Confirm RSVP'}</button>`;
-};
-
-/* ---- step 3: it worked ---- */
-export function confirmView() {
-  const ev = byId(state.eventId);
-  const t = curTier();
-  return `
-  <div class="pad" style="min-height:100%;display:flex;flex-direction:column;justify-content:center;
-       align-items:center;text-align:center;padding-top:calc(max(var(--top),12px) + 40px)">
-    <div id="confirmMark" style="width:96px;height:96px;border-radius:50%;display:grid;place-items:center;
-         background:rgba(255,91,61,.12);border:1px solid rgba(255,91,61,.3);color:var(--ember);margin-bottom:24px">
-      ${ico('check', 44)}
-    </div>
-    <h1 class="t-display" style="margin:0 0 10px">You’re going.</h1>
-    <p class="t-body ash" style="margin:0 0 26px;max-width:290px">
-      ${t.price > 0 ? `${state.qty} × ${esc(t.name)} confirmed.` : 'Your spot is held.'}
-      We’ll remind you three hours before doors.
-    </p>
-    <div class="card" style="width:100%;padding:15px;text-align:left">
-      <div class="row" style="gap:12px">
-        <div style="width:52px;height:52px;border-radius:var(--r-sm);overflow:hidden;position:relative;flex:none">
-          ${cover(ev)}</div>
-        <div style="flex:1;min-width:0">
-          <div class="t-head" style="font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(ev.title)}</div>
-          <div class="t-sub" style="font-size:12.5px">${esc(ev.dateLong)} · ${esc(ev.timeRange)}</div>
-          <div class="t-sub" style="font-size:12.5px">${esc(ev.venue)}</div>
-        </div>
-      </div>
-    </div>
-    <button class="row press" data-act="toast" data-msg="Invite link copied"
-      style="margin-top:20px;gap:8px;color:var(--bone);font-size:13.5px;font-weight:620">
-      ${ico('userplus', 17)} Invite a friend
-    </button>
-  </div>`;
-}
-
-export const confirmDock = () => `<div class="dock-row">
-  <button class="btn btn-ghost press" data-act="tab" data-tab="explore" style="flex:none;width:124px">Explore</button>
-  <button class="btn press" data-act="viewticket" style="flex:1">View ticket</button></div>`;
+export { totalFor, FEE };

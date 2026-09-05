@@ -1,309 +1,300 @@
-import { state, me, notifs } from '../store.js';
-import { USERS } from '../data/people.js';
-import { esc } from '../util.js';
-import { ico } from '../icons.js';
-import { avatar, empty } from '../ui/parts.js';
+/* Settings, as a shallow tree. One route per page, so the back button behaves
+   and a deep page can be linked to directly. */
 
-const row = (icon, label, { sub, value, act = '', data = '', danger, toggle, key } = {}) => `
-  <button class="row-btn press-sm" ${act ? `data-act="${act}"` : ''} ${data}
-    ${toggle ? `role="switch" aria-checked="${state.notif[key] ?? state[key] ? 'true' : 'false'}"` : ''}>
-    ${icon ? `<span style="width:32px;height:32px;flex:none;border-radius:9px;display:grid;place-items:center;
-      background:rgba(244,241,236,.07);color:${danger ? 'var(--ember)' : 'var(--bone)'}">${ico(icon, 16)}</span>` : ''}
-    <span style="flex:1;min-width:0">
-      <span class="t-head" style="font-size:14.5px;display:block;${danger ? 'color:var(--ember)' : ''}">${esc(label)}</span>
-      ${sub ? `<span class="t-sub" style="font-size:12px">${esc(sub)}</span>` : ''}
-    </span>
-    ${toggle
-      ? `<span class="tgl" aria-hidden="true" ${(state.notif[key] ?? state[key]) ? 'aria-checked="true"' : ''}></span>`
-      : value !== undefined
-        ? `<span class="t-sub" style="font-size:13px">${esc(value)}</span><span style="color:var(--ash)">${ico('fwd', 16)}</span>`
-        : `<span style="color:var(--ash)">${ico('fwd', 16)}</span>`}
-  </button>`;
+import { state, save, reset, me, notifs } from "../store.js";
+import { USERS } from "../data/people.js";
+import { esc } from "../util.js";
+import { icon } from "../icons.js";
+import { avatar, empty, pageTitle, sectionHead, brandMark } from "../parts.js";
+import { sheet, closeSheet, toast } from "../ui.js";
+import { canInstall, installed, promptInstall } from "../install.js";
+import { go, refresh } from "../router.js";
+import { haptic, warn } from "../motion.js";
 
-const group = (title, rows) => `
-  <div style="margin-bottom:22px">
-    ${title ? `<div class="label">${esc(title)}</div>` : ''}
-    <div class="list glass">${rows}</div>
+const TITLES = {
+  root: "Settings", account: "Account", notifications: "Notifications", privacy: "Privacy",
+  blocked: "Blocked", muted: "Muted", payment: "Payment", appearance: "Appearance",
+  help: "Help", legal: "Legal", about: "About",
+};
+
+const link = (key, ic, title, sub) => `
+  <a class="row-btn" href="#/settings/${key}">
+    <span class="ico">${icon(ic)}</span>
+    <span class="row-copy"><span class="row-t">${title}</span>
+      ${sub ? `<span class="row-s">${sub}</span>` : ""}</span>
+    <span class="row-go">${icon("fwd")}</span>
+  </a>`;
+
+const toggle = (ic, title, sub, on, attrs) => `
+  <div class="row-btn">
+    <span class="ico">${icon(ic)}</span>
+    <span class="row-copy"><span class="row-t">${title}</span>
+      ${sub ? `<span class="row-s">${sub}</span>` : ""}</span>
+    <button class="switch" type="button" role="switch" aria-checked="${!!on}"
+      aria-label="${title}" ${attrs}></button>
   </div>`;
 
-export const SETTINGS_TITLE = {
-  root:'Settings', Account:'Account', Notifications:'Notifications',
-  Privacy:'Privacy & safety', Blocked:'Blocked', Muted:'Muted',
-  Payment:'Payment', Membership:'Membership', Appearance:'Appearance',
-  Help:'Help', Guidelines:'Guidelines', Terms:'Legal', About:'About',
-};
+export default function settings({ key = "root" } = {}) {
+  const k = key || "root";
+  const body = PAGES[k] ? PAGES[k]() : `<div class="wrap">${empty("gear", "Not here",
+    "That settings page does not exist.", { href: "#/settings", label: "Back to Settings" })}</div>`;
 
-export const SETTINGS_PARENT = {
-  Account:'root', Notifications:'root', Privacy:'root', Appearance:'root',
-  Payment:'root', Membership:'root', Help:'root', About:'root', Terms:'root',
-  Blocked:'Privacy', Muted:'Privacy', Guidelines:'Privacy',
-};
-
-export function settingsView({ key }) {
-  const k = key || 'root';
-  const u = USERS[me];
-
-  if (k === 'root') return `
-    <div class="pad" style="padding-top:calc(max(var(--top),12px) + 58px)">
-      <h1 class="t-display" style="margin:0 0 20px">Settings</h1>
-
-      <button class="row press-sm" data-act="set" data-key="Account"
-        style="width:100%;gap:13px;padding:13px;border-radius:var(--r-md);margin-bottom:22px;
-               background:rgba(244,241,236,.05);border:1px solid var(--hair);text-align:left">
-        ${avatar(me, 52)}
-        <span style="flex:1;min-width:0">
-          <span class="t-head" style="display:block">${esc(u.name)}</span>
-          <span class="t-sub" style="font-size:12.5px">@${esc(u.handle)} · Edit your profile</span>
-        </span>
-        <span style="color:var(--ash)">${ico('fwd', 17)}</span>
-      </button>
-
-      ${group('', 
-        row('user', 'Account', { act:'set', data:'data-key="Account"' }) +
-        row('bell', 'Notifications', { act:'set', data:'data-key="Notifications"' }) +
-        row('lock', 'Privacy & safety', { act:'set', data:'data-key="Privacy"' }) +
-        row('card', 'Payment methods', { act:'set', data:'data-key="Payment"' })
-      )}
-
-      ${group('', 
-        row('diamond', 'Membership', { sub: state.member ? 'Active · $12/mo' : 'Not a member',
-          act: state.member ? 'set' : 'premium', data:'data-key="Membership"' }) +
-        row('eye', 'Appearance', { value:'Dark', act:'set', data:'data-key="Appearance"' })
-      )}
-
-      ${group('',
-        row('info', 'Help & support', { act:'set', data:'data-key="Help"' }) +
-        row('shield', 'Terms & privacy', { act:'set', data:'data-key="Terms"' }) +
-        row('sparkle', 'About Went To Event', { act:'set', data:'data-key="About"' })
-      )}
-
-      ${group('',
-        row('refresh', 'Reset this preview', { sub:'Clears saved events, tickets and posts', act:'reset' }) +
-        row('logout', 'Log out', { act:'toast', data:'data-msg="Sign-out is stubbed in this preview"', danger:true })
-      )}
-
-      <div style="text-align:center;padding:10px 0 20px">
-        <div class="t-sub" style="font-size:11px">Went To Event · preview build</div>
-      </div>
-    </div>`;
-
-  const pages = {
-    Account: () => `
-      ${group('Profile',
-        row('user', 'Name', { value:u.name, act:'toast', data:'data-msg="Editing is stubbed in this preview"' }) +
-        row('sparkle', 'Username', { value:'@' + u.handle, act:'toast', data:'data-msg="Editing is stubbed in this preview"' }) +
-        row('chat', 'Bio', { sub:u.bio, act:'toast', data:'data-msg="Editing is stubbed in this preview"' }) +
-        row('camera', 'Photo', { act:'toast', data:'data-msg="Editing is stubbed in this preview"' })
-      )}
-      ${group('Account',
-        row('globe', 'Home city', { value: 'Change', act:'picker' }) +
-        row('lock', 'Private account', { toggle:true, key:'privateAcct', act:'toggle', data:'data-key="privateAcct"' })
-      )}
-      ${group('',
-        row('trash', 'Delete account', { act:'toast', data:'data-msg="Account deletion requested — check your email"', danger:true })
-      )}`,
-
-    Notifications: () => `
-      ${group('Push',
-        row('bell', 'Events starting soon', { sub:'3 hours before doors', toggle:true, key:'starting', act:'notif', data:'data-key="starting"' }) +
-        row('users', 'Friends going', { sub:'When someone you follow joins', toggle:true, key:'friends', act:'notif', data:'data-key="friends"' }) +
-        row('sparkle', 'New from hosts you follow', { toggle:true, key:'hosts', act:'notif', data:'data-key="hosts"' }) +
-        row('chat', 'Messages', { toggle:true, key:'messages', act:'notif', data:'data-key="messages"' }) +
-        row('diamond', 'Members-only drops', { toggle:true, key:'drops', act:'notif', data:'data-key="drops"' })
-      )}
-      ${group('In app',
-        row('wave', 'Haptics', { sub:'A short tap on meaningful actions', toggle:true, key:'haptics', act:'toggle', data:'data-key="haptics"' })
-      )}`,
-
-    Privacy: () => `
-      ${group('Who can see you',
-        row('lock', 'Private account', { sub:'Only approved followers see your posts', toggle:true, key:'privateAcct', act:'toggle', data:'data-key="privateAcct"' }) +
-        row('eye', 'Show me on events I join', { sub:'Friends can see you are going', toggle:true, key:'sound', act:'toggle', data:'data-key="sound"' })
-      )}
-      ${group('People',
-        row('shield', 'Blocked accounts', { value:String(Object.keys(state.blocked).length), act:'set', data:'data-key="Blocked"' }) +
-        row('mute', 'Muted accounts', { value:String(Object.keys(state.muted).length), act:'set', data:'data-key="Muted"' }) +
-        row('flag', 'Community guidelines', { act:'set', data:'data-key="Guidelines"' })
-      )}`,
-
-    Blocked: () => {
-      const keys = Object.keys(state.blocked);
-      return keys.length
-        ? group('', keys.map(k => `<div class="row" style="padding:11px 13px;gap:11px">
-            ${avatar(k, 40)}
-            <span style="flex:1;min-width:0">
-              <span class="t-head" style="font-size:14px;display:block">${esc(USERS[k].name)}</span>
-              <span class="t-sub" style="font-size:12px">@${esc(USERS[k].handle)}</span></span>
-            <button class="pill press" data-act="unblock" data-key="${k}">Unblock</button>
-          </div>`).join(''))
-        : empty('shield', 'Nobody blocked', 'Accounts you block cannot message you or see what you post.');
+  return {
+    html: body, tabs: k === "root",
+    bar: k === "root" ? { back: true, title: "Settings" } : { back: true, title: TITLES[k] || "Settings" },
+    mount(el) {
+      el.addEventListener("click", (e) => {
+        const sw = e.target.closest("[data-toggle]");
+        if (sw) {
+          haptic(6);
+          const [group, name] = sw.dataset.toggle.split(".");
+          if (group === "notif") state.notif[name] = !state.notif[name];
+          else state[name] = !state[name];
+          save();
+          sw.setAttribute("aria-checked", group === "notif" ? state.notif[name] : state[name]);
+          return;
+        }
+        if (e.target.closest("#install")) { promptInstall(); return; }
+        if (e.target.closest("#reset")) {
+          sheet(`
+            <div class="sheet-t">Reset this preview</div>
+            <p class="lede">This clears your saved events, tickets, posts and settings, and puts
+              the demo back to how it arrived. It cannot be undone.</p>
+            <div class="dock-row" style="padding-top:20px">
+              <button class="btn btn-soft" type="button" data-close style="flex:1">Keep it</button>
+              <button class="btn btn-danger" type="button" id="doReset" style="flex:1">Reset</button>
+            </div>`, {
+            label: "Reset",
+            mount(s) { s.querySelector("#doReset").addEventListener("click", () => { warn(); reset(); }); },
+          });
+        }
+      });
     },
-
-    Muted: () => {
-      const keys = Object.keys(state.muted);
-      return keys.length
-        ? group('', keys.map(k => `<div class="row" style="padding:11px 13px;gap:11px">
-            ${avatar(k, 40)}
-            <span style="flex:1;min-width:0">
-              <span class="t-head" style="font-size:14px;display:block">${esc(USERS[k].name)}</span>
-              <span class="t-sub" style="font-size:12px">@${esc(USERS[k].handle)}</span></span>
-            <button class="pill press" data-act="unmute" data-key="${k}">Unmute</button>
-          </div>`).join(''))
-        : empty('mute', 'Nobody muted', 'Muting hides someone’s posts without them knowing.');
-    },
-
-    Payment: () => `
-      ${group('Saved methods',
-        row('apple', 'Apple Pay', { sub:'Face ID', value:'Default' }) +
-        row('card', 'Visa •••• 4242', { sub:'Expires 06/29' }) +
-        row('wallet', 'WTE Balance', { sub:'$40.00 available' })
-      )}
-      ${group('', row('plus', 'Add a payment method', { act:'toast', data:'data-msg="Adding cards is stubbed in this preview"' }))}`,
-
-    Membership: () => `
-      ${group('Your membership',
-        row('diamond', 'Status', { value: state.member ? 'Active' : 'Inactive' }) +
-        row('cal', 'Renews', { value: state.member ? '5 Oct 2026' : '—' }) +
-        row('wallet', 'Price', { value:'$12 / month' })
-      )}
-      ${state.member ? group('', row('close', 'Cancel membership', { act:'cancelmember', danger:true })) : ''}`,
-
-    Appearance: () => `
-      ${group('Theme',
-        row('eye', 'Dark', { value:'On', sub:'Went To Event is designed dark — Ink is 70% of the brand' })
-      )}
-      ${group('Motion',
-        row('wave', 'Reduce motion', { sub:'Follows your system setting automatically' })
-      )}`,
-
-    Help: () => `
-      ${group('', 
-        row('info', 'How ticketing works', { act:'toast', data:'data-msg="Help centre is stubbed in this preview"' }) +
-        row('wallet', 'Refunds & transfers', { act:'toast', data:'data-msg="Help centre is stubbed in this preview"' }) +
-        row('shield', 'Report a problem', { act:'toast', data:'data-msg="Help centre is stubbed in this preview"' }) +
-        row('chat', 'Contact support', { act:'toast', data:'data-msg="Help centre is stubbed in this preview"' })
-      )}`,
-
-    Guidelines: () => `
-      <div class="glass" style="padding:18px;border-radius:var(--r-md)">
-        <p class="t-body" style="margin:0 0 14px">Went To Event works because people show up as themselves.
-          Three rules carry most of it:</p>
-        ${[['Be real', 'One account, your own name, photos you took.'],
-           ['Host honestly', 'The event has to be what the listing says it is. Price, place, time.'],
-           ['Leave people alone', 'No harassment, no unwanted contact after someone stops replying.']]
-          .map(([t, s]) => `<div style="margin-bottom:13px">
-            <div class="t-head" style="font-size:14px;margin-bottom:2px">${t}</div>
-            <div class="t-sub" style="font-size:13px">${s}</div></div>`).join('')}
-        <p class="t-sub" style="margin:0;font-size:12.5px">Reports are reviewed within 24 hours.</p>
-      </div>`,
-
-    Terms: () => `
-      ${group('', 
-        row('shield', 'Terms of service', { act:'toast', data:'data-msg="Legal copy is placeholder in this preview"' }) +
-        row('lock', 'Privacy policy', { act:'toast', data:'data-msg="Legal copy is placeholder in this preview"' }) +
-        row('info', 'Cookie settings', { act:'toast', data:'data-msg="Legal copy is placeholder in this preview"' })
-      )}`,
-
-    About: () => `
-      <div class="glass" style="padding:22px;border-radius:var(--r-md);text-align:center">
-        <div style="display:flex;justify-content:center;margin-bottom:14px">
-          <img src="assets/icons/e_icon_rounded_512.png" alt="" width="70" height="70" style="border-radius:16px">
-        </div>
-        <div class="t-title" style="margin-bottom:4px">Went To Event</div>
-        <div class="t-sub" style="margin-bottom:16px">Preview build · September 2026</div>
-        <p class="t-body ash" style="margin:0 0 16px">Discover events near you, join in two taps, and keep a
-          record of the good ones.</p>
-        <div class="t-sub" style="font-size:11.5px">Designed and built by Alpha Agency</div>
-      </div>`,
   };
-
-  return `
-    <div class="pad" style="padding-top:calc(max(var(--top),12px) + 58px)">
-      <h1 class="t-display" style="margin:0 0 20px">${esc(SETTINGS_TITLE[k] || k)}</h1>
-      ${(pages[k] || (() => empty('info', 'Nothing here', 'This section is a stub in the preview.')))()}
-    </div>`;
 }
 
-export function premiumView() {
-  const perks = [
-    ['ticket',  'No booking fees',        'On every ticket, every time. Pays for itself in two nights out.'],
-    ['diamond', 'Members-only events',    'Rooftop tables, supper clubs and rooms that never go on general sale.'],
-    ['bolt',    'Early access',           'Twenty-four hours before tickets open to everyone else.'],
-    ['sparkle', 'City Concierge',         'A short, human-picked plan for your weekend, wherever you are.'],
-    ['checkcirc','A verified badge',      'So hosts know you show up.'],
-  ];
-  return `
-  <div>
-    <div style="position:relative;padding:calc(max(var(--top),12px) + 68px) 22px 32px;text-align:center;overflow:hidden">
-      <div style="position:absolute;inset:0;background:
-        radial-gradient(80% 60% at 50% 0%,rgba(201,168,106,.20),transparent 68%)"></div>
-      <div style="position:relative">
-        <div style="width:72px;height:72px;margin:0 auto 20px;border-radius:22px;display:grid;place-items:center;
-             background:rgba(201,168,106,.16);border:1px solid rgba(201,168,106,.32);color:var(--gold)">
-          ${ico('diamond', 34)}
+const PAGES = {
+  root: () => {
+    const u = USERS[me];
+    return `
+    <div class="wrap">
+      ${pageTitle("Settings")}
+      <a class="card card-pad row" href="#/you" style="margin-top:20px">
+        ${avatar(me, 52)}
+        <span class="row-copy">
+          <span class="row-t">${esc(u.name)}</span>
+          <span class="row-s">@${esc(u.handle)}${state.member ? " · Member" : ""}</span>
+        </span>
+        <span class="row-go">${icon("fwd")}</span>
+      </a>
+    </div>
+
+    <section class="section wrap">
+      <div class="rows">
+        ${link("account", "user", "Account", "Name, handle, bio")}
+        ${link("notifications", "bell", "Notifications", "What reaches your phone")}
+        ${link("privacy", "lock", "Privacy", "Who sees you and what you do")}
+        ${link("payment", "card", "Payment", "Cards and the Went balance")}
+        ${link("appearance", "eye", "Appearance", "Motion, haptics, contrast")}
+      </div>
+    </section>
+
+    <section class="section wrap">
+      <div class="rows">
+        ${link("help", "info", "Help", "How this preview works")}
+        ${link("legal", "shield", "Legal", "Terms and privacy")}
+        ${link("about", "globe", "About", "What this build is")}
+      </div>
+    </section>
+
+    ${!installed() && canInstall() ? `
+      <section class="section wrap">
+        <button class="card card-pad row" type="button" id="install" style="width:100%;text-align:left">
+          <span class="ico">${icon("plus")}</span>
+          <span class="row-copy"><span class="row-t">Add to home screen</span>
+            <span class="row-s">Opens full screen, works offline</span></span>
+          <span class="row-go">${icon("fwd")}</span>
+        </button>
+      </section>` : ""}
+
+    <section class="section wrap">
+      <button class="btn btn-danger" type="button" id="reset">Reset this preview</button>
+    </section>
+
+    <footer style="text-align:center;padding:34px 0 8px;opacity:.4">
+      <div style="display:flex;justify-content:center;margin-bottom:9px;color:var(--mute)">${brandMark(24)}</div>
+      <div class="label">Went To Event · preview build</div>
+    </footer>`;
+  },
+
+  account: () => `
+    <div class="wrap">
+      ${pageTitle("Account")}
+      <section class="section">
+        <div class="stack" style="gap:16px">
+          <div class="field"><label>Name</label><input value="${esc(USERS[me].name)}" readonly></div>
+          <div class="field"><label>Handle</label><input value="@${esc(USERS[me].handle)}" readonly></div>
+          <div class="field"><label>Bio</label><textarea rows="3" readonly>${esc(USERS[me].bio)}</textarea></div>
         </div>
-        <h1 class="t-display" style="margin:0 0 10px">${state.member ? 'You’re a member.' : 'Went To Event, membership.'}</h1>
-        <p class="t-body ash" style="margin:0 auto;max-width:300px">
-          ${state.member
-            ? 'Booking fees are off, members-only nights are unlocked and your badge is live.'
-            : 'One price. No booking fees, and the rooms that never make it to general sale.'}
-        </p>
-      </div>
-    </div>
+        <p class="tiny" style="padding-top:14px">Editing a profile is stubbed — there is no account
+          behind this preview, so nothing here saves.</p>
+      </section>
+      <section class="section"><div class="rows">
+        ${toggle("lock", "Private account", "Only approved followers see your posts",
+          state.privateAcct, 'data-toggle="s.privateAcct"')}
+      </div></section>
+    </div>`,
 
-    <div class="pad">
-      <div class="stack" style="--gap:10px">
-        ${perks.map(([i, t, s]) => `
-          <div class="row" style="gap:13px;padding:14px;border-radius:var(--r-md);
-               background:rgba(244,241,236,.045);border:1px solid var(--hair)">
-            <span style="width:38px;height:38px;flex:none;border-radius:11px;display:grid;place-items:center;
-                  background:rgba(201,168,106,.14);color:var(--gold)">${ico(i, 18)}</span>
-            <span style="flex:1">
-              <span class="t-head" style="font-size:14.5px;display:block;margin-bottom:2px">${t}</span>
-              <span class="t-sub" style="font-size:12.5px">${s}</span>
-            </span>
-          </div>`).join('')}
-      </div>
+  notifications: () => `
+    <div class="wrap">
+      ${pageTitle("Notifications")}
+      <section class="section"><div class="rows">
+        ${toggle("bell", "Events starting soon", "Three hours before doors",
+          state.notif.starting, 'data-toggle="notif.starting"')}
+        ${toggle("users", "Friends going", "When someone you follow joins",
+          state.notif.friends, 'data-toggle="notif.friends"')}
+        ${toggle("sparkle", "New from hosts you follow", null,
+          state.notif.hosts, 'data-toggle="notif.hosts"')}
+        ${toggle("chat", "Messages", null, state.notif.messages, 'data-toggle="notif.messages"')}
+        ${toggle("diamond", "Members-only drops", null, state.notif.drops, 'data-toggle="notif.drops"')}
+      </div></section>
+      <section class="section">
+        <p class="tiny">Push is stubbed. Nothing is scheduled and no permission is requested.</p>
+      </section>
+    </div>`,
 
-      ${state.member ? `
-        <button class="row press-sm" data-act="cancelmember" style="width:100%;margin-top:20px;justify-content:center;
-          padding:13px;color:var(--ash);font-size:13px">Cancel membership</button>` : ''}
-    </div>
-  </div>`;
-}
+  privacy: () => `
+    <div class="wrap">
+      ${pageTitle("Privacy")}
+      <section class="section"><div class="rows">
+        ${toggle("lock", "Private account", "Only approved followers see your posts",
+          state.privateAcct, 'data-toggle="s.privateAcct"')}
+        ${toggle("eye", "Show me on events I join", "Friends can see you are going",
+          state.sound, 'data-toggle="s.sound"')}
+      </div></section>
+      <section class="section"><div class="rows">
+        ${link("blocked", "shield", "Blocked", `${Object.keys(state.blocked).length} people`)}
+        ${link("muted", "mute", "Muted", `${Object.keys(state.muted).length} people`)}
+      </div></section>
+    </div>`,
 
-export const premiumDock = () => state.member ? '' : `
-  <button class="btn btn-gold press" data-act="subscribe">Become a member · $12/mo</button>
-  <div class="dock-note">Cancel anytime. Auto-renews monthly until cancelled.</div>`;
+  blocked: () => peopleList("blocked", "No one is blocked",
+    "Block someone from their profile and they show up here."),
+  muted: () => peopleList("muted", "No one is muted",
+    "Mute someone from their profile and their posts stop appearing in your feed."),
 
-export function notificationsView() {
+  payment: () => `
+    <div class="wrap">
+      ${pageTitle("Payment")}
+      <section class="section"><div class="rows">
+        <div class="row-btn"><span class="ico">${icon("apple")}</span>
+          <span class="row-copy"><span class="row-t">Apple Pay</span>
+            <span class="row-s">Default</span></span></div>
+        <div class="row-btn"><span class="ico">${icon("card")}</span>
+          <span class="row-copy"><span class="row-t">Visa · 4242</span>
+            <span class="row-s">Expires 09/29</span></span></div>
+        <div class="row-btn"><span class="ico">${icon("wallet")}</span>
+          <span class="row-copy"><span class="row-t">Went balance</span>
+            <span class="row-s">$40.00</span></span></div>
+      </div></section>
+      <section class="section">
+        <p class="tiny">Every card here is invented. No payment processor is contacted anywhere
+          in this preview.</p>
+      </section>
+    </div>`,
+
+  appearance: () => `
+    <div class="wrap">
+      ${pageTitle("Appearance")}
+      <section class="section"><div class="rows">
+        ${toggle("wave", "Haptics", "A short tap on meaningful actions",
+          state.haptics, 'data-toggle="s.haptics"')}
+      </div></section>
+      <section class="section">
+        <div class="card card-pad stack" style="gap:12px">
+          <div class="row-t">Following your system</div>
+          <p class="small">Reduced motion, reduced transparency and increased contrast are all
+            read from your device settings and honoured — there is nothing to switch on here.</p>
+        </div>
+      </section>
+    </div>`,
+
+  help: () => `
+    <div class="wrap">
+      ${pageTitle("Help")}
+      <section class="section">
+        <div class="rows">
+          ${[["search", "Finding events", "Explore searches titles, hosts, venues and descriptions in the city you are in."],
+             ["ticket", "Booking", "Pick a tier, choose how many, pay. The pass lands in Went."],
+             ["plus", "Publishing", "Four steps, and you can see the card being built as you type."],
+             ["pin", "Changing city", "Tap the city name in the bar. Every city has a full catalogue."]]
+            .map(([ic, t, s]) => `
+              <div class="row-btn"><span class="ico">${icon(ic)}</span>
+                <span class="row-copy"><span class="row-t">${t}</span>
+                  <span class="row-s">${s}</span></span></div>`).join("")}
+        </div>
+      </section>
+    </div>`,
+
+  legal: () => `
+    <div class="wrap">
+      ${pageTitle("Legal")}
+      <section class="section">
+        <div class="card card-pad stack" style="gap:14px">
+          <div>
+            <div class="row-t">Terms</div>
+            <p class="small" style="margin-top:5px">There are none. This is a design preview built
+              by Alpha Agency, not a running service, and no agreement is formed by using it.</p>
+          </div>
+          <div>
+            <div class="row-t">Privacy</div>
+            <p class="small" style="margin-top:5px">Nothing you do here leaves your device. There is
+              no account, no server and no analytics; state lives in this browser’s local storage
+              and Reset clears it.</p>
+          </div>
+        </div>
+      </section>
+    </div>`,
+
+  about: () => `
+    <div class="wrap">
+      ${pageTitle("About")}
+      <section class="section">
+        <div style="display:grid;justify-items:center;text-align:center;gap:14px;padding:8px 0 4px">
+          <span style="color:var(--ink)">${brandMark(54)}</span>
+          <div>
+            <div class="display d-3">Went To Event</div>
+            <p class="small" style="margin-top:6px;max-width:30ch">
+              What is on near you, and who is going. Join in two taps, or publish your own
+              in four steps.</p>
+          </div>
+        </div>
+      </section>
+      <section class="section"><div class="rows">
+        <div class="row-btn"><span class="row-copy"><span class="row-t">Build</span>
+          <span class="row-s">Preview · design system v2</span></span></div>
+        <div class="row-btn"><span class="row-copy"><span class="row-t">Made by</span>
+          <span class="row-s">Alpha Agency, Dubai</span></span></div>
+      </div></section>
+    </div>`,
+};
+
+function peopleList(which, emptyTitle, emptySub) {
+  const keys = Object.keys(state[which]);
   return `
-  <div class="pad" style="padding-top:calc(max(var(--top),12px) + 58px)">
-    <h1 class="t-display" style="margin:0 0 18px">Notifications</h1>
-    ${notifs.length ? `<div class="stack" style="--gap:3px">${notifs.map(notifRow).join('')}</div>`
-      : empty('bell', 'All caught up', 'Nothing new right now.')}
+  <div class="wrap">
+    ${pageTitle(TITLES[which])}
+    <section class="section">
+      ${keys.length ? `<div class="rows">${keys.map((k) => `
+        <div class="row-btn">
+          ${avatar(k, 42)}
+          <span class="row-copy"><span class="row-t">${esc(USERS[k]?.name || k)}</span>
+            <span class="row-s">@${esc(USERS[k]?.handle || k)}</span></span>
+          <a class="btn btn-soft btn-sm" href="#/u/${k}">View</a>
+        </div>`).join("")}</div>`
+      : empty("users", emptyTitle, emptySub)}
+    </section>
   </div>`;
 }
 
-function notifRow(n) {
-  const go = n.go
-    ? (n.go.to === 'event' ? `data-act="event" data-id="${n.go.id}"`
-      : n.go.to === 'user' ? `data-act="user" data-key="${n.go.key}"`
-      : n.go.to === 'thread' ? `data-act="thread" data-key="${n.go.key}"`
-      : n.go.to === 'premium' ? 'data-act="premium"'
-      : 'data-act="tab" data-tab="profile"')
-    : '';
-  return `<button class="row press-sm" ${go}
-    style="width:100%;gap:12px;padding:12px 10px;border-radius:var(--r-md);text-align:left;
-           background:${n.unread ? 'rgba(255,91,61,.05)' : 'transparent'}">
-    ${n.user ? avatar(n.user, 42) : `
-      <span style="width:42px;height:42px;flex:none;border-radius:var(--r-full);display:grid;place-items:center;
-        background:rgba(244,241,236,.07);color:var(--bone)">${ico(n.ic, 18)}</span>`}
-    <span style="flex:1;min-width:0">
-      <span class="t-body" style="font-size:14px;display:block;line-height:1.4">
-        ${n.user ? `<b style="font-weight:660">${esc(USERS[n.user].name)}</b> ` : ''}${esc(n.text)}</span>
-      <span class="t-sub" style="font-size:11.5px">${esc(n.ago)}</span>
-    </span>
-    ${n.unread ? `<i style="width:8px;height:8px;border-radius:50%;background:var(--ember);flex:none"></i>` : ''}
-  </button>`;
-}
+export { TITLES as SETTINGS_TITLES };

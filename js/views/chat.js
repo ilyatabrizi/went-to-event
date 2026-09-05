@@ -1,102 +1,197 @@
-import { state, convos, convoOf } from '../store.js';
-import { USERS } from '../data/people.js';
-import { esc } from '../util.js';
-import { ico } from '../icons.js';
-import { avatar, nameLine, empty, verified } from '../ui/parts.js';
+/* Chat and one thread. Threads reply back, once, so the screen is not a dead
+   end in a demo — and the reply says it is scripted. */
 
-export function chatView() {
-  const list = convos.filter(c => !state.blocked[c.user]);
-  return `
-  <div class="pad" style="padding-top:calc(max(var(--top),12px) + 6px)">
-    <div class="row" style="justify-content:space-between;margin-bottom:16px">
-      <h1 class="t-display" style="margin:0">Chat</h1>
-      <button class="gbtn press" data-act="compose" aria-label="New message">${ico('plus', 19)}</button>
-    </div>
+import { state, convos, convoOf, me, save, unreadNotifs, notifs } from "../store.js";
+import { USERS } from "../data/people.js";
+import { byId } from "../data/events.js";
+import { esc } from "../util.js";
+import { icon } from "../icons.js";
+import { avatar, userName, empty, pageTitle, sectionHead, lazyImages } from "../parts.js";
+import { sheet, closeSheet, toast } from "../ui.js";
+import { go, refresh } from "../router.js";
+import { haptic } from "../motion.js";
 
-    <div class="field" style="margin-bottom:6px">
-      ${ico('search', 18)}
-      <input data-input="chatsearch" type="search" placeholder="Search messages" autocomplete="off"
-        aria-label="Search messages">
-    </div>
+/* ------------------------------------------------------------------ list */
+export default function chat() {
+  const list = convos.filter((c) => !state.blocked[c.user]);
 
-    <div id="chatList" style="margin-top:10px">
-      ${list.length ? list.map(convoRow).join('')
-        : empty('chat', 'No messages', 'Message someone you met at an event and it shows up here.')}
+  const html = `
+  <div class="wrap">
+    ${pageTitle("Chat")}
+    <div class="search" style="margin-top:18px">
+      ${icon("search")}
+      <input id="cq" type="search" placeholder="Search messages" aria-label="Search messages" autocomplete="off">
     </div>
-  </div>`;
+  </div>
+
+  <section class="section wrap">
+    ${list.length ? `<div class="rows" id="clist">${list.map(convoRow).join("")}</div>`
+      : empty("chat", "No messages", "Conversations with people you meet at events land here.")}
+  </section>`;
+
+  return {
+    html,
+    bar: { title: "Chat", right: `<button class="gbtn" type="button" id="compose"
+      aria-label="New message">${icon("plus")}</button>` },
+    mount(el) {
+      lazyImages(el);
+      const q = el.querySelector("#cq");
+      q?.addEventListener("input", () => {
+        const v = q.value.trim().toLowerCase();
+        el.querySelectorAll("#clist [data-user]").forEach((row) => {
+          const c = convoOf(row.dataset.user);
+          const hay = `${USERS[c.user].name} ${c.msgs.map((m) => m.t).join(" ")}`.toLowerCase();
+          row.hidden = !!v && !hay.includes(v);
+        });
+      });
+      el.querySelector("#compose")?.addEventListener("click", openCompose);
+    },
+  };
 }
 
 function convoRow(c) {
-  const u = USERS[c.user];
   const last = c.msgs[c.msgs.length - 1];
-  const mine = last && last.f === 'me';
-  return `<button class="row press-sm" data-act="thread" data-key="${c.user}"
-    data-search="${esc((u.name + ' ' + u.handle + ' ' + (last ? last.t : '')).toLowerCase())}"
-    style="width:100%;gap:12px;padding:11px 8px;border-radius:var(--r-md);text-align:left">
-    <div style="position:relative;flex:none">
-      ${avatar(c.user, 50)}
-      ${c.unread ? `<i style="position:absolute;top:0;right:0;width:13px;height:13px;border-radius:50%;
-         background:var(--ember);box-shadow:0 0 0 2.5px var(--ink)"></i>` : ''}
-    </div>
-    <div style="flex:1;min-width:0">
-      <div class="row" style="gap:5px">
-        <span class="t-head" style="font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(u.name)}</span>
-        ${verified(c.user)}
-        <span class="t-sub" style="font-size:12px;margin-left:auto;flex:none">${esc(c.ago)}</span>
-      </div>
-      <div class="t-sub" style="font-size:13.5px;margin-top:1px;overflow:hidden;text-overflow:ellipsis;
-           white-space:nowrap;${c.unread ? 'color:var(--bone);font-weight:520' : ''}">
-        ${mine ? 'You: ' : ''}${esc(last ? last.t : '')}
-      </div>
-    </div>
-  </button>`;
-}
-
-export function threadView({ key }) {
-  const u = USERS[key];
-  const c = convoOf(key) || { user: key, msgs: [] };
-  const blocked = !!state.blocked[key];
-
   return `
-  <div id="threadScroll">
-      <div style="text-align:center;padding:18px 0 24px">
-        ${avatar(key, 76, 'av-center')}
-        <div class="t-head" style="margin-top:12px;display:flex;align-items:center;justify-content:center;gap:5px">
-          ${esc(u.name)}${verified(key)}</div>
-        <div class="t-sub" style="font-size:12.5px">@${esc(u.handle)} · ${esc(u.bio)}</div>
-        <button class="pill press on-quiet" data-act="user" data-key="${key}" style="margin:12px auto 0">View profile</button>
-      </div>
-      ${c.msgs.map((m, i) => {
-        const prev = c.msgs[i - 1];
-        const gap = !prev || prev.f !== m.f;
-        return `<div style="display:flex;flex-direction:column;${gap && i ? 'margin-top:8px' : ''}">
-          <div class="bub ${m.f === 'me' ? 'bub-me' : 'bub-them'}">${esc(m.t)}</div>
-          ${i === c.msgs.length - 1 ? `<div class="t-sub" style="font-size:10.5px;margin-top:4px;
-             align-self:${m.f === 'me' ? 'flex-end' : 'flex-start'}">${esc(m.w)}</div>` : ''}
-        </div>`;
-      }).join('')}
-      <div id="typing" hidden style="align-self:flex-start;margin-top:6px">
-        <div class="bub bub-them" style="display:flex;gap:4px;padding:13px 15px">
-          ${[0, 1, 2].map(i => `<i style="width:6px;height:6px;border-radius:50%;background:var(--ash);
-             animation:typedot 1.3s ${i * .16}s infinite"></i>`).join('')}
-        </div>
-      </div>
-  </div>
-  <style>@keyframes typedot{0%,60%,100%{opacity:.3;transform:translateY(0)}30%{opacity:1;transform:translateY(-3px)}}</style>`;
+  <a class="row-btn" href="#/thread/${c.user}" data-user="${c.user}">
+    ${avatar(c.user, 46)}
+    <span class="row-copy">
+      <span class="spread"><span class="row-t">${userName(c.user)}</span>
+        <span class="row-s" style="flex:none">${esc(c.ago)}</span></span>
+      <span class="row-s clip">${last.f === "me" ? "You: " : ""}${esc(last.t)}</span>
+    </span>
+    ${c.unread ? `<span class="badge badge-solid" style="min-width:22px;justify-content:center">${c.unread}</span>` : ""}
+  </a>`;
 }
 
-export const threadDock = ({ key }) => {
-  if (state.blocked[key]) return `<div class="btn btn-ghost" style="pointer-events:none;font-size:14px">
-    You blocked @${esc(USERS[key].handle)}</div>`;
-  return `<div class="field" style="height:48px;padding-left:16px;padding-right:5px">
-    <input id="msgInput" data-input="msg" placeholder="Message" autocomplete="off"
-      enterkeyhint="send" aria-label="Write a message">
-    <button class="press" data-act="send" aria-label="Send"
-      style="width:38px;height:38px;flex:none;border-radius:var(--r-full);display:grid;place-items:center;
-             background:var(--ember);color:#180804">${ico('send', 18)}</button>
-  </div>`;
-};
+/* ---------------------------------------------------------------- thread */
+export function thread({ key }) {
+  const c = convoOf(key);
+  if (!c) {
+    return { html: `<div class="wrap">${empty("chat", "No such conversation", "It may have been deleted.",
+      { href: "#/chat", label: "Back to Chat" })}</div>`, tabs: false, bar: { back: true, title: "Chat" } };
+  }
+  c.unread = 0;
+  const u = USERS[key];
 
-export function openComposeTargets() {
-  return Object.keys(USERS).filter(k => k !== 'ava' && !state.blocked[k]);
+  const html = `
+  <div class="wrap" style="padding-top:6px">
+    <div style="display:grid;justify-items:center;text-align:center;gap:10px;padding:8px 0 26px">
+      <a href="#/u/${key}">${avatar(key, 64)}</a>
+      <div><div class="strong" style="font-size:16px">${userName(key)}</div>
+        <div class="small">@${esc(u.handle)}</div></div>
+    </div>
+
+    <div class="stack" id="msgs" style="gap:9px">
+      ${c.msgs.map(bubble).join("")}
+    </div>
+  </div>`;
+
+  return {
+    html, tabs: false,
+    bar: { back: true, title: u.name },
+    dock: `<div class="dock-row">
+      <span class="search" style="flex:1;height:50px">
+        <input id="msg" placeholder="Message ${esc(u.name.split(" ")[0])}" aria-label="Write a message"
+          autocomplete="off"></span>
+      <button class="gbtn" type="button" id="send" style="width:50px;height:50px;background:var(--act);color:var(--on-act);border-color:transparent"
+        aria-label="Send">${icon("send")}</button>
+    </div>`,
+    mount(el) {
+      const msgs = el.querySelector("#msgs");
+      const input = document.querySelector("#msg");
+      const send = document.querySelector("#send");
+      scrollTo({ top: document.body.scrollHeight, behavior: "instant" });
+
+      const push = (m) => {
+        c.msgs.push(m);
+        msgs.insertAdjacentHTML("beforeend", bubble(m));
+        scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
+      };
+      const submit = () => {
+        const t = (input?.value || "").trim();
+        if (!t) return;
+        input.value = "";
+        haptic(8);
+        push({ f: "me", t, w: "now" });
+        setTimeout(() => push({
+          f: "them", w: "now",
+          t: "(scripted reply — the preview answers once so the thread is not a dead end)",
+        }), 900);
+      };
+      send?.addEventListener("click", submit);
+      input?.addEventListener("keydown", (e) => { if (e.key === "Enter") submit(); });
+    },
+  };
+}
+
+const bubble = (m) => `
+  <div style="display:flex;justify-content:${m.f === "me" ? "flex-end" : "flex-start"}">
+    <div style="max-width:78%;padding:11px 15px;border-radius:var(--r-lg);font-size:14.5px;line-height:1.45;
+      ${m.f === "me" ? "background:var(--act);color:var(--on-act);border-bottom-right-radius:8px"
+                     : "background:var(--wash);border-bottom-left-radius:8px"}">
+      ${esc(m.t)}
+      <div style="font-size:10.5px;opacity:.5;margin-top:4px;text-align:right">${esc(m.w)}</div>
+    </div>
+  </div>`;
+
+function openCompose() {
+  const people = Object.keys(USERS).filter((k) => k !== me && !state.blocked[k]);
+  sheet(`
+    <div class="sheet-t">New message</div>
+    <div class="stack" style="gap:2px;padding-bottom:8px">
+      ${people.map((k) => `
+        <a class="row-btn" href="#/thread/${k}" data-close>
+          ${avatar(k, 40)}
+          <span class="row-copy"><span class="row-t" style="font-size:14.5px">${userName(k)}</span>
+            <span class="row-s">@${esc(USERS[k].handle)}</span></span>
+        </a>`).join("")}
+    </div>`, { label: "New message" });
+}
+
+/* -------------------------------------------------------- notifications */
+export function notifications() {
+  const list = notifs;
+  const html = `
+  <div class="wrap">
+    ${pageTitle("Notifications")}
+    <section class="section">
+      ${list.length ? `<div class="rows">${list.map(notifRow).join("")}</div>`
+        : empty("bell", "Nothing yet", "Follows, replies and reminders land here.")}
+    </section>
+  </div>`;
+
+  return {
+    html, tabs: false,
+    bar: { back: true, title: "Notifications", right:
+      `<button class="gbtn" type="button" id="readall" aria-label="Mark all read">${icon("check")}</button>` },
+    mount(el) {
+      lazyImages(el);
+      el.addEventListener("click", (e) => {
+        const row = e.target.closest("[data-n]");
+        if (row) notifs[+row.dataset.n].unread = false;
+      });
+      document.querySelector("#readall")?.addEventListener("click", () => {
+        notifs.forEach((n) => { n.unread = false; });
+        save(); toast("All caught up", "check"); refresh();
+      });
+    },
+  };
+}
+
+function notifRow(n, i) {
+  const href = !n.go ? "#/notifications"
+    : n.go.to === "event" ? `#/event/${n.go.id}`
+    : n.go.to === "user" ? `#/u/${n.go.key}`
+    : n.go.to === "thread" ? `#/thread/${n.go.key}`
+    : n.go.to === "premium" ? "#/membership" : "#/you";
+  return `
+  <a class="row-btn" href="${href}" data-n="${i}">
+    <span class="ico" ${n.unread ? 'style="color:var(--ember)"' : ""}>${icon(n.ic)}</span>
+    <span class="row-copy">
+      <span class="row-t" style="font-size:14.5px;font-weight:${n.unread ? 600 : 500}">
+        ${n.user ? `<b>${esc(USERS[n.user]?.name || n.user)}</b> ` : ""}${esc(n.text)}</span>
+      <span class="row-s">${esc(n.ago)}</span>
+    </span>
+    ${n.unread ? '<i class="dot"></i>' : ""}
+  </a>`;
 }
