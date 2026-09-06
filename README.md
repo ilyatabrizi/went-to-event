@@ -43,10 +43,13 @@ Bone, which is what the guidelines already had.
 
 ### Type
 
-**Fraunces** for page titles, event titles and any number that deserves weight.
-**Plus Jakarta Sans** for everything else. Both are vendored as woff2 and
-preloaded — no CDN, no layout shift. The pairing is ours but unused by any other
-preview, so this does not read as a sibling of NORM or Balance.
+Two grotesques, no serif. **Archivo** carries every headline — 700–760 weight with
+tracking that tightens as the size grows — and **Inter** does the small work, where
+it is still the best face on a dark screen. Both are self-hosted variable subsets
+(≈35 KB and ≈48 KB); nothing is fetched from a font CDN.
+
+A serif was tried and dropped: it read like a recipe column on a nightlife product,
+and the "e." mark itself is geometric sans.
 
 ## The interface
 
@@ -67,13 +70,13 @@ preview, so this does not read as a sibling of NORM or Balance.
 
 ## What is in it
 
-Five tabs — **Home · Explore · Chat · Went · You** — and eighteen screens.
+Five tabs — **Home · Explore · Chat · Went · You** — and twenty screens.
 
 **Home** — one event takes a full-bleed hero, a For You / Following switch, a
 "happening tonight" rail, and a scored feed where every card says *why* it is
 there.
 **Explore** — search, fifteen categories ranked by how full they are, a filter
-sheet (when / price / sort), free-this-week and closest-to-you rails.
+sheet of chips with a live match count, free-this-week and closest-to-you rails.
 **Event** — hero, when/where card, a map schematic, host with follow, who is
 going, tiers, more from the host, similar events, report.
 **Booking** — tier picker, quantity, checkout with three methods, a booking fee
@@ -82,12 +85,17 @@ that membership waives, confirmation, and the pass.
 **Went** — what you are going to and what you have been to, split Upcoming /
 Past, each opening a Milk pass with a scannable-looking code.
 **You** — profile with posts/saved/going, the publish CTA, membership, and a
-settings tree (account, notifications, privacy, blocked, muted, payment,
+grouped settings tree (account, verification, privacy, notifications, payment,
 appearance, help, legal, about).
-**Publish** — four steps, with the card being built visible as you type and a
-payout that tracks the price field on every keystroke.
-**Anywhere** — a country rail and city list with "living here" / "just
-visiting". San Francisco is hand-written; every other city generates a full,
+**Verification** — three steps for the badge hosts look for: what you need, a
+document in a frame that scans, a face guide that sweeps, then the wait and the
+badge. Nothing is captured or sent, and the screen says so.
+**Publish** — five steps, with the card being built visible as you type and a
+payout that tracks the price field on every keystroke. Step four is **Artwork**:
+six posters drawn from the kind of night it is, or a photo of your own, which
+stays on the device.
+**Anywhere** — a search across every city on earth, the places you have been,
+and city cards carrying their own art, with "living here" / "just visiting". San Francisco is hand-written; every other city generates a full,
 deterministic catalogue from its own name, so Tokyo is the same Tokyo each time.
 
 ## Structure
@@ -113,7 +121,7 @@ e2e.py                113 checks in real Chrome, screenshots into docs/shots/
 serve.py              local preview on :8141, no-store
 ```
 
-### Four decisions worth knowing
+### Decisions worth knowing
 
 **Every render gets a fresh container.** Setting `#view.innerHTML` leaves any
 listener a view bound to `#view` still attached, so after two visits one tap
@@ -133,11 +141,19 @@ module is worse than being offline. Cover images stay cache-first — they never
 change at a given URL and they are the expensive part. The worker does not
 register on localhost at all.
 
-**Cover photography is hotlinked from Unsplash**, with a brand gradient painted
-underneath every one. A blocked, slow or 404'd image degrades to the palette
-rather than to a grey hole, and errors retry once then stay hidden rather than
-removing the element. Swap `IMG` in `js/data/geo.js` for client imagery when
-there is any.
+**All artwork is drawn, not fetched.** Every cover is generated SVG: six
+compositions — a shaft of light, a horizon, a skyline, thrown rings, a ticket grid,
+a waveform — over one hue per category, mostly dark with the colour arriving as a
+glow rather than a fill, plus grain and a vignette that hands the bottom back to Ink
+so a title always has ground to sit on. It is seeded on the event, so a night looks
+the same forever, on every device, offline, with nothing to download.
+
+Stock photography was the wrong answer twice: the same six crowd shots repeated
+down a feed and belonged to nobody, and stock headshots standing in for your friends
+were worse — so avatars are generated identity marks too. The upshot is that the app
+is entirely same-origin: no CDN, no preconnect, one cache, and a preview that works
+on a plane.
+
 
 ## Placeholder, and deliberately so
 
