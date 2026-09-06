@@ -40,7 +40,7 @@ export default function home() {
     <section class="section wrap">
       ${feed.length ? `
         ${sectionHead(state.homeFeed === "foryou" ? "Picked for you" : "From people you follow")}
-        <div class="stack" style="gap:20px">
+        <div class="stack stagger" style="gap:20px">
           ${rest.map((ev) => eventCard(ev, { why: reason(ev) })).join("")}
         </div>`
       : empty("users", "Nothing here yet",
@@ -74,7 +74,7 @@ export default function home() {
 function heroBlock(ev) {
   return `
   <a class="hero" href="#/event/${ev.id}" aria-label="${esc(ev.title)}, ${esc(ev.when)}">
-    <span class="cover">${cover(ev, { w: 1000 })}</span>
+    <span class="cover">${cover(ev, { tall: true })}</span>
     <span class="hero-body">
       <span class="hero-meta">
         ${ev.soon ? `<span class="live"><i class="dot"></i>Tonight</span>` : ""}

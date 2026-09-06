@@ -6,9 +6,9 @@
     python3 e2e.py --shots-only
 
 Playwright against the system Chrome — no browser download. Every console error
-and every failed same-origin request anywhere in the run is a failure, not a
-warning. Unsplash covers are hotlinked, so a remote image that 404s is reported
-but not failed: the gradient underneath is the designed fallback.
+and every failed request anywhere in the run is a failure, not a warning: the
+app is entirely same-origin now, so there is nothing left that is allowed to
+fail quietly.
 """
 
 import pathlib
@@ -66,6 +66,9 @@ def route(page):
 
 
 def text(page, sel='#view'):
+    """Rendered text, which is what a person sees. Note that CSS text-transform
+    applies here — a label styled uppercase comes back uppercase — so compare
+    with `has()` rather than `in text(...)` unless case is genuinely the point."""
     return page.locator(sel).inner_text()
 
 
@@ -157,8 +160,12 @@ def main():
         check('five tabs', count(page, '#tabs .tab') == 5)
         check('the tab capsule is under Home',
               page.evaluate("document.querySelector('[data-tab=\"home\"]').getAttribute('aria-current')") == 'page')
-        check('covers decoded',
-              page.evaluate("[...document.querySelectorAll('#view img')].filter(i=>i.naturalWidth>0).length") >= 4)
+        # Cover art is generated SVG now, not a photograph fetched from a CDN.
+        check('every cover is drawn, not fetched',
+              count(page, '#view svg.cover-art') >= 4)
+        check('no image is loaded from anywhere else',
+              page.evaluate("[...document.querySelectorAll('#view img')]"
+                            ".filter(i=>!i.src.startsWith('data:')).length") == 0)
         audit(page, 'home')
         shot(page, '01-home')
 
@@ -302,7 +309,22 @@ def main():
         page.fill('[data-f="date"]', 'Sat, 14 Sep')
         tap(page, '#next', 520)
         page.fill('[data-f="venue"]', 'Old Print Works')
-        tap(page, '#next', 520)
+        tap(page, '#next', 560)
+
+        # ---- artwork: six generated posters, or a photo of your own
+        check('the artwork step is reached', has(page, 'Artwork'))
+        check('six posters are offered', page.locator('.art-opt').count() == 6)
+        check('one is chosen by default',
+              page.locator('.art-opt[aria-pressed="true"]').count() == 1)
+        check('every poster is drawn, not fetched',
+              page.evaluate("[...document.querySelectorAll('.art-opt svg.cover-art')].length") == 6)
+        tap(page, '[data-art="3"]', 420)
+        check('picking a different poster moves the tick',
+              page.evaluate("document.querySelector('[data-art=\"3\"]')"
+                            ".getAttribute('aria-pressed')") == 'true')
+        check('a photo of your own is offered', page.locator('.art-upload').count() == 1)
+        shot(page, '11b-artwork')
+        tap(page, '#next', 560)
         check('reached the last step', has(page, 'Entry'))
         tap(page, '[data-paid="1"]', 520)
         page.fill('[data-f="price"]', '30')
@@ -363,13 +385,30 @@ def main():
         nav(page, '#/', 560)
         tap(page, '.bar-brand', 700)
         check('the city picker opens', count(page, '.sheet') == 1)
-        check('countries offered', count(page, '[data-country]') >= 20)
+        check('places are offered as cards', count(page, '.sheet .place') >= 8)
+        check('each carries its own art', count(page, '.sheet .place svg.cover-art') >= 8)
         check('living here vs visiting', count(page, '[data-mode]') == 2)
+        check('anywhere is searchable', count(page, '#pq') == 1)
         shot(page, '15-city')
-        tap(page, '.sheet [data-city="1"]', 800)
+
+        # search reaches a city that is not on the idle list
+        page.fill('#pq', 'kyot')
+        page.wait_for_timeout(320)
+        check('search finds a city by prefix', has(page, 'Kyoto', '.sheet'))
+        page.fill('#pq', 'zzzzz')
+        page.wait_for_timeout(320)
+        check('a dead search says so', has(page, 'No such place', '.sheet'))
+        page.fill('#pq', 'new york')
+        page.wait_for_timeout(340)
+        tap(page, '.sheet .place', 900)
         check('changing city changes the feed', 'New York' in text(page, '#bar'))
-        tap(page, '.bar-brand', 700)
-        tap(page, '.sheet [data-city="0"]', 800)
+
+        tap(page, '.bar-brand', 900)
+        check('the place you just left is remembered',
+              has(page, 'Recent', '.sheet'))
+        page.fill('#pq', 'san franc')
+        page.wait_for_timeout(340)
+        tap(page, '.sheet .place', 900)
         check('and changes back', 'San Francisco' in text(page, '#bar'))
 
         nav(page, '#/notifications', 560)
@@ -423,6 +462,60 @@ def main():
                   route(page) == want_for.get(key, '/' + key), f'got {route(page)!r}')
             check(f'shortcut ?go={key} scrubs the query',
                   'go=' not in page.evaluate('location.search'))
+
+        # ------------------------------------------------------ the chrome
+        print('\nchrome')
+        for hash_, name in [('#/explore', 'Explore'), ('#/went', 'Went'), ('#/you', 'You')]:
+            nav(page, hash_, 620)
+            check(f'{name}: no back arrow on a tab root',
+                  count(page, '#bar [data-back]') == 0)
+            check(f'{name}: the bar carries the mark',
+                  count(page, '#bar .bar-mark') == 1)
+            check(f'{name}: its title waits for the scroll',
+                  page.evaluate("document.getElementById('shell').dataset.titled") == '0')
+        nav(page, '#/explore', 620)
+        page.evaluate('scrollTo(0, 400)')
+        page.wait_for_timeout(380)
+        check('scrolling hands the title to the bar',
+              page.evaluate("document.getElementById('shell').dataset.titled") == '1')
+        check('and the bar earns a background',
+              page.evaluate("document.getElementById('shell').dataset.scrolled") == '1')
+        page.evaluate('scrollTo(0, 0)')
+        page.wait_for_timeout(380)
+        check('scrolling back hands it return',
+              page.evaluate("document.getElementById('shell').dataset.titled") == '0')
+
+        # ------------------------------------------------------ verification
+        print('\nverification')
+        nav(page, '#/verify', 640)
+        check('verification opens on its first step', has(page, 'Your details'))
+        check('it says what you need', count(page, '.vz-req') == 3)
+        check('the reassurance is not dressed as an error', count(page, '.note-warn') == 0)
+        shot(page, '18-verify-intro')
+
+        tap(page, '#vnext', 640)
+        check('step two asks for the document', has(page, 'Your document'))
+        check('a document frame is drawn', count(page, '.vz-doc') == 1)
+        check('the frame is idle before you press',
+              page.evaluate("document.querySelector('.vz').dataset.state") == 'idle')
+        tap(page, '#vnext', 420)
+        check('pressing capture starts a read',
+              page.evaluate("document.querySelector('.vz').dataset.state") == 'busy')
+        check('and the button locks while it reads',
+              page.evaluate("document.querySelector('#vnext').disabled") is True)
+        shot(page, '19-verify-scan')
+        page.wait_for_timeout(2800)
+        check('step three asks for your face', has(page, 'Your face'))
+        check('a face guide is drawn', count(page, '.vz-face') == 1)
+        tap(page, '#vnext', 2800)
+        check('it goes away to check', has(page, 'Checking your document'))
+        page.wait_for_timeout(3200)
+        check('and comes back verified', has(page, 'verified'))
+        check('the badge is on the avatar', count(page, '.vz-badge') == 1)
+        check('nothing was actually uploaded', has(page, 'no document was captured'))
+        shot(page, '20-verified')
+        nav(page, '#/settings', 620)
+        check('the setting now reads as done', has(page, 'your badge is live'))
 
         # --------------------------------------------------- reduced motion
         print('\nreduced motion')

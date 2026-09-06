@@ -9,10 +9,14 @@
    ========================================================================== */
 
 /* ------------------------------------------------------------------ fonts */
-@font-face{font-family:Jakarta;src:url(../assets/fonts/jakarta.woff2)format("woff2");
-  font-weight:300 700;font-display:swap}
-@font-face{font-family:Fraunces;src:url(../assets/fonts/fraunces.woff2)format("woff2");
-  font-weight:100 900;font-display:swap}
+/* Two grotesques, no serif. A serif title read like a recipe column on a
+   nightlife product; the genre — and the "e." mark itself — is geometric sans.
+   Archivo carries every headline with real weight; Inter does the small work,
+   where it is still the best face on a dark screen. */
+@font-face{font-family:Archivo;src:url(../assets/fonts/archivo.woff2)format("woff2");
+  font-weight:400 800;font-display:swap;font-style:normal}
+@font-face{font-family:InterVar;src:url(../assets/fonts/inter.woff2)format("woff2");
+  font-weight:300 700;font-display:swap;font-style:normal}
 
 /* ----------------------------------------------------------------- tokens */
 :root{
@@ -43,8 +47,8 @@
 
   --milk:#F7F2E9;          /* the pass, and only the pass */
 
-  --sans:Jakarta,-apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif;
-  --serif:Fraunces,"Times New Roman",Georgia,serif;
+  --sans:InterVar,-apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif;
+  --display:Archivo,-apple-system,BlinkMacSystemFont,"SF Pro Display",system-ui,sans-serif;
 
   --gutter:20px;
   --shell:448px;
@@ -70,7 +74,8 @@
 html{-webkit-text-size-adjust:100%;text-size-adjust:100%;background:var(--paper)}
 body{
   margin:0;background:var(--paper);color:var(--ink);
-  font:400 15.5px/1.6 var(--sans);letter-spacing:-.005em;
+  font:400 15.5px/1.6 var(--sans);letter-spacing:-.006em;
+  font-variant-numeric:tabular-nums;
   -webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;
   overscroll-behavior-y:none;
 }
@@ -119,10 +124,12 @@ input,textarea{-webkit-appearance:none;appearance:none;border-radius:0}
 .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 
 /* ------------------------------------------------------------- typography */
-.title{font-family:var(--serif);font-weight:400;font-size:clamp(38px,10.5vw,44px);
+.title{font-family:var(--display);font-weight:760;font-size:clamp(34px,9.4vw,40px);
+  will-change:opacity,transform;
+  letter-spacing:-.036em;
   line-height:1.02;letter-spacing:-.015em;padding-top:8px}
 .title-sub{margin-top:10px;color:var(--mute);font-size:15px;line-height:1.5;max-width:32ch}
-.display{font-family:var(--serif);font-weight:400;line-height:1.1;letter-spacing:-.012em}
+.display{font-family:var(--display);font-weight:740;line-height:1.06;letter-spacing:-.032em}
 .d-2{font-size:clamp(27px,7.4vw,31px)}
 .d-3{font-size:22px}
 .d-4{font-size:18px}
@@ -161,6 +168,16 @@ input,textarea{-webkit-appearance:none;appearance:none;border-radius:0}
   -webkit-backdrop-filter:blur(18px) saturate(140%);backdrop-filter:blur(18px) saturate(140%);
 }
 .bar-brand{display:flex;align-items:center;gap:10px;height:100%;min-width:0}
+/* The title in the bar is the page's own heading, arriving after it has
+   scrolled away. It slides rather than fades, so the two read as one object
+   moving — a cross-fade reads as two. */
+.bar-title{font-family:var(--display);font-weight:700;font-size:16.5px;letter-spacing:-.022em}
+.bar-title-slide{
+  opacity:0;transform:translateY(10px);
+  transition:opacity .26s var(--ease),transform .34s var(--ease);
+}
+#shell[data-titled="1"] .bar-title-slide{opacity:1;transform:none}
+
 .bar-mark svg{width:26px;height:auto;color:var(--ink)}
 .bar-place{display:grid;gap:1px;min-width:0}
 .bar-place-k{font-size:10.5px;font-weight:600;letter-spacing:.10em;text-transform:uppercase;
@@ -236,7 +253,9 @@ input,textarea{-webkit-appearance:none;appearance:none;border-radius:0}
 
 .chip{display:inline-flex;align-items:center;gap:7px;padding:11px 16px;
   border-radius:var(--r-pill);background:var(--wash);color:var(--ink-2);
-  font-size:13.5px;font-weight:500;white-space:nowrap;transition:.2s var(--ease)}
+  font-size:13.5px;font-weight:500;white-space:nowrap;
+  transition:background-color .2s var(--ease),color .2s var(--ease),
+             border-color .2s var(--ease),transform .13s var(--ease)}
 .chip svg{width:15px;height:15px}
 .chip[aria-pressed="true"]{background:var(--act);color:var(--on-act)}
 .chip:active{transform:scale(.96)}
@@ -257,8 +276,9 @@ input,textarea{-webkit-appearance:none;appearance:none;border-radius:0}
 .rail .ev-sm-wrap{width:210px}
 
 /* the round icon that starts every row */
-.ico{width:40px;height:40px;flex:0 0 auto;display:grid;place-items:center;
-  border-radius:var(--r-pill);background:var(--wash);color:var(--ink-2)}
+.ico{width:38px;height:38px;flex:0 0 auto;display:grid;place-items:center;
+  border-radius:11px;background:var(--wash);color:var(--ink-2);
+  box-shadow:inset 0 1px 0 rgba(244,241,236,.05)}
 .ico svg{width:18px;height:18px}
 .ico-lg{width:46px;height:46px}
 .ico-lg svg{width:20px;height:20px}
@@ -315,12 +335,20 @@ input,textarea{-webkit-appearance:none;appearance:none;border-radius:0}
   color:var(--ink-2);transition:.24s var(--ease);white-space:nowrap}
 .seg button[aria-pressed="true"]{background:var(--act);color:var(--on-act)}
 
-.switch{width:50px;height:30px;flex:none;border-radius:var(--r-pill);background:var(--wash);
-  position:relative;transition:background .26s var(--ease)}
-.switch::after{content:"";position:absolute;top:3px;left:3px;width:24px;height:24px;
-  border-radius:50%;background:var(--ink);transition:transform .26s var(--spring)}
-.switch[aria-checked="true"]{background:var(--ember)}
-.switch[aria-checked="true"]::after{transform:translateX(20px)}
+/* Bone, not Ember. Five settings toggles in one view was five Ember objects on
+   a screen whose whole rule is that Ember marks exactly one thing — and "on" is
+   not a live state, it is a preference. Bone is this app's action colour; the
+   switch just uses it like every button does. */
+.switch{width:50px;height:31px;flex:none;border-radius:var(--r-pill);background:var(--wash);
+  position:relative;border:1px solid var(--line);cursor:pointer;
+  transition:background-color .26s var(--ease),border-color .26s var(--ease)}
+.switch::after{content:"";position:absolute;top:3px;left:3px;width:23px;height:23px;
+  border-radius:50%;background:var(--mute);box-shadow:var(--shadow-1);
+  transition:transform .32s var(--spring),background-color .26s var(--ease),width .2s var(--ease)}
+.switch:active::after{width:28px}
+.switch[aria-checked="true"]{background:var(--act);border-color:transparent}
+.switch[aria-checked="true"]::after{transform:translateX(19px);background:var(--on-act)}
+.switch[aria-checked="true"]:active::after{transform:translateX(14px)}
 
 /* ------------------------------------------------------------------- rows */
 .row-btn{display:flex;align-items:center;gap:13px;width:100%;text-align:left;
@@ -333,7 +361,15 @@ input,textarea{-webkit-appearance:none;appearance:none;border-radius:0}
 .row-go svg{width:17px;height:17px}
 .rows{background:var(--card);border-radius:var(--r-lg);border:1px solid var(--line);
   box-shadow:var(--shadow-2);overflow:hidden;padding:5px}
-.rows .row-btn + .row-btn{box-shadow:0 -1px 0 var(--line-2)}
+/* Inset the rule so it starts where the words start, not under the icon. A rule
+   that runs the full width cuts the icon off from its own label. */
+.rows .row-btn + .row-btn::before{content:"";position:absolute;left:69px;right:0;top:0;
+  height:1px;background:var(--line-2)}
+.rows .row-btn{position:relative}
+/* A group needs a name above it, otherwise nine identical rows read as one
+   undifferentiated list and nobody can find anything twice. */
+.rows-label{padding:0 0 9px 6px;display:block}
+.rows-note{padding:10px 6px 0;display:block;color:var(--faint);font-size:12.5px;line-height:1.5}
 
 /* ---------------------------------------------------------------- avatars */
 .av{position:relative;border-radius:50%;overflow:hidden;flex:none;display:grid;
@@ -379,7 +415,7 @@ input,textarea{-webkit-appearance:none;appearance:none;border-radius:0}
 .ev-save:active{transform:scale(.86)}
 .ev-save[aria-pressed="true"]{color:var(--ember)}
 .ev-title{position:absolute;left:16px;right:16px;bottom:14px;z-index:2;
-  font-family:var(--serif);font-weight:400;font-size:23px;line-height:1.12;
+  font-family:var(--display);font-weight:720;font-size:22px;line-height:1.14;letter-spacing:-.026em;
   letter-spacing:-.012em;text-shadow:0 1px 14px rgba(11,10,12,.6)}
 .ev-body{padding:14px 16px 16px;display:grid;gap:9px}
 .ev-when{display:flex;align-items:center;gap:7px;font-size:13.5px;color:var(--ink-2)}
@@ -423,7 +459,8 @@ input,textarea{-webkit-appearance:none;appearance:none;border-radius:0}
 .hero .cover::after{background:linear-gradient(180deg,rgba(11,10,12,.52) 0%,
   rgba(11,10,12,.12) 34%,rgba(11,10,12,.88) 82%,var(--paper) 100%)}
 .hero-body{position:relative;z-index:2;display:grid;gap:13px;width:100%}
-.hero-title{font-family:var(--serif);font-weight:400;font-size:clamp(34px,9.4vw,42px);
+.hero-title{font-family:var(--display);font-weight:760;font-size:clamp(31px,8.6vw,38px);
+  letter-spacing:-.034em;
   line-height:1.04;letter-spacing:-.018em;text-shadow:0 2px 20px rgba(11,10,12,.5)}
 .hero-meta{display:flex;flex-wrap:wrap;gap:8px}
 
@@ -432,7 +469,7 @@ input,textarea{-webkit-appearance:none;appearance:none;border-radius:0}
 .pass{background:var(--milk);color:#141216;border-radius:var(--r-lg);overflow:hidden;
   box-shadow:var(--shadow-3)}
 .pass-head{padding:20px 22px 16px;display:grid;gap:5px}
-.pass-t{font-family:var(--serif);font-size:25px;line-height:1.1;letter-spacing:-.012em}
+.pass-t{font-family:var(--display);font-weight:740;font-size:23px;line-height:1.12;letter-spacing:-.03em}
 .pass-s{font-size:13.5px;color:#544E59}
 .pass-rip{position:relative;height:22px;display:flex;align-items:center}
 .pass-rip::before,.pass-rip::after{content:"";position:absolute;width:22px;height:22px;
@@ -452,13 +489,18 @@ input,textarea{-webkit-appearance:none;appearance:none;border-radius:0}
 .empty{display:grid;justify-items:center;text-align:center;gap:14px;padding:52px 24px}
 .empty .ico{width:56px;height:56px}
 .empty .ico svg{width:24px;height:24px}
-.empty-t{font-family:var(--serif);font-size:22px;line-height:1.2}
+.empty-t{font-family:var(--display);font-weight:720;font-size:21px;line-height:1.2;letter-spacing:-.026em}
 .empty-s{font-size:14px;color:var(--mute);max-width:30ch;line-height:1.55}
 
+/* Quiet by default. An Ember-washed panel with a warning glyph reads as an
+   error, which is wrong for the thing it is usually saying — and it spends the
+   1% on a footnote. `note(text, "warn")` still exists for the real ones. */
 .note{display:flex;gap:11px;padding:14px 16px;border-radius:var(--r-md);
-  background:var(--ember-wash);box-shadow:inset 0 0 0 1px var(--ember-line);
+  background:var(--sink);box-shadow:inset 0 0 0 1px var(--line);
   font-size:13px;line-height:1.5;color:var(--ink-2)}
-.note svg{width:16px;height:16px;color:var(--ember);flex:none;margin-top:1px}
+.note svg{width:16px;height:16px;color:var(--mute);flex:none;margin-top:1px}
+.note-warn{background:var(--ember-wash);box-shadow:inset 0 0 0 1px var(--ember-line)}
+.note-warn svg{color:var(--ember)}
 
 .map{position:relative;height:150px;border-radius:var(--r-md);overflow:hidden;
   background:var(--sink)}
@@ -487,7 +529,8 @@ input,textarea{-webkit-appearance:none;appearance:none;border-radius:0}
   background:var(--card);margin-inline:calc(var(--gutter) * -1)}
 .grab::after{content:"";width:38px;height:4px;border-radius:2px;background:var(--line);
   box-shadow:0 0 0 1px rgba(0,0,0,.2)}
-.sheet-t{font-family:var(--serif);font-size:23px;line-height:1.15;padding:6px 0 16px}
+.sheet-t{font-family:var(--display);font-weight:730;font-size:21px;line-height:1.16;
+  letter-spacing:-.028em;padding:4px 0 14px}
 
 /* ---------------------------------------------------------------- toasts */
 #toast-root{position:fixed;z-index:100;left:50%;transform:translateX(-50%);
@@ -525,4 +568,223 @@ input,textarea{-webkit-appearance:none;appearance:none;border-radius:0}
 }
 @media (prefers-contrast:more){
   :root{--mute:#B3ADB8;--faint:#948E9B;--line:rgba(244,241,236,.22)}
+}
+
+
+/* ------------------------------------------------------------ filter sheet */
+.sheet-head-row{display:flex;align-items:flex-start;justify-content:space-between;
+  gap:12px;padding:4px 0 18px}
+.sheet-sub{color:var(--mute);font-size:13.5px;margin-top:3px}
+.fgroup + .fgroup{margin-top:20px}
+.fgroup .label{display:block;padding-bottom:10px}
+.fchips{display:flex;flex-wrap:wrap;gap:8px}
+.fchip{
+  height:38px;padding:0 15px;border-radius:var(--r-pill);
+  background:var(--wash);border:1px solid var(--line);color:var(--ink-2);
+  font-size:14px;font-weight:550;letter-spacing:-.008em;white-space:nowrap;
+  transition:background-color .2s var(--ease),color .2s var(--ease),
+             border-color .2s var(--ease),transform .12s var(--ease);
+}
+.fchip:active{transform:scale(.96)}
+.fchip[aria-pressed="true"]{background:var(--act);color:var(--on-act);border-color:transparent;
+  font-weight:650}
+
+
+/* ------------------------------------------------------------ place picker */
+/* Tall by default: choosing a city is a task, not a confirmation, and a sheet
+   that shows four rows makes you scroll to do it. */
+.sheet-tall{height:88svh;display:flex;flex-direction:column}
+.sheet-tall .place-body-wrap{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;
+  margin:16px -4px 0;padding:0 4px 8px;overscroll-behavior:contain}
+.place-foot{padding-top:14px;border-top:1px solid var(--line);margin-top:12px;flex:none}
+
+.place-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+.place{
+  position:relative;border-radius:var(--r-md);overflow:hidden;text-align:left;
+  aspect-ratio:5/3.1;border:1px solid var(--line);background:var(--card);
+  transition:transform .14s var(--ease),border-color .2s var(--ease);
+}
+.place:active{transform:scale(.965)}
+.place[aria-pressed="true"]{border-color:var(--ember-line)}
+.place-art{position:absolute;inset:0}
+.place-art svg{position:absolute;inset:0;width:100%;height:100%}
+.place-body{position:absolute;left:12px;right:12px;bottom:10px;display:grid;gap:2px}
+.place-city{font-family:var(--display);font-weight:700;font-size:16px;letter-spacing:-.022em;
+  line-height:1.15;color:var(--ink)}
+.place-meta{font-size:11.5px;color:var(--ink-2);opacity:.78;letter-spacing:.02em}
+.place-on{position:absolute;top:9px;right:9px;width:24px;height:24px;border-radius:50%;
+  display:grid;place-items:center;background:var(--ember);color:#1A0703}
+.place-none{padding:44px 8px;text-align:center}
+
+
+/* --------------------------------------------------------- artwork picker */
+.art-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}
+.art-opt{
+  position:relative;aspect-ratio:1/1.16;border-radius:14px;overflow:hidden;
+  border:1px solid var(--line);background:var(--card);
+  transition:transform .14s var(--ease),border-color .2s var(--ease),box-shadow .2s var(--ease);
+}
+.art-opt svg.cover-art{position:absolute;inset:0;width:100%;height:100%}
+.art-opt:active{transform:scale(.95)}
+.art-opt[aria-pressed="true"]{border-color:var(--act);box-shadow:0 0 0 2px var(--act)}
+.art-tick{
+  position:absolute;top:7px;right:7px;width:22px;height:22px;border-radius:50%;
+  display:grid;place-items:center;background:var(--act);color:var(--on-act);
+  opacity:0;transform:scale(.4);
+  transition:opacity .2s var(--ease),transform .3s var(--spring);
+}
+.art-opt[aria-pressed="true"] .art-tick{opacity:1;transform:none}
+
+.art-upload{
+  position:relative;display:grid;place-items:center;gap:5px;margin-top:12px;
+  min-height:118px;padding:20px;border-radius:var(--r-md);overflow:hidden;
+  border:1.5px dashed var(--line);background:var(--sink);cursor:pointer;text-align:center;
+  transition:border-color .2s var(--ease),background-color .2s var(--ease);
+}
+.art-upload:active{border-color:var(--ink-2);background:var(--wash)}
+.art-upload.has{border-style:solid;padding:0;min-height:150px}
+.art-upload img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.art-up-ico{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;
+  background:var(--wash);color:var(--ink-2)}
+.art-up-t{font-weight:600;font-size:14.5px}
+.art-up-s{font-size:12.5px;color:var(--faint)}
+.art-upload-on{position:absolute;left:12px;bottom:12px;display:flex;align-items:center;gap:6px;
+  padding:7px 12px;border-radius:var(--r-pill);background:rgba(11,10,12,.72);
+  -webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);
+  font-size:12.5px;font-weight:600;color:var(--ink)}
+.art-clear{position:absolute;top:10px;right:10px;width:32px;height:32px;border-radius:50%;
+  display:grid;place-items:center;background:rgba(11,10,12,.72);color:var(--ink);
+  -webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px)}
+/* a host's own photo sits over the generated poster, never instead of it */
+.cover-photo{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+
+
+/* ------------------------------------------------------------ verification */
+.vz{position:relative;margin:22px 0 4px;border-radius:var(--r-lg);overflow:hidden;
+  background:var(--sink);border:1px solid var(--line);display:grid;place-items:center}
+.vz-doc{aspect-ratio:3/2}
+.vz-face{aspect-ratio:1/1;max-width:280px;margin-inline:auto}
+.vz-art{width:100%;height:100%}
+
+/* the corner brackets a camera puts on a document */
+.vz-c{position:absolute;width:26px;height:26px;border:2.5px solid var(--mute);
+  transition:border-color .3s var(--ease),transform .4s var(--spring)}
+.vz-tl{top:24px;left:26px;border-right:0;border-bottom:0;border-radius:8px 0 0 0}
+.vz-tr{top:24px;right:26px;border-left:0;border-bottom:0;border-radius:0 8px 0 0}
+.vz-bl{bottom:24px;left:26px;border-right:0;border-top:0;border-radius:0 0 0 8px}
+.vz-br{bottom:24px;right:26px;border-left:0;border-top:0;border-radius:0 0 8px 0}
+.vz[data-state="busy"] .vz-c{border-color:var(--ink-2)}
+.vz[data-state="ok"] .vz-c{border-color:var(--ember);transform:scale(1.12)}
+
+/* the scan line, which only exists while something is being read */
+.vz-scan{position:absolute;left:8%;right:8%;height:2px;border-radius:2px;opacity:0;
+  background:linear-gradient(90deg,transparent,var(--ember),transparent);
+  box-shadow:0 0 18px 3px rgba(255,91,61,.35)}
+.vz[data-state="busy"] .vz-scan{opacity:1;animation:vz-scan 1.5s cubic-bezier(.45,0,.55,1) 1}
+@keyframes vz-scan{0%{top:22%}50%{top:76%}100%{top:22%}}
+
+/* the face oval and its sweep */
+.vz-oval{position:absolute;width:60%;aspect-ratio:.78;border-radius:50%;
+  border:2.5px dashed rgba(138,132,143,.6);
+  transition:border-color .3s var(--ease),transform .4s var(--spring)}
+.vz[data-state="busy"] .vz-oval{border-style:solid;border-color:var(--ink-2)}
+.vz[data-state="ok"] .vz-oval{border-style:solid;border-color:var(--ember);transform:scale(1.04)}
+.vz-sweep{position:absolute;inset:0;opacity:0;
+  background:conic-gradient(from 0deg,transparent 0 78%,rgba(255,91,61,.5) 92%,transparent 100%)}
+.vz[data-state="busy"] .vz-sweep{opacity:1;animation:vz-spin 1.5s linear 1}
+@keyframes vz-spin{to{transform:rotate(360deg)}}
+
+.vz-reqs{display:grid;gap:11px;padding-top:20px}
+.vz-req{display:flex;align-items:flex-start;gap:11px;font-size:14.5px;color:var(--ink-2);
+  line-height:1.45}
+.vz-req-ic{width:21px;height:21px;flex:none;border-radius:50%;display:grid;place-items:center;
+  background:var(--wash);color:var(--mute);margin-top:1px}
+
+.vz-done{display:grid;justify-items:center;text-align:center}
+.vz-badge-wrap{position:relative;display:inline-grid;
+  animation:vz-pop .6s var(--spring) both}
+@keyframes vz-pop{from{opacity:0;transform:scale(.8)}}
+.vz-badge{position:absolute;right:-2px;bottom:-2px;width:34px;height:34px;border-radius:50%;
+  display:grid;place-items:center;background:var(--ember);color:#1A0703;
+  box-shadow:0 0 0 4px var(--paper);
+  animation:vz-pop .5s var(--spring) .28s both}
+.vz-spin{width:54px;height:54px;border-radius:50%;
+  border:3px solid var(--wash);border-top-color:var(--ember);
+  animation:vz-spin 1s linear infinite}
+
+@media (prefers-reduced-motion:reduce){
+  .vz-scan,.vz-sweep{display:none}
+  .vz-spin{animation-duration:2.4s}
+}
+
+
+/* ============================================================================
+   MOTION
+
+   Three rules, applied everywhere rather than per-component:
+
+   1. Everything you can touch answers on touch-DOWN, at 0.96. Not 0.9 — below
+      0.95 reads as a toy — and not on release, which feels dead.
+   2. Content arrives in pieces, ~55ms apart, not as one block sliding up. A
+      single container animating is the thing that makes a page feel like a
+      slide rather than a screen.
+   3. Nothing animates `all`. Every transition names its properties, so a
+      layout property never sneaks into a compositor animation.
+   ========================================================================== */
+
+/* ---- 1. press ---- */
+.btn,.chip,.card-tap,.row-btn,.gbtn,.ev,.place,.art-opt,.fchip,.seg button,
+.tab,.post-act,.rail-card{
+  transition:transform .13s cubic-bezier(.2,0,.2,1),
+             background-color .2s var(--ease),
+             border-color .2s var(--ease),
+             color .2s var(--ease),
+             opacity .2s var(--ease);
+}
+.btn:active,.card-tap:active,.ev:active,.gbtn:active,.rail-card:active{transform:scale(.96)}
+.chip:active,.fchip:active,.art-opt:active,.place:active{transform:scale(.955)}
+.row-btn:active{transform:scale(.99)}
+.tab:active .tab-ico{transform:scale(.88)}
+.tab-ico{transition:transform .22s var(--spring)}
+
+/* ---- 2. staggered arrival ---- */
+/* The view no longer animates as one block. Its top-level sections come in one
+   after another, which is what makes a screen read as assembling rather than
+   sliding. Six is enough — past that nobody is still watching. */
+.view-in > *{animation:rise .5s var(--ease) both}
+.view-in > *:nth-child(1){animation-delay:.02s}
+.view-in > *:nth-child(2){animation-delay:.07s}
+.view-in > *:nth-child(3){animation-delay:.12s}
+.view-in > *:nth-child(4){animation-delay:.17s}
+.view-in > *:nth-child(5){animation-delay:.22s}
+.view-in > *:nth-child(n+6){animation-delay:.26s}
+@keyframes rise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+
+/* Cards inside a stack get their own, smaller stagger — the list should not
+   land all at once either. */
+.stack.stagger > *{animation:rise .46s var(--ease) both}
+.stack.stagger > *:nth-child(1){animation-delay:.03s}
+.stack.stagger > *:nth-child(2){animation-delay:.09s}
+.stack.stagger > *:nth-child(3){animation-delay:.15s}
+.stack.stagger > *:nth-child(4){animation-delay:.20s}
+.stack.stagger > *:nth-child(n+5){animation-delay:.24s}
+
+/* ---- 3. scroll-driven reveal for anything below the fold ---- */
+/* Content further down should not have already animated by the time you reach
+   it. Where the browser supports it this costs no JS at all. */
+@supports (animation-timeline: view()){
+  @media (prefers-reduced-motion:no-preference){
+    .reveal{animation:rise-in linear both;animation-timeline:view();
+      animation-range:entry 0% entry 34%}
+    @keyframes rise-in{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:none}}
+  }
+}
+
+/* ---- honest reduced-motion ---- */
+/* The global rule already kills durations. These are the ones that must not
+   simply become instant — they must not run at all, or they flash. */
+@media (prefers-reduced-motion:reduce){
+  .view-in > *,.stack.stagger > *{animation:none}
+  .btn:active,.chip:active,.ev:active,.gbtn:active,.card-tap:active,
+  .row-btn:active,.place:active,.art-opt:active,.fchip:active{transform:none}
 }

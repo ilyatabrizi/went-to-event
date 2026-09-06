@@ -64,7 +64,7 @@ export default function went() {
 
     <section class="section">
       ${list.length
-        ? `<div class="stack">${list.map(passCard).join("")}</div>`
+        ? `<div class="stack stagger">${list.map(passCard).join("")}</div>`
         : empty("ticket",
             state.wentTab === "upcoming" ? "Nothing booked yet" : "Nothing in the past",
             state.wentTab === "upcoming"
@@ -74,7 +74,7 @@ export default function went() {
     </section>
   </div>`;
 
-  return { html, mount: (el) => lazyImages(el) };
+  return { html, bar: { title: "Went" }, mount: (el) => lazyImages(el) };
 }
 
 function passCard(t) {

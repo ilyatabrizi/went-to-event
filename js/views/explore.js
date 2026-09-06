@@ -101,7 +101,7 @@ export function exploreBody() {
     <section class="section wrap">
       ${sectionHead(`${list.length} ${list.length === 1 ? "result" : "results"}${
         state.cat ? " · " + catLabel(state.cat) : ""}`)}
-      <div class="stack" style="gap:20px">${list.map((e) => eventCard(e)).join("")}</div>
+      <div class="stack stagger" style="gap:20px">${list.map((e) => eventCard(e)).join("")}</div>
     </section>`;
 }
 
@@ -134,6 +134,7 @@ export default function explore() {
 
   return {
     html,
+    bar: { title: "Explore" },
     mount(el) {
       lazyImages(el);
       const body = el.querySelector("#body");
@@ -170,47 +171,68 @@ export default function explore() {
 }
 
 /* ---------------------------------------------------------- filter sheet */
+/* Three questions with four answers each is twelve chips, not twelve full-width
+   rows stacked into a 700px scroll. Answers are single-select, so a chip that
+   fills with Bone when chosen says everything a tick in a list row said, in a
+   sixth of the height — and the whole sheet is legible without moving.
+
+   It also answers as you go: the count under the title is live, so nobody has
+   to press "Show results" to find out they filtered everything away. */
 export function openFilters(onApply) {
+  const KEY = { When: "whenIdx", Price: "priceIdx", Sort: "sortIdx" };
+
   const group = (id, items, active) => `
-    <div class="label" style="padding:18px 0 10px">${id}</div>
-    <div class="stack" style="gap:8px">
-      ${items.map((label, i) => `
-        <button class="row-btn" type="button" data-f="${id}" data-i="${i}"
-          style="background:var(--wash)">
-          <span class="row-copy"><span class="row-t" style="font-size:14.5px">${esc(label)}</span></span>
-          <span class="row-go" style="color:var(--ink);opacity:${i === active ? 1 : 0}">
-            ${icon("check", 18)}</span>
-        </button>`).join("")}
+    <div class="fgroup">
+      <div class="label">${id}</div>
+      <div class="fchips">
+        ${items.map((label, i) => `
+          <button class="fchip" type="button" data-f="${id}" data-i="${i}"
+            aria-pressed="${i === active}">${esc(label)}</button>`).join("")}
+      </div>
     </div>`;
 
+  const count = () => {
+    const n = results().length;
+    return `${n} ${n === 1 ? "event" : "events"} match`;
+  };
+
   sheet(`
-    <div class="sheet-t">Filters</div>
+    <div class="sheet-head-row">
+      <div>
+        <div class="sheet-t" style="padding:0">Filters</div>
+        <div class="sheet-sub" id="fcount">${count()}</div>
+      </div>
+      <button class="gbtn" type="button" data-close aria-label="Close">${icon("close", 18)}</button>
+    </div>
     ${group("When", WHEN, state.whenIdx)}
     ${group("Price", PRICE, state.priceIdx)}
     ${group("Sort", SORT, state.sortIdx)}
-    <div class="dock-row" style="padding-top:22px">
-      <button class="btn btn-soft" type="button" id="clear" style="flex:none;width:112px">Clear</button>
+    <div class="dock-row" style="padding-top:20px">
+      <button class="btn btn-soft" type="button" id="clear" style="flex:none;width:104px">Clear</button>
       <button class="btn btn-primary" type="button" data-close style="flex:1">Show results</button>
     </div>`, {
     label: "Filters",
     onClose: onApply,
     mount(el) {
+      const paint = () => {
+        el.querySelector("#fcount").textContent = count();
+        el.querySelectorAll("[data-f]").forEach((b) => {
+          b.setAttribute("aria-pressed",
+            String(+b.dataset.i === state[KEY[b.dataset.f]]));
+        });
+      };
       el.addEventListener("click", (e) => {
         const b = e.target.closest("[data-f]");
         if (b) {
           haptic(6);
-          const i = +b.dataset.i;
-          if (b.dataset.f === "When") state.whenIdx = i;
-          if (b.dataset.f === "Price") state.priceIdx = i;
-          if (b.dataset.f === "Sort") state.sortIdx = i;
-          save();
-          el.querySelectorAll(`[data-f="${b.dataset.f}"] .row-go`).forEach((g, gi) => {
-            g.style.opacity = gi === i ? 1 : 0;
-          });
+          state[KEY[b.dataset.f]] = +b.dataset.i;
+          save(); paint();
+          return;
         }
         if (e.target.closest("#clear")) {
+          haptic(8);
           state.whenIdx = state.priceIdx = state.sortIdx = 0;
-          save(); closeSheet();
+          save(); paint();
         }
       });
     },

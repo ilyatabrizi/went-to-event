@@ -17,8 +17,17 @@ const TITLES = {
   help: "Help", legal: "Legal", about: "About",
 };
 
+/* A named group. Nine identical rows with no headings is a list nobody can
+   navigate twice; the name is what makes it findable. */
+const group = (label, rows, note) => `
+  <section class="section wrap">
+    ${label ? `<span class="label rows-label">${esc(label)}</span>` : ""}
+    <div class="rows">${rows}</div>
+    ${note ? `<span class="rows-note">${esc(note)}</span>` : ""}
+  </section>`;
+
 const link = (key, ic, title, sub) => `
-  <a class="row-btn" href="#/settings/${key}">
+  <a class="row-btn" href="${key.startsWith("#") ? key : "#/settings/" + key}">
     <span class="ico">${icon(ic)}</span>
     <span class="row-copy"><span class="row-t">${title}</span>
       ${sub ? `<span class="row-s">${sub}</span>` : ""}</span>
@@ -89,23 +98,21 @@ const PAGES = {
       </a>
     </div>
 
-    <section class="section wrap">
-      <div class="rows">
-        ${link("account", "user", "Account", "Name, handle, bio")}
-        ${link("notifications", "bell", "Notifications", "What reaches your phone")}
-        ${link("privacy", "lock", "Privacy", "Who sees you and what you do")}
-        ${link("payment", "card", "Payment", "Cards and the Went balance")}
-        ${link("appearance", "eye", "Appearance", "Motion, haptics, contrast")}
-      </div>
-    </section>
+    ${group("Your account",
+      link("account", "user", "Account", "Name, handle, bio") +
+      link("#/verify", "shield", "Verification",
+           state.verified ? "Verified · your badge is live" : "Get the badge hosts look for") +
+      link("privacy", "lock", "Privacy", "Who sees you and what you do"))}
 
-    <section class="section wrap">
-      <div class="rows">
-        ${link("help", "info", "Help", "How this preview works")}
-        ${link("legal", "shield", "Legal", "Terms and privacy")}
-        ${link("about", "globe", "About", "What this build is")}
-      </div>
-    </section>
+    ${group("App",
+      link("notifications", "bell", "Notifications", "What reaches your phone") +
+      link("payment", "card", "Payment", "Cards and the Went balance") +
+      link("appearance", "eye", "Appearance", "Motion, haptics, contrast"))}
+
+    ${group("About",
+      link("help", "info", "Help", "How this preview works") +
+      link("legal", "shield", "Legal", "Terms and privacy") +
+      link("about", "globe", "About", "What this build is"))}
 
     ${!installed() && canInstall() ? `
       <section class="section wrap">
@@ -146,22 +153,20 @@ const PAGES = {
     </div>`,
 
   notifications: () => `
-    <div class="wrap">
-      ${pageTitle("Notifications")}
-      <section class="section"><div class="rows">
-        ${toggle("bell", "Events starting soon", "Three hours before doors",
-          state.notif.starting, 'data-toggle="notif.starting"')}
-        ${toggle("users", "Friends going", "When someone you follow joins",
-          state.notif.friends, 'data-toggle="notif.friends"')}
-        ${toggle("sparkle", "New from hosts you follow", null,
-          state.notif.hosts, 'data-toggle="notif.hosts"')}
-        ${toggle("chat", "Messages", null, state.notif.messages, 'data-toggle="notif.messages"')}
-        ${toggle("diamond", "Members-only drops", null, state.notif.drops, 'data-toggle="notif.drops"')}
-      </div></section>
-      <section class="section">
-        <p class="tiny">Push is stubbed. Nothing is scheduled and no permission is requested.</p>
-      </section>
-    </div>`,
+    <div class="wrap">${pageTitle("Notifications")}</div>
+    ${group("Events",
+      toggle("bell", "Starting soon", "Three hours before doors",
+        state.notif.starting, 'data-toggle="notif.starting"') +
+      toggle("users", "Friends going", "When someone you follow joins",
+        state.notif.friends, 'data-toggle="notif.friends"') +
+      toggle("sparkle", "New from hosts you follow", "Only the ones you follow",
+        state.notif.hosts, 'data-toggle="notif.hosts"'))}
+    ${group("People",
+      toggle("chat", "Messages", "Every new message",
+        state.notif.messages, 'data-toggle="notif.messages"') +
+      toggle("diamond", "Members-only drops", "Rooms that never reach general sale",
+        state.notif.drops, 'data-toggle="notif.drops"'),
+      "Push is stubbed in this preview. Nothing is scheduled and no permission is requested.")}`,
 
   privacy: () => `
     <div class="wrap">

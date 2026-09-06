@@ -1,4 +1,3 @@
-import { PORTRAITS, photoUrl } from './geo.js';
 
 export const USERS = {
   ava:   { name:'Ava Reyes',        handle:'avareyes',   bio:'Chasing warehouse sets and slow rooftop mornings.', followers:428,     following:186 },
@@ -22,7 +21,6 @@ const BG = ['#2A2036','#20303A','#33261B','#243020','#1E2838','#2E1F30','#1F3028
 Object.keys(USERS).forEach((k, i) => {
   const u = USERS[k];
   u.key = k;
-  u.photo = photoUrl(PORTRAITS[i % PORTRAITS.length], 200);
   u.bg = BG[i % BG.length];
   u.initials = u.name.split(/\s+/).slice(0, 2).map(w => w[0]).join('');
 });

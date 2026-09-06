@@ -8,11 +8,15 @@ const KEY = "wte.v2";
    not halfway through a checkout. */
 const PERSIST = ["country", "cityIdx", "visiting", "saved", "followingUsers", "followingHosts",
                  "member", "posts", "myTickets", "blocked", "muted", "notif", "sound",
-                 "haptics", "seenBoot", "privateAcct", "homeFeed", "installDismissed"];
+                 "haptics", "seenBoot", "privateAcct", "homeFeed", "installDismissed",
+                 "recentCities", "verified", "verifyStep"];
 
 export const state = {
   /* place */
-  country: 0, cityIdx: 0, visiting: false,
+  country: 0, cityIdx: 0, visiting: false, recentCities: [],
+
+  /* identity — a verified account is the badge hosts look for */
+  verified: false, verifyStep: 0,
 
   /* explore */
   query: "", cat: null, whenIdx: 0, priceIdx: 0, sortIdx: 0,

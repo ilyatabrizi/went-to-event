@@ -6,7 +6,8 @@ import { icon } from "./icons.js";
 import { route, startRouter, go, render } from "./router.js";
 import { state, save, subscribe, unreadChats, unreadNotifs, toggleSave, isSaved } from "./store.js";
 import { iconFill } from "./icons.js";
-import { barPlace, barBack, lazyImages } from "./parts.js";
+import { barPlace, barBack, barRoot, lazyImages } from "./parts.js";
+import { GRAIN_DEFS } from "./artwork.js";
 import { cityName } from "./place.js";
 import { toast, closeSheet } from "./ui.js";
 import { haptic } from "./motion.js";
@@ -21,6 +22,7 @@ import detail from "./views/detail.js";
 import booking, { checkout, confirm } from "./views/booking.js";
 import create, { published, blankDraft } from "./views/create.js";
 import settings from "./views/settings.js";
+import verify from "./views/verify.js";
 
 /* ----------------------------------------------------------------- routes */
 route("/",                home);
@@ -40,6 +42,7 @@ route("/notifications",   notifications);
 route("/membership",      membership);
 route("/publish",         create);
 route("/published",       published);
+route("/verify",          verify);
 route("/settings",        () => settings({ key: "root" }));
 route("/settings/:key",   settings);
 
@@ -49,6 +52,7 @@ const tabs = $("#tabs");
 const ink = $("#tabs-ink");
 const bar = $("#bar");
 const dock = $("#dock");
+const view = $("#view");
 
 tabs.querySelectorAll(".tab").forEach((tab) => {
   tab.querySelector(".tab-ico").innerHTML =
@@ -62,10 +66,14 @@ const TAB_FOR = {
   "/event": "explore", "/book": "explore", "/checkout": "explore", "/confirm": "explore",
   "/pass": "went", "/thread": "chat", "/u": "chat", "/notifications": "home",
   "/membership": "you", "/publish": "you", "/published": "you", "/settings": "you",
+  "/verify": "you",
 };
 
+const ROOT_TITLE = { "/explore": "Explore", "/chat": "Chat", "/went": "Went", "/you": "You" };
+
 function paintTabs(path) {
-  const key = TAB_FOR[path] || TAB_FOR["/" + path.split("/")[1]] || null;
+  const p = path.replace(/^#/, "") || "/";
+  const key = TAB_FOR[p] || TAB_FOR["/" + p.split("/")[1]] || null;
   let active = null;
   tabs.querySelectorAll(".tab").forEach((tab) => {
     const on = tab.dataset.tab === key;
@@ -94,19 +102,25 @@ subscribe(paintBadges);
 /* ------------------------------------------------------------------- bars */
 /* The view says what its bar and dock are; the shell just paints them. */
 document.addEventListener("view:chrome", (e) => {
-  const { path, bar: b, dock: d, tabs: showTabs } = e.detail;
+  const { bar: b, dock: d, tabs: showTabs } = e.detail;
+  /* The router keys its scroll memory by the raw hash, so that is what it
+     sends. Every map in here is keyed by the route, so strip the "#" once,
+     here, rather than in five different lookups. */
+  const path = e.detail.path.replace(/^#/, "") || "/";
 
+  /* Three bars, and which one you get is not a style choice:
+     · a pushed screen gets back + its title, always visible;
+     · Home gets the place header, because where you are IS the screen;
+     · every other tab root gets the mark plus its own title, which arrives
+       only once the large heading has scrolled out from under it. */
+  const isRoot = !!TAB_FOR[path];
   bar.innerHTML = b?.back || b?.close
     ? barBack(b.title, b.right || "")
-    : b?.title && !TAB_FOR[path]
-      ? barBack(b.title, b.right || "")
-      : barPlace(cityName(), { bell: unreadNotifs() }) ;
-
-  /* A tab root with its own title (Chat, Went, You) still gets the place
-     header — the title is already the first thing in the page. */
-  if (!b?.back && !b?.close && b?.right && TAB_FOR[path]) {
-    bar.querySelector(".bar-actions").insertAdjacentHTML("afterbegin", b.right);
-  }
+    : isRoot && path !== "/"
+      ? barRoot(b?.title || ROOT_TITLE[path] || "", b?.right || "")
+      : !isRoot && b?.title
+        ? barBack(b.title, b.right || "")
+        : barPlace(cityName(), { bell: unreadNotifs() });
   if (b?.close) bar.querySelector("[data-back]").innerHTML = icon("close");
 
   dock.innerHTML = d || "";
@@ -115,6 +129,7 @@ document.addEventListener("view:chrome", (e) => {
   shell.dataset.tabs = showTabs ? "1" : "0";
   tabs.hidden = !showTabs;
 
+  shell.dataset.titled = "0";
   paintTabs(path);
   paintBadges();
   lazyImages(bar);
@@ -128,6 +143,19 @@ addEventListener("scroll", () => {
   ticking = true;
   requestAnimationFrame(() => {
     shell.dataset.scrolled = scrollY > 12 ? "1" : "0";
+    /* Hand the page's heading over to the bar at the moment it leaves, so only
+       one of the two is ever legible. */
+    const h = view.querySelector(".title");
+    if (h) {
+      /* Measure the bar, do not parse --bar-h: a custom property comes back as
+         its raw token ("calc(0px + 58px)"), parseFloat gives NaN, and every
+         comparison against it is quietly false forever. */
+      const gone = h.getBoundingClientRect().bottom < bar.offsetHeight + 4;
+      shell.dataset.titled = gone ? "1" : "0";
+      h.style.opacity = gone ? "0" : "1";
+    } else {
+      shell.dataset.titled = "0";
+    }
     ticking = false;
   });
 }, { passive: true });
@@ -218,14 +246,19 @@ startRouter();
 
 /* Hold the veil until the first screen has actually painted, so the app is
    never seen mid-render. Returning visitors get a much shorter hold. */
+document.body.insertAdjacentHTML("afterbegin", GRAIN_DEFS);
+
 const boot = $("#boot");
 document.addEventListener("view:rendered", function lift() {
   document.removeEventListener("view:rendered", lift);
+  /* First visit holds long enough for the opening to actually play — a mark
+     that gets cut off mid-draw is worse than no opening at all. A returning
+     visitor has seen it and wants their app. */
   setTimeout(() => {
     boot.classList.add("gone");
-    setTimeout(() => boot.remove(), 520);
+    setTimeout(() => boot.remove(), 700);
     state.seenBoot = true; save();
-  }, state.seenBoot ? 240 : 900);
+  }, state.seenBoot ? 240 : 1150);
 });
 
 /* Not on localhost: a service worker in front of the dev server turns every

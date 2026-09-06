@@ -49,7 +49,7 @@ export default function detail({ id }) {
 
   const html = `
   <div class="hero" style="min-height:clamp(360px,58svh,470px)">
-    <span class="cover">${cover(ev, { w: 1000 })}</span>
+    <span class="cover">${cover(ev, { tall: true })}</span>
     <span class="hero-body">
       <span class="hero-meta">
         ${ev.soon ? `<span class="live"><i class="dot"></i>Tonight</span>` : ""}

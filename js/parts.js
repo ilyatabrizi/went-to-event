@@ -1,32 +1,22 @@
 /* The pieces every view is assembled from. If a shape appears on two screens it
    belongs here, so it can only ever look one way. */
 
-import { esc, money, compact, plural, initials } from "./util.js";
+import { esc, money, compact, plural, initials, hashStr } from "./util.js";
 import { icon, iconFill } from "./icons.js";
-import { COV, IMG, photoUrl, catIcon, catLabel } from "./data/geo.js";
+import { catIcon, catLabel } from "./data/geo.js";
+import { poster, tile } from "./artwork.js";
 import { USERS } from "./data/people.js";
 import { state, isSaved, isMember } from "./store.js";
 
 /* ------------------------------------------------------------------ cover */
-/* A brand-family gradient with a woven motif renders first; the photo fades in
-   over it. A blocked, slow or 404'd image degrades to the palette, never to a
-   grey hole — which is why the gradient is a real element, not a placeholder. */
-export function cover(ev, { w = 800 } = {}) {
-  const c = COV[ev.cat] || COV.Nightlife;
-  const gid = "cg" + ev.id;
-  const arr = IMG[ev.cat];
-  const src = (!ev.userMade && arr && arr.length) ? photoUrl(arr[ev.id % arr.length], w) : null;
-  return `
-    <svg class="cover-art" viewBox="0 0 400 268" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
-      <defs><linearGradient id="${gid}" x1="0" y1="0" x2=".35" y2="1">
-        <stop offset="0" stop-color="${c.g[0]}"/><stop offset="1" stop-color="${c.g[1]}"/>
-      </linearGradient></defs>
-      <rect width="400" height="268" fill="url(#${gid})"/>
-      <g opacity=".2" fill="none" stroke="#F4F1EC" stroke-width="1">
-        <circle cx="${60 + (ev.id % 7) * 40}" cy="${40 + (ev.id % 5) * 30}" r="86"/>
-        <circle cx="${320 - (ev.id % 5) * 30}" cy="${210 - (ev.id % 4) * 26}" r="62"/>
-      </g>
-    </svg>${src ? `<img data-lazy alt="" src="${esc(src)}">` : ""}`;
+/* Every cover is drawn here, not fetched. See artwork.js for why. It is inline
+   SVG, so it is on screen in the same frame as the text — nothing to load, no
+   layout shift, and it works with the radio off. */
+export function cover(ev, opts = {}) {
+  const art = poster(ev, { seed: opts.seed ?? ev.art ?? 0, tall: !!opts.tall });
+  /* A host who brought their own photo gets their own photo. The generated
+     poster stays underneath it, so a broken or slow image still has ground. */
+  return ev.photo ? `${art}<img class="cover-photo" alt="" src="${esc(ev.photo)}">` : art;
 }
 
 /** Wire every cover image on the page. Call after any innerHTML that has one. */
@@ -51,11 +41,19 @@ export function lazyImages(root = document) {
 
 /* ---------------------------------------------------------------- avatars */
 export function avatar(key, size = 40) {
-  const u = USERS[key] || { name: key, initials: initials(key), bg: "#2A262E" };
-  const s = size === 40 ? "" : `width:${size}px;height:${size}px;font-size:${Math.round(size * .35)}px`;
-  return `<span class="av" style="background:${u.bg};${s}">
-    <span>${esc(u.initials || initials(u.name))}</span>
-    ${u.photo ? `<img data-lazy alt="" src="${esc(u.photo)}">` : ""}</span>`;
+  const u = USERS[key] || { name: key, initials: initials(key) };
+  const s = size === 40 ? "" : `width:${size}px;height:${size}px;font-size:${Math.round(size * .36)}px`;
+  return `<span class="av" style="${avField(key)};${s}">
+    <span>${esc(u.initials || initials(u.name))}</span></span>`;
+}
+
+/* An identity mark, not a photograph. Two stops off one hue, picked by name, so
+   a person looks the same everywhere and nobody is represented by a stranger
+   from a stock library. */
+export function avField(key) {
+  const h = hashStr(String(key));
+  const hue = h % 360;
+  return `background:linear-gradient(145deg,hsl(${hue} 32% 34%),hsl(${(hue + 34) % 360} 40% 18%))`;
 }
 
 export function avStack(keys, max = 3, onCard = false) {
@@ -90,8 +88,9 @@ export const empty = (name, title, sub, action) => `
     ${action ? `<a class="btn btn-soft btn-sm" href="${action.href}">${esc(action.label)}</a>` : ""}
   </div>`;
 
-export const note = (text) =>
-  `<div class="note">${icon("info")}<span>${esc(text)}</span></div>`;
+export const note = (text, tone = "quiet") =>
+  `<div class="note${tone === "warn" ? " note-warn" : ""}">
+     ${icon(tone === "warn" ? "info" : "shield")}<span>${esc(text)}</span></div>`;
 
 /* ------------------------------------------------------------ event cards */
 const priceOf = (ev) => {
@@ -166,10 +165,11 @@ export const eventRow = (ev, sub) => `
 /* ------------------------------------------------------------- post cards */
 export function postCard(p) {
   const u = USERS[p.author] || { name: p.author };
-  const photo = p.photo && p.photo.startsWith("cov:")
-    ? (() => { const arr = IMG[p.photo.slice(4)];
-               return arr ? photoUrl(arr[Math.abs(String(p.id).length * 3) % arr.length], 700) : null; })()
-    : p.photo;
+  /* A post with a picture shows the poster of the night it is about — which is
+     both true and the only image we actually have a right to. */
+  const art = p.photo && p.photo.startsWith("cov:")
+    ? poster({ id: hashStr(String(p.id)) % 9999, cat: p.photo.slice(4), title: p.id })
+    : null;
   return `<article class="card post">
     <div class="post-head">
       <a href="#/u/${p.author}">${avatar(p.author, 38)}</a>
@@ -179,7 +179,7 @@ export function postCard(p) {
       </div>
     </div>
     <p class="lede" style="font-size:14.5px">${esc(p.text)}</p>
-    ${photo ? `<div class="post-photo cover">${`<img data-lazy alt="" src="${esc(photo)}">`}</div>` : ""}
+    ${art ? `<div class="post-photo cover">${art}</div>` : ""}
     <div class="post-acts">
       <button class="post-act" type="button" data-like="${p.id}"
         aria-pressed="false">${icon("heart", 16)}<span>${p.likes}</span></button>
@@ -208,7 +208,18 @@ export const barPlace = (city, { bell = 0 } = {}) => `
 export const barBack = (title, right = "") => `
   <span class="row" style="gap:11px;min-width:0;flex:1">
     <button class="gbtn" type="button" data-back aria-label="Back">${icon("back")}</button>
-    <span class="clip strong" style="font-size:16px">${esc(title || "")}</span>
+    <span class="bar-title clip">${esc(title || "")}</span>
+  </span>
+  <span class="bar-actions">${right}</span>`;
+
+/* A tab root's bar. The title is not printed here — it lives in the page as a
+   large heading and slides UP into this bar as that heading scrolls away, the
+   way iOS has done it since 11. Which means the bar is never empty chrome, and
+   there is never a back arrow on a screen you cannot go back from. */
+export const barRoot = (title, right = "") => `
+  <span class="row" style="gap:10px;min-width:0;flex:1">
+    <span class="bar-mark">${brandMark(24)}</span>
+    <span class="bar-title bar-title-slide clip">${esc(title)}</span>
   </span>
   <span class="bar-actions">${right}</span>`;
 

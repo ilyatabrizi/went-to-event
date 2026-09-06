@@ -149,7 +149,7 @@ export function eventsForCity(city) {
   const r = rng(seed);
   const list = [];
   const keys = CATS.map(c => c.key);
-  const n = 16 + Math.floor(r() * 5);
+  const n = 9 + Math.floor(r() * 17);   /* 9–25, so cities differ at a glance */
   for (let i = 0; i < n; i++) {
     const cat = keys[(i * 7 + seed) % keys.length];
     const tpl = pick(r, TPL[cat] || TPL.Nightlife);

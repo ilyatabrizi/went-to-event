@@ -6,8 +6,8 @@
    fresh module is worse than being offline. Network-first costs one fast
    request on a good connection and still works with no connection at all.
 
-   Remote cover images: CACHE-FIRST. They never change at a given URL, they are
-   the expensive part, and caching them is what makes the app usable on a plane. */
+   There is nothing else. Cover art is generated SVG, avatars are generated, and
+   the two fonts are ours — so the whole app is same-origin and one cache. */
 
 const V = 'wte-v2';
 const IMGS = 'wte-img-v2';
@@ -43,7 +43,7 @@ self.addEventListener('install', e => {
 self.addEventListener('activate', e => {
   e.waitUntil((async () => {
     const ks = await caches.keys();
-    await Promise.all(ks.filter(k => k !== V && k !== IMGS).map(k => caches.delete(k)));
+    await Promise.all(ks.filter(k => k !== V).map(k => caches.delete(k)));
 
     /* Claim clients only when REPLACING a worker. Claiming on a first install
        hijacks requests the page already had in flight — on a first visit that
@@ -64,19 +64,6 @@ self.addEventListener('fetch', e => {
   const req = e.request;
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
-
-  if (url.hostname === 'images.unsplash.com') {
-    e.respondWith(caches.open(IMGS).then(async c => {
-      const hit = await c.match(req);
-      if (hit) return hit;
-      try {
-        const res = await fetch(req);
-        if (res.ok || res.type === 'opaque') c.put(req, res.clone());
-        return res;
-      } catch { return Response.error(); }
-    }));
-    return;
-  }
 
   if (url.origin !== location.origin) return;
 

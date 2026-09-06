@@ -12,18 +12,19 @@ import { toast } from "../ui.js";
 import { go, refresh } from "../router.js";
 import { haptic, commit } from "../motion.js";
 
-export const STEPS = ["The basics", "When", "Where", "Entry"];
+export const STEPS = ["The basics", "When", "Where", "Artwork", "Entry"];
 
 export const blankDraft = () => ({
   step: 0, title: "", cat: "Nightlife", date: "", time: "", venue: "",
   city: cityName(), paid: false, price: "", about: "",
+  art: 0, photo: null,     /* which generated poster, or a photo of your own */
 });
 
 export function stepValid(d) {
   if (d.step === 0) return !!d.title.trim();
   if (d.step === 1) return !!d.date.trim();
   if (d.step === 2) return !!d.venue.trim();
-  return true;
+  return true;   /* artwork and entry both have working defaults */
 }
 
 export default function create() {
@@ -36,7 +37,7 @@ export default function create() {
     when: (d.date || "Date TBC") + (d.time ? " · " + d.time : ""),
     venue: d.venue || "Venue TBC", going: 1, friends: [],
     minPrice: d.paid ? parseFloat(d.price) || 0 : 0,
-    userMade: true,
+    userMade: true, art: d.art, photo: d.photo,
   };
 
   const body = [
@@ -88,7 +89,33 @@ export default function create() {
         </span>
       </div>`,
 
-    /* 3 — entry */ `
+    /* 3 — artwork */ `
+      <p class="lede" style="font-size:14.5px;margin-bottom:18px">Every event gets a poster.
+        Six are drawn for you from the kind of night it is — pick one, or use a photo of
+        your own.</p>
+
+      <div class="art-grid">
+        ${[0, 1, 2, 3, 4, 5].map((n) => `
+          <button class="art-opt" type="button" data-art="${n}"
+            aria-pressed="${!d.photo && d.art === n}" aria-label="Poster ${n + 1}">
+            ${cover({ id: 777, cat: d.cat, title: d.title || "Your event" }, { seed: n })}
+            <span class="art-tick">${icon("check", 14)}</span>
+          </button>`).join("")}
+      </div>
+
+      <label class="art-upload ${d.photo ? "has" : ""}" for="f_photo">
+        <input id="f_photo" type="file" accept="image/*" hidden>
+        ${d.photo
+          ? `<img src="${esc(d.photo)}" alt="Your cover">
+             <span class="art-upload-on">${icon("check", 15)} Your photo</span>
+             <button class="art-clear" type="button" id="clearPhoto"
+               aria-label="Remove photo">${icon("close", 15)}</button>`
+          : `<span class="art-up-ico">${icon("camera", 22)}</span>
+             <span class="art-up-t">Use your own photo</span>
+             <span class="art-up-s">JPG or PNG · it stays on this device</span>`}
+      </label>`,
+
+    /* 4 — entry */ `
       <div class="label" style="padding-bottom:11px">Is it free or ticketed?</div>
       <div class="dock-row">
         <button class="btn ${d.paid ? "btn-soft" : "btn-primary"}" type="button" data-paid="0"
@@ -169,7 +196,26 @@ export default function create() {
         paintPreview(el, d);
       });
 
+      /* A photo never leaves the device — it is read straight into a data URL
+         and kept in the draft, which is also why it is capped: a 12MP JPEG in
+         localStorage would blow the quota and lose the whole draft. */
+      el.querySelector("#f_photo")?.addEventListener("change", (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        if (file.size > 6 * 1024 * 1024) { toast("That photo is over 6 MB", "info"); return; }
+        const fr = new FileReader();
+        fr.onload = () => { d.photo = fr.result; save(); haptic(8); refresh(); };
+        fr.readAsDataURL(file);
+      });
+
       el.addEventListener("click", (e) => {
+        const a = e.target.closest("[data-art]");
+        if (a) {
+          haptic(6); d.art = +a.dataset.art; d.photo = null; save(); refresh(); return;
+        }
+        if (e.target.closest("#clearPhoto")) {
+          e.preventDefault(); haptic(6); d.photo = null; save(); refresh(); return;
+        }
         const c = e.target.closest("[data-cat]");
         if (c) { haptic(6); d.cat = c.dataset.cat; save(); refresh(); return; }
         const p = e.target.closest("[data-paid]");
@@ -217,7 +263,7 @@ function publish(d) {
     when: (d.date || "Date TBC") + (d.time ? " · " + d.time.split(" – ")[0] : ""),
     dateLong: d.date || "Date TBC", timeRange: d.time || "Time TBC",
     venue: d.venue || "Venue TBC", address: `${d.venue}, ${d.city}`, dist: 0.4,
-    going: 1, friends: [], userMade: true,
+    going: 1, friends: [], userMade: true, art: d.art, photo: d.photo,
     about: d.about.trim() || "A new event on Went To Event.",
     tiers: price > 0
       ? [{ name: "General", desc: "Standard entry", price }]
