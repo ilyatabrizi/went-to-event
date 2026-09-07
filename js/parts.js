@@ -202,7 +202,7 @@ export const barPlace = (city, { bell = 0 } = {}) => `
   <span class="bar-actions">
     <a class="gbtn" href="#/notifications" aria-label="Notifications">${icon("bell")}
       ${bell ? '<i class="gbtn-n"></i>' : ""}</a>
-    <a class="gbtn" href="#/explore" aria-label="Search">${icon("search")}</a>
+    <a class="gbtn" href="#/explore" data-search aria-label="Search">${icon("search")}</a>
   </span>`;
 
 export const barBack = (title, right = "") => `

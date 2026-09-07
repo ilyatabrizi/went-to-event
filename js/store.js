@@ -8,7 +8,7 @@ const KEY = "wte.v2";
    not halfway through a checkout. */
 const PERSIST = ["country", "cityIdx", "visiting", "saved", "followingUsers", "followingHosts",
                  "member", "posts", "myTickets", "blocked", "muted", "notif", "sound",
-                 "haptics", "seenBoot", "privateAcct", "homeFeed", "installDismissed",
+                 "haptics", "privateAcct", "homeFeed", "installDismissed",
                  "recentCities", "verified", "verifyStep"];
 
 export const state = {
@@ -34,7 +34,7 @@ export const state = {
   member: false, privateAcct: false,
   posts: [], myTickets: [],
   notif: { starting: true, friends: true, hosts: false, messages: true, drops: false },
-  sound: true, haptics: true, seenBoot: false, installDismissed: false,
+  sound: true, haptics: true, installDismissed: false,
 
   /* drafts */
   create: null, composeText: "", draftPhoto: null,

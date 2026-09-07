@@ -5,9 +5,10 @@ import { state, save } from "../store.js";
 import { byId } from "../data/events.js";
 import { esc, money, hashStr, plural } from "../util.js";
 import { icon } from "../icons.js";
-import { cover, sectionHead, empty, lazyImages, pageTitle } from "../parts.js";
+import { cover, sectionHead, empty, lazyImages, pageTitle, railCard } from "../parts.js";
 import { segmented, toast } from "../ui.js";
 import { go, refresh } from "../router.js";
+import { cityEvents } from "../place.js";
 
 /* A real, scannable-looking matrix generated from the ticket's own reference —
    deterministic, so the same ticket always shows the same code. Not a working
@@ -52,6 +53,11 @@ export default function went() {
   const past = state.myTickets.filter((t) => t.past);
   const list = state.wentTab === "upcoming" ? upcoming : past;
 
+  /* Anything already in the wallet is not a suggestion. */
+  const booked = new Set(state.myTickets.map((t) => t.eventId));
+  const suggestions = list.length > 2 ? []
+    : cityEvents().filter((e) => !booked.has(e.id)).slice(0, 6);
+
   const html = `
   <div class="wrap">
     ${pageTitle("Went")}
@@ -72,7 +78,18 @@ export default function went() {
               : "Events you have been to collect here — that is the “went” part.",
             { href: "#/explore", label: "Find something" })}
     </section>
-  </div>`;
+  </div>
+
+  ${/* One booking leaves most of the screen empty, and an empty screen is a
+        dead end. Fill it with the thing you came to this app to do rather
+        than with nothing. */
+    suggestions.length ? `
+    <section class="section">
+      <div class="wrap">${sectionHead(
+        list.length ? "More you could go to" : "Happening near you",
+        { href: "#/explore", label: "Explore" })}</div>
+      <div class="rail">${suggestions.map(railCard).join("")}</div>
+    </section>` : ""}`;
 
   return { html, bar: { title: "Went" }, mount: (el) => lazyImages(el) };
 }

@@ -24,72 +24,12 @@
 <link rel="stylesheet" href="css/app.css">
 
 <style>
-  /* Boot only. Inline, so the mark is on screen in the first frame — before
-     app.css, before a single font has landed.
-
-     The opening reads as one movement, not four: the room lights (a soft ember
-     bloom), the "e" is drawn on by its own stroke, the dot falls onto the
-     baseline and settles, and the whole mark lifts away as the app arrives
-     behind it. Nothing waits on anything else to finish. */
+  /* No opening sequence. The ground is painted before anything else loads so
+     the first frame is already Ink — there is nothing to fade away from. */
   html,body{background:#0B0A0C;margin:0}
-  #boot{position:fixed;inset:0;z-index:999;display:grid;place-items:center;
-    background:#0B0A0C;will-change:opacity,transform}
-  #boot.gone{opacity:0;transform:scale(1.06);pointer-events:none;
-    transition:opacity .62s cubic-bezier(.4,0,.2,1),transform .62s cubic-bezier(.4,0,.2,1)}
-  .boot-stage{position:relative;width:min(38vw,150px);display:grid;place-items:center}
-  .boot-stage svg{width:100%;height:auto;display:block;overflow:visible}
-  /* the room light coming up */
-  .boot-bloom{position:absolute;width:230%;aspect-ratio:1;border-radius:50%;
-    background:radial-gradient(circle,rgba(255,91,61,.30),rgba(255,91,61,0) 66%);
-    opacity:0;animation:boot-bloom 1.5s cubic-bezier(.22,.61,.36,1) both}
-  @keyframes boot-bloom{
-    0%{opacity:0;transform:scale(.55)}
-    38%{opacity:1;transform:scale(1)}
-    100%{opacity:.42;transform:scale(1.1)}}
-  /* the e, drawn on rather than faded in */
-  #boot .e-mark path{
-    fill:#F4F1EC;
-    stroke:#F4F1EC;stroke-width:14;stroke-linejoin:round;
-    stroke-dasharray:2600;stroke-dashoffset:2600;fill-opacity:0;
-    animation:boot-draw .62s cubic-bezier(.65,0,.35,1) .06s both,
-              boot-fill .4s cubic-bezier(.22,.61,.36,1) .5s both}
-  @keyframes boot-draw{to{stroke-dashoffset:0}}
-  @keyframes boot-fill{from{fill-opacity:0}to{fill-opacity:1;stroke-width:0}}
-  /* the dot lands and settles — the one ember thing in the whole opening */
-  #boot .e-dot{transform-box:fill-box;transform-origin:50% 50%;
-    animation:boot-drop .56s cubic-bezier(.24,1.32,.5,1) .56s both}
-  @keyframes boot-drop{
-    0%{opacity:0;transform:translateY(-320%) scale(.5)}
-    55%{opacity:1}
-    100%{opacity:1;transform:translateY(0) scale(1)}}
-  /* the word, arriving under the mark */
-  .boot-word{margin-top:16px;font:600 11px/1 -apple-system,BlinkMacSystemFont,system-ui,sans-serif;
-    letter-spacing:.34em;text-transform:uppercase;color:#8A848F;
-    animation:boot-word .5s cubic-bezier(.22,.61,.36,1) .72s both}
-  @keyframes boot-word{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
-  @media (prefers-reduced-motion:reduce){
-    #boot *{animation:none!important}
-    #boot .e-mark path{fill-opacity:1;stroke-width:0;stroke-dashoffset:0}
-    .boot-bloom{opacity:.42}
-    #boot.gone{transform:none;transition:opacity .2s linear}
-  }
 </style>
 </head>
 <body>
-
-<!-- The opening: the room lights, the "e" draws on, the dot falls. -->
-<div id="boot" role="status" aria-label="Went To Event is opening">
-  <div class="boot-stage">
-    <span class="boot-bloom" aria-hidden="true"></span>
-    <svg viewBox="0 0 1024 1024" role="img" aria-label="Went To Event">
-      <g class="e-mark" transform="matrix(0.79929,0,0,-0.79929,188.694,733.403)">
-        <path d="M580 235H175Q180 175 217.0 141.0Q254 107 308 107Q386 107 419 174H570Q546 94 478.0 42.5Q410 -9 311 -9Q231 -9 167.5 26.5Q104 62 68.5 127.0Q33 192 33 277Q33 363 68.0 428.0Q103 493 166.0 528.0Q229 563 311 563Q390 563 452.5 529.0Q515 495 549.5 432.5Q584 370 584 289Q584 259 580 235ZM439 329Q438 383 400.0 415.5Q362 448 307 448Q255 448 219.5 416.5Q184 385 176 329Z"/>
-      </g>
-      <circle class="e-dot" cx="759.43" cy="683.90" r="49.5" fill="#FF5B3D"/>
-    </svg>
-    <div class="boot-word">Went To Event</div>
-  </div>
-</div>
 
 <div id="shell" data-hero="0" data-dock="0" data-tabs="1">
   <header id="bar" class="bar"></header>

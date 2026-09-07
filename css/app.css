@@ -113,8 +113,8 @@ input,textarea{-webkit-appearance:none;appearance:none;border-radius:0}
 #shell[data-tabs="0"] #view{padding-bottom:calc(var(--safe-b) + 36px)}
 #shell[data-tabs="0"][data-dock="1"] #view{padding-bottom:calc(var(--safe-b) + 116px)}
 
-.view-in{animation:view-in .34s var(--ease) both}
-@keyframes view-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+/* The container itself does not animate — its children do, one after another.
+   Animating both stacks two eases on the same pixels and reads as lag. */
 
 .wrap{padding-inline:var(--gutter)}
 .section{padding-top:30px}
@@ -547,18 +547,6 @@ input,textarea{-webkit-appearance:none;appearance:none;border-radius:0}
 @keyframes toast-in{from{opacity:0;transform:translateY(14px) scale(.96)}}
 @keyframes toast-out{to{opacity:0;transform:translateY(8px) scale(.98)}}
 
-/* ------------------------------------------------------------------ boot */
-#boot{position:fixed;inset:0;z-index:999;display:grid;place-items:center;
-  background:var(--paper);transition:opacity .5s var(--ease)}
-#boot.gone{opacity:0;pointer-events:none}
-.boot-stage{width:min(42vw,164px);display:grid;justify-items:center}
-.boot-stage svg{width:100%;height:auto;color:var(--ink)}
-#boot .e-mark{animation:mark-in .8s var(--spring) both}
-#boot .e-dot{transform-box:fill-box;transform-origin:center;
-  animation:dot-drop .62s var(--spring) .42s both}
-@keyframes mark-in{from{opacity:0;transform:translateY(10px) scale(.94)}}
-@keyframes dot-drop{from{opacity:0;transform:translateY(-180%) scale(.3)}}
-
 /* --------------------------------------------------- a11y accommodations */
 @media (prefers-reduced-transparency:reduce){
   .tabs{background:#161418;-webkit-backdrop-filter:none;backdrop-filter:none}
@@ -748,26 +736,63 @@ input,textarea{-webkit-appearance:none;appearance:none;border-radius:0}
 .tab-ico{transition:transform .22s var(--spring)}
 
 /* ---- 2. staggered arrival ---- */
-/* The view no longer animates as one block. Its top-level sections come in one
-   after another, which is what makes a screen read as assembling rather than
-   sliding. Six is enough — past that nobody is still watching. */
-.view-in > *{animation:rise .5s var(--ease) both}
-.view-in > *:nth-child(1){animation-delay:.02s}
-.view-in > *:nth-child(2){animation-delay:.07s}
-.view-in > *:nth-child(3){animation-delay:.12s}
-.view-in > *:nth-child(4){animation-delay:.17s}
-.view-in > *:nth-child(5){animation-delay:.22s}
-.view-in > *:nth-child(n+6){animation-delay:.26s}
-@keyframes rise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+/* The stagger has to target the SCREEN's children, not #view's. #view has
+   exactly one child — the per-render container — so `.view-in > *` animated
+   the whole page as a single block for half a second, which is the one thing
+   this rule exists to prevent. Total arrival is ~330ms now: long enough to
+   read as movement, short enough that nobody waits for it. */
+.screen > *{animation:rise .3s var(--ease) both}
+.screen > *:nth-child(1){animation-delay:0s}
+.screen > *:nth-child(2){animation-delay:.04s}
+.screen > *:nth-child(3){animation-delay:.08s}
+.screen > *:nth-child(4){animation-delay:.11s}
+.screen > *:nth-child(n+5){animation-delay:.13s}
+@keyframes rise{from{opacity:0;transform:translateY(9px)}to{opacity:1;transform:none}}
 
 /* Cards inside a stack get their own, smaller stagger — the list should not
    land all at once either. */
-.stack.stagger > *{animation:rise .46s var(--ease) both}
-.stack.stagger > *:nth-child(1){animation-delay:.03s}
-.stack.stagger > *:nth-child(2){animation-delay:.09s}
-.stack.stagger > *:nth-child(3){animation-delay:.15s}
-.stack.stagger > *:nth-child(4){animation-delay:.20s}
-.stack.stagger > *:nth-child(n+5){animation-delay:.24s}
+.stack.stagger > *{animation:rise .3s var(--ease) both}
+.stack.stagger > *:nth-child(1){animation-delay:.02s}
+.stack.stagger > *:nth-child(2){animation-delay:.06s}
+.stack.stagger > *:nth-child(3){animation-delay:.1s}
+.stack.stagger > *:nth-child(4){animation-delay:.13s}
+.stack.stagger > *:nth-child(n+5){animation-delay:.15s}
+
+/* ---- 2b. the cross-fade between screens ---- */
+/* Where the browser has View Transitions, the whole screen cross-fades and the
+   per-section stagger stands down — running both would play the arrival twice,
+   once inside the snapshot and once for real.
+
+   The chrome is named separately so it is captured as its own layer: the bar
+   and the tab bar hold still while the content under them changes, instead of
+   ghosting through the fade. */
+:root[data-vt="1"] .screen > *,
+:root[data-vt="1"] .stack.stagger > *{animation:none}
+
+@media (prefers-reduced-motion:no-preference){
+  #bar{view-transition-name:chrome-bar}
+  #tabs{view-transition-name:chrome-tabs}
+  #dock{view-transition-name:chrome-dock}
+
+  ::view-transition-old(root){animation:vt-out .16s var(--ease) both}
+  ::view-transition-new(root){animation:vt-in .26s var(--ease) both}
+  @keyframes vt-out{to{opacity:0}}
+  @keyframes vt-in{from{opacity:0;transform:translateY(6px)}
+                   to{opacity:1;transform:none}}
+
+  /* The chrome only ever changes its contents, never its box, so it gets a
+     plain short fade with no movement. */
+  ::view-transition-old(chrome-bar),::view-transition-new(chrome-bar),
+  ::view-transition-old(chrome-dock),::view-transition-new(chrome-dock){
+    animation-duration:.18s}
+  ::view-transition-old(chrome-tabs),::view-transition-new(chrome-tabs){
+    animation:none;mix-blend-mode:normal}
+}
+
+/* A transition must never outlive a fast tap. If one is still running when the
+   next navigation starts the browser skips it, which is the right behaviour —
+   but make sure nothing here is slow enough to make that common. */
+::view-transition-group(*){animation-duration:.26s}
 
 /* ---- 3. scroll-driven reveal for anything below the fold ---- */
 /* Content further down should not have already animated by the time you reach
@@ -784,7 +809,7 @@ input,textarea{-webkit-appearance:none;appearance:none;border-radius:0}
 /* The global rule already kills durations. These are the ones that must not
    simply become instant — they must not run at all, or they flash. */
 @media (prefers-reduced-motion:reduce){
-  .view-in > *,.stack.stagger > *{animation:none}
+  .screen > *,.stack.stagger > *{animation:none}
   .btn:active,.chip:active,.ev:active,.gbtn:active,.card-tap:active,
   .row-btn:active,.place:active,.art-opt:active,.fchip:active{transform:none}
 }

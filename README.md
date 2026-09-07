@@ -5,7 +5,7 @@ good ones, and publish your own in four steps.
 
 **Live:** https://ilyatabrizi.github.io/went-to-event/
 **Local:** `python3 serve.py` → http://localhost:8141
-**Tests:** `python3 e2e.py` → 113 checks + screenshots into `docs/shots/`
+**Tests:** `python3 e2e.py` → 169 checks + screenshots into `docs/shots/`
 
 Built by Alpha Agency. Installable on iOS and Android; works offline once opened.
 
@@ -65,6 +65,13 @@ and the "e." mark itself is geometric sans.
   and primary action are ends up wearing the previous screen's.
 - **Sheets over modals.** Drag to dismiss from the top, focus trapped while up,
   focus handed back on the way out.
+- **No opening sequence.** The app is simply there. The ground is painted
+  before anything loads, so the first frame is already Ink and there is nothing
+  to fade away from.
+- **Screens cross-fade.** Where the browser has View Transitions the whole
+  screen dissolves in ~260ms with the bar and tab bar held still as their own
+  layers; where it does not, the sections arrive one after another instead.
+  Never both.
 - **Reduced motion, reduced transparency and increased contrast** are all read
   from the device and honoured.
 
@@ -75,8 +82,10 @@ Five tabs — **Home · Explore · Chat · Went · You** — and twenty screens.
 **Home** — one event takes a full-bleed hero, a For You / Following switch, a
 "happening tonight" rail, and a scored feed where every card says *why* it is
 there.
-**Explore** — search, fifteen categories ranked by how full they are, a filter
-sheet of chips with a live match count, free-this-week and closest-to-you rails.
+**Explore** — search, all fifteen categories as a chip rail, a filter sheet of
+chips with a live match count, an on-tonight and a free-this-week rail, then
+everything in the city. There is no category grid: it was a second, slower way
+to do what the chips above it already did.
 **Event** — hero, when/where card, a map schematic, host with follow, who is
 going, tiers, more from the host, similar events, report.
 **Booking** — tier picker, quantity, checkout with three methods, a booking fee
@@ -117,7 +126,7 @@ js/
   views/              home explore chat went profile detail booking
                       create settings pickers
 sw.js                 network-first for app files, cache-first for cover images
-e2e.py                113 checks in real Chrome, screenshots into docs/shots/
+e2e.py                169 checks in real Chrome, screenshots into docs/shots/
 serve.py              local preview on :8141, no-store
 ```
 
@@ -133,6 +142,16 @@ page three times and taps once to keep it that way.
 "navigates" to itself would silently do nothing, which is how a four-step
 publish flow stops advancing. Anything re-rendering its own screen calls
 `refresh()`, and `go()` catches the rest.
+
+**The bar's background is recomputed on every render, not only on scroll.**
+Arriving at a short screen from a scrolled one fires no scroll event, so the
+bar kept the background it earned on the previous page — which looked like a
+solid bar appearing over a page sitting at the top. A screen that is only
+scrollable by the few pixels a phone's URL bar adds never takes one at all.
+
+**Tapping a lit tab does one of two things.** A pushed screen keeps its parent
+tab lit, so from there the tap returns to that tab's root. Only when you are
+already standing on the root does it scroll to the top instead.
 
 **The service worker is network-first for same-origin files.** Cache-first is
 the usual advice and it is a trap: once a build is cached, an edit never reaches

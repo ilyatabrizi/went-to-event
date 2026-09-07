@@ -10,7 +10,7 @@ import { barPlace, barBack, barRoot, lazyImages } from "./parts.js";
 import { GRAIN_DEFS } from "./artwork.js";
 import { cityName } from "./place.js";
 import { toast, closeSheet } from "./ui.js";
-import { haptic } from "./motion.js";
+import { haptic, reduced } from "./motion.js";
 import { openCityPicker } from "./views/pickers.js";
 
 import home from "./views/home.js";
@@ -129,35 +129,50 @@ document.addEventListener("view:chrome", (e) => {
   shell.dataset.tabs = showTabs ? "1" : "0";
   tabs.hidden = !showTabs;
 
-  shell.dataset.titled = "0";
   paintTabs(path);
   paintBadges();
   lazyImages(bar);
+  /* After the swap, so the new screen's height is what gets measured. */
+  requestAnimationFrame(paintBarState);
 });
 
 /* --------------------------------------------------------------- the bar */
-/* Scroll state, so the bar earns its background only once content is under it. */
+/* The bar earns its background from the scroll position — but the scroll
+   position changes on NAVIGATION too, and silently: arriving at a short screen
+   from a scrolled one fires no scroll event, so the bar used to keep the
+   background it earned on the previous page. On Went, which is exactly one
+   viewport, that looked like a solid bar appearing over a page sitting at the
+   top. So this is a function, and both the scroll listener and every render
+   call it. */
+function paintBarState() {
+  /* A short screen is only scrollable by the few pixels a phone's URL bar adds
+     and removes. Reacting to that flicks the background on and off while the
+     page sits still. Require something genuinely scrollable first. */
+  const scrollable = document.documentElement.scrollHeight - innerHeight;
+  const canScroll = scrollable > 40;
+  shell.dataset.scrolled = canScroll && scrollY > 12 ? "1" : "0";
+
+  /* Hand the page's heading over to the bar at the moment it leaves, so only
+     one of the two is ever legible. */
+  const h = view.querySelector(".title");
+  if (h && canScroll) {
+    /* Measure the bar, do not parse --bar-h: a custom property comes back as
+       its raw token ("calc(0px + 58px)"), parseFloat gives NaN, and every
+       comparison against it is quietly false forever. */
+    const gone = h.getBoundingClientRect().bottom < bar.offsetHeight + 4;
+    shell.dataset.titled = gone ? "1" : "0";
+    h.style.opacity = gone ? "0" : "1";
+  } else {
+    shell.dataset.titled = "0";
+    if (h) h.style.opacity = "1";       // never strand a heading mid-fade
+  }
+}
+
 let ticking = false;
 addEventListener("scroll", () => {
   if (ticking) return;
   ticking = true;
-  requestAnimationFrame(() => {
-    shell.dataset.scrolled = scrollY > 12 ? "1" : "0";
-    /* Hand the page's heading over to the bar at the moment it leaves, so only
-       one of the two is ever legible. */
-    const h = view.querySelector(".title");
-    if (h) {
-      /* Measure the bar, do not parse --bar-h: a custom property comes back as
-         its raw token ("calc(0px + 58px)"), parseFloat gives NaN, and every
-         comparison against it is quietly false forever. */
-      const gone = h.getBoundingClientRect().bottom < bar.offsetHeight + 4;
-      shell.dataset.titled = gone ? "1" : "0";
-      h.style.opacity = gone ? "0" : "1";
-    } else {
-      shell.dataset.titled = "0";
-    }
-    ticking = false;
-  });
+  requestAnimationFrame(() => { paintBarState(); ticking = false; });
 }, { passive: true });
 
 /* -------------------------------------------------------- global actions */
@@ -172,6 +187,27 @@ document.addEventListener("click", (e) => {
   }
   const nav = e.target.closest("[data-go]");
   if (nav) { haptic(6); go(nav.dataset.go); return; }
+
+  /* The search button in the bar went to Explore but left the field cold, so
+     it saved nobody a tap. It arms the focus the view already knew how to use. */
+  if (e.target.closest("[data-search]")) { state.focusSearch = true; return; }
+
+  /* Tapping a lit tab does one of two things, and the difference matters: a
+     pushed screen keeps its parent tab lit, so from there the tap has to go
+     back to that tab's ROOT. Only when you are already standing on the root
+     does it scroll to the top — the iOS idiom — instead of rebuilding a screen
+     that has not changed. */
+  const tab = e.target.closest("#tabs .tab");
+  if (tab && tab.getAttribute("aria-current") === "page") {
+    const root = tab.getAttribute("href");
+    const here = "#" + (location.hash.replace(/^#/, "") || "/");
+    if (here === root) {
+      e.preventDefault();
+      haptic(6);
+      scrollTo({ top: 0, behavior: reduced() ? "instant" : "smooth" });
+    }
+    return;                       // otherwise the href takes you to the root
+  }
 
   const sv = e.target.closest("[data-save]");
   if (sv) {
@@ -226,7 +262,7 @@ addEventListener("hashchange", () => {
   if (location.hash === "#/publish" && !state.create) state.create = blankDraft();
 });
 
-/* ------------------------------------------------------------------ boot */
+/* --------------------------------------------------------------- startup */
 /* PWA shortcuts arrive as ?go=<tab|publish>. A shortcut that quietly opens
    Home is worse than no shortcut, so it is honoured — then the query is
    scrubbed, so a reload or a shared link does not re-fire it. */
@@ -244,22 +280,9 @@ if (jump) location.hash = jump;
 
 startRouter();
 
-/* Hold the veil until the first screen has actually painted, so the app is
-   never seen mid-render. Returning visitors get a much shorter hold. */
+/* The artwork's grain filters live once, at the top of the body, so every
+   generated cover can reference them instead of carrying its own copy. */
 document.body.insertAdjacentHTML("afterbegin", GRAIN_DEFS);
-
-const boot = $("#boot");
-document.addEventListener("view:rendered", function lift() {
-  document.removeEventListener("view:rendered", lift);
-  /* First visit holds long enough for the opening to actually play — a mark
-     that gets cut off mid-draw is worse than no opening at all. A returning
-     visitor has seen it and wants their app. */
-  setTimeout(() => {
-    boot.classList.add("gone");
-    setTimeout(() => boot.remove(), 700);
-    state.seenBoot = true; save();
-  }, state.seenBoot ? 240 : 1150);
-});
 
 /* Not on localhost: a service worker in front of the dev server turns every
    edit into a cache-busting expedition. It earns its place on the deployed

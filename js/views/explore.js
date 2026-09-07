@@ -6,7 +6,7 @@ import { CATS, catIcon, catLabel } from "../data/geo.js";
 import { esc, compact } from "../util.js";
 import { icon } from "../icons.js";
 import { cityName, cityEvents } from "../place.js";
-import { eventCard, eventRow, railCard, sectionHead, empty, lazyImages } from "../parts.js";
+import { eventCard, railCard, sectionHead, empty, lazyImages } from "../parts.js";
 import { sheet, closeSheet } from "../ui.js";
 import { go, refresh } from "../router.js";
 import { haptic } from "../motion.js";
@@ -52,43 +52,29 @@ export function exploreBody() {
   const idle = !q && !state.cat && !filtersActive();
 
   if (idle) {
-    const free = cityEvents().filter((e) => e.minPrice === 0).slice(0, 5);
-    const near = cityEvents().slice().sort((a, b) => a.dist - b.dist).slice(0, 5);
-    const counts = {};
-    cityEvents().forEach((e) => { counts[e.cat] = (counts[e.cat] || 0) + 1; });
-    /* Empty categories sink to the bottom — a grid that offers you nothing is
-       worse than a shorter grid. */
-    const cats = CATS.slice().sort((a, b) => (counts[b.key] || 0) - (counts[a.key] || 0));
+    const all = cityEvents();
+    const free = all.filter((e) => e.minPrice === 0).slice(0, 6);
+    const tonight = all.filter((e) => e.soon).slice(0, 6);
 
     return `
-      <section class="section">
-        <div class="wrap">${sectionHead("Browse by category")}</div>
-        <div class="wrap grid-2">
-          ${cats.map((c) => `
-            <button class="card card-flat row" type="button" data-cat="${c.key}"
-              style="padding:14px;gap:11px;text-align:left">
-              <span class="ico">${icon(c.icon)}</span>
-              <span class="row-copy">
-                <span class="row-t" style="font-size:14px">${esc(c.label)}</span>
-                <span class="row-s" style="font-size:12px">${
-                  counts[c.key] ? `${counts[c.key]} ${counts[c.key] === 1 ? "event" : "events"}`
-                                : "Nothing yet"}</span>
-              </span>
-            </button>`).join("")}
-        </div>
-      </section>
+      ${/* A rail holding one card is not a rail — it is a card that looks
+            like it lost something. Below two, it does not earn the section. */
+        tonight.length >= 2 ? `
+        <section class="section">
+          <div class="wrap">${sectionHead("On tonight")}</div>
+          <div class="rail">${tonight.map(railCard).join("")}</div>
+        </section>` : ""}
 
-      ${free.length ? `
+      ${free.length >= 2 ? `
         <section class="section">
           <div class="wrap">${sectionHead("Free this week")}</div>
           <div class="rail">${free.map(railCard).join("")}</div>
         </section>` : ""}
 
-      ${near.length ? `
-        <section class="section wrap">
-          ${sectionHead("Closest to you")}
-          <div class="rows">${near.map((e) => eventRow(e, `${e.dist} km · ${e.venue}`)).join("")}</div>
-        </section>` : ""}`;
+      <section class="section wrap">
+        ${sectionHead(`Everything in ${cityName()}`, { href: "#/explore", label: `${all.length}` })}
+        <div class="stack stagger" style="gap:20px">${all.map((e) => eventCard(e)).join("")}</div>
+      </section>`;
   }
 
   if (!list.length) {
@@ -125,7 +111,7 @@ export default function explore() {
         ${icon("slider")}Filters${n ? ` <span class="chip-n">${n}</span>` : ""}</button>
       ${state.cat ? `<button class="chip" type="button" data-cat="" aria-pressed="true">
         ${icon(catIcon(state.cat))}${esc(catLabel(state.cat))}${icon("close", 13)}</button>` : ""}
-      ${CATS.slice(0, 8).filter((c) => c.key !== state.cat).map((c) => `
+      ${CATS.filter((c) => c.key !== state.cat).map((c) => `
         <button class="chip" type="button" data-cat="${c.key}" aria-pressed="false">
           ${icon(c.icon)}${esc(c.label)}</button>`).join("")}
     </div>

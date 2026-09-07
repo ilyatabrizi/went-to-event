@@ -4,6 +4,7 @@
 
 import { $ } from "./util.js";
 import { closeSheet } from "./ui.js";
+import { reduced } from "./motion.js";
 
 const routes = [];
 let current = null;
@@ -30,6 +31,13 @@ const match = (hash) => {
    forward into a new screen should always start at the top. */
 const scrollMemory = new Map();
 let backing = false;
+
+/* A real cross-fade where the browser can do one, a staggered arrival where it
+   cannot. Never both: the stagger would run inside a frame the transition has
+   already snapshotted, and you would see it twice. The flag is set once and
+   read by CSS, which is what turns the stagger off. */
+const USE_VT = typeof document.startViewTransition === "function" && !reduced();
+document.documentElement.dataset.vt = USE_VT ? "1" : "0";
 addEventListener("popstate", () => { backing = true; });
 
 export async function render() {
@@ -60,24 +68,42 @@ export async function render() {
   const screen = document.createElement("div");
   screen.className = "screen";
   screen.innerHTML = res.html;
-  view.replaceChildren(screen);
 
-  view.classList.remove("view-in");
-  void view.offsetWidth;                        // restart the entrance
-  view.classList.add("view-in");
+  /* Everything that changes on screen changes in ONE callback, so the browser
+     can cross-fade the old frame into the new one instead of blinking. The
+     chrome is named separately in CSS, so the bar and the tab bar hold still
+     while the content underneath them changes. */
+  const y = scrollMemory.get(current);
+  const swap = () => {
+    view.replaceChildren(screen);
+    document.dispatchEvent(new CustomEvent("view:chrome", {
+      detail: { path: current, bar: res.bar, dock: res.dock, tabs: res.tabs !== false },
+    }));
+    /* Scroll inside the same callback, so the snapshot the browser cross-fades
+       to is the page as it will actually sit — not the new screen still
+       showing the old screen's scroll offset. */
+    scrollTo({ top: backing && y ? y : 0, behavior: "instant" });
+  };
 
-  /* The bar and the dock belong to the view, not to the shell — a screen that
-     cannot say what its own back button and primary action are ends up with
-     the previous screen's. They are painted before mount, so a view's own
-     wiring can find its dock in the DOM. */
-  document.dispatchEvent(new CustomEvent("view:chrome", {
-    detail: { path: current, bar: res.bar, dock: res.dock, tabs: res.tabs !== false },
-  }));
+  /* A transition cannot start on a hidden document, and a second one started
+     before the first finishes aborts it. Both are normal — a backgrounded tab,
+     an impatient double tap — and both reject promises nobody is awaiting, so
+     every one of them is swallowed here rather than surfacing as an error. */
+  if (USE_VT && !document.hidden) {
+    try {
+      const vt = document.startViewTransition(swap);
+      vt.ready.catch(() => {});
+      vt.finished.catch(() => {});
+      await vt.updateCallbackDone;
+    } catch {
+      /* startViewTransition itself refused: the DOM still has to change. */
+      if (!view.firstElementChild || view.firstElementChild !== screen) swap();
+    }
+  } else {
+    swap();
+  }
 
   if (res.mount) res.mount(screen);
-
-  const y = scrollMemory.get(current);
-  scrollTo({ top: backing && y ? y : 0, behavior: "instant" });
   backing = false;
   document.dispatchEvent(new CustomEvent("view:rendered", { detail: { path: current } }));
 }

@@ -140,11 +140,15 @@ def main():
             noise if 'unsplash' in r.url else bad).append(
                 ('remote image: ' if 'unsplash' in r.url else 'request failed: ') + r.url))
 
-        # ------------------------------------------------------------- boot
-        print('boot')
+        # ---------------------------------------------------------- startup
+        print('startup')
         page.goto(BASE, wait_until='networkidle')
         page.wait_for_timeout(1700)
-        check('boot veil lifted', page.locator('#boot').count() == 0)
+        check('no opening sequence — the app is just there',
+              page.locator('#boot').count() == 0)
+        check('and nothing is left covering the first screen', page.evaluate(
+            "(()=>{const e=document.elementFromPoint(innerWidth/2,innerHeight/2);"
+            "return !!e && !!e.closest('#shell')})()"))
         check('landed on home', route(page) == '/')
 
         # ------------------------------------------------------------- home
@@ -177,11 +181,11 @@ def main():
         print('\nexplore')
         tap(page, '[data-tab="explore"]', 560)
         check('explore opened', route(page) == '/explore')
-        check('the category grid is full', count(page, '[data-cat]') >= 15)
-        check('populated categories lead the grid', page.evaluate(
-            "(()=>{const t=[...document.querySelectorAll('#view .grid-2 [data-cat]')]"
-            ".map(b=>b.textContent.includes('Nothing yet'));"
-            "return t.indexOf(true) === -1 || t.lastIndexOf(false) < t.indexOf(true)})()"))
+        check('the browse-by-category grid is gone', count(page, '#view .grid-2') == 0)
+        check('but every category is still reachable from the chip rail',
+              count(page, '#view .rail [data-cat]') >= 15)
+        check('and the idle page still lists the city',
+              has(page, 'Everything in San Francisco'))
         audit(page, 'explore')
         shot(page, '02-explore')
 
@@ -265,6 +269,8 @@ def main():
         check('past is empty and says so', 'Nothing in the past' in text(page))
         tap(page, '[data-seg="wenttab"] [data-segkey="upcoming"]', 460)
         check('upcoming comes back', count(page, '#view .card') >= 1)
+        check('a near-empty Went offers somewhere to go',
+              count(page, '#view .rail .ev-sm') >= 2)
         audit(page, 'went')
         shot(page, '08-went')
 
@@ -429,6 +435,66 @@ def main():
         check('an unknown route renders home rather than nothing',
               count(page, '#view .hero') == 1)
 
+        # ------------------------------------------------------------ motion
+        print('\nmotion + short screens')
+        check('the cross-fade is on where the browser has it',
+              page.evaluate("document.documentElement.dataset.vt") == '1')
+        check('the stagger targets the screen, not the view wrapper', page.evaluate(
+            "(()=>{const s=document.querySelector('#view > .screen');"
+            "return !!s && s.children.length > 1})()"))
+
+        # A screen you cannot really scroll must not let the bar take a
+        # background — on a phone the URL bar alone would toggle it, and the bar
+        # then reads as moving. Legal is short enough to prove it.
+        nav(page, '#/settings/legal', 560)
+        short = page.evaluate(
+            "document.documentElement.scrollHeight - innerHeight")
+        check('the test is pointed at a genuinely short screen', short <= 40,
+              f'scrollable by {short}px')
+        page.evaluate('scrollTo(0, 30)')
+        page.wait_for_timeout(260)
+        check('a screen that barely scrolls keeps the bar flat',
+              page.evaluate("document.getElementById('shell').dataset.scrolled") == '0',
+              f'scrollable by {short}px')
+        check('and never strands its heading half-faded',
+              page.evaluate("(()=>{const t=document.querySelector('#view .title');"
+                            "return !t || t.style.opacity !== '0'})()"))
+        page.evaluate('scrollTo(0, 0)')
+
+        # The bug this replaced: arriving at a short screen from a scrolled one
+        # fires no scroll event, so the bar kept the background it earned on the
+        # previous page — a solid bar over a page sitting at the top.
+        nav(page, '#/', 560)
+        page.evaluate('scrollTo(0, 900)')
+        page.wait_for_timeout(300)
+        check('the bar has a background on a scrolled home',
+              page.evaluate("document.getElementById('shell').dataset.scrolled") == '1')
+        nav(page, '#/settings/legal', 700)
+        check('and drops it on arriving at a short screen',
+              page.evaluate("document.getElementById('shell').dataset.scrolled") == '0')
+
+        # A long screen still earns one.
+        nav(page, '#/explore', 560)
+        page.evaluate('scrollTo(0, 400)')
+        page.wait_for_timeout(320)
+        check('a long screen still gives the bar its background',
+              page.evaluate("document.getElementById('shell').dataset.scrolled") == '1')
+
+        # Tapping the tab you are on returns you to the top rather than
+        # rebuilding a screen that has not changed.
+        check('still on explore', route(page) == '/explore')
+        tap(page, '#tabs [data-tab="explore"]', 900)
+        check('tapping the active tab scrolls back to the top',
+              page.evaluate('Math.round(scrollY)') == 0)
+        check('and does not leave the tab', route(page) == '/explore')
+
+        # The search button in the bar should land you in the field.
+        nav(page, '#/', 560)
+        tap(page, '#bar [data-search]', 700)
+        check('the bar search opens Explore with the field focused',
+              page.evaluate("document.activeElement && document.activeElement.id") == 'q',
+              page.evaluate("document.activeElement && document.activeElement.id"))
+
         # ------------------------------------------------------ persistence
         print('\npersistence + PWA')
         nav(page, '#/', 520)
@@ -451,6 +517,17 @@ def main():
               any(i.get('purpose') == 'maskable' for i in m.get('icons', [])))
         check('manifest offers shortcuts', len(m.get('shortcuts', [])) >= 3)
         check('service worker served', ctx.request.get(f'{BASE}/sw.js').ok)
+
+        # Every module the app imports has to be in the precache list, or the
+        # app is broken offline in exactly the way a PWA must not be. Two were
+        # missing when this check was written.
+        sw_src = ctx.request.get(f'{BASE}/sw.js').text()
+        import re as _re
+        listed = set(_re.findall(r"'(\./js/[^']+)'", sw_src))
+        on_disk = {'./' + str(f) for f in pathlib.Path(__file__).parent.glob('js/**/*.js')}
+        on_disk = {'./js/' + p.split('/js/')[-1] for p in on_disk}
+        check('every module is in the offline shell', on_disk <= listed,
+              f'missing {sorted(on_disk - listed)}')
 
         # Every shortcut the manifest advertises must actually land somewhere.
         want_for = {'explore': '/explore', 'went': '/went', 'create': '/publish'}
@@ -525,7 +602,9 @@ def main():
         p2 = ctx2.new_page()
         p2.goto(BASE, wait_until='networkidle')
         p2.wait_for_timeout(1700)
-        check('reduced motion still boots', p2.locator('#boot').count() == 0)
+        check('reduced motion still starts', p2.locator('#view .screen').count() == 1)
+        check('reduced motion turns the cross-fade off',
+              p2.evaluate("document.documentElement.dataset.vt") == '0')
         p2.evaluate("location.hash = '#/explore'")
         p2.wait_for_timeout(500)
         check('reduced motion still navigates',
