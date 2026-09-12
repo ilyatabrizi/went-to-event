@@ -100,7 +100,7 @@ function over(f,a,b){return f.map((c,i)=>c*a+b[i]*(1-a));}
 function bgOf(el){let n=el,st=[];while(n&&n!==document.documentElement){const bs=getComputedStyle(n).backgroundColor;const a=alpha(bs);if(a>0){st.push([parse(bs),a]);if(a>=0.999)break;}n=n.parentElement;}
  let base=[11,10,12];for(let i=st.length-1;i>=0;i--)base=over(st[i][0],st[i][1],base);return base;}
 const out=[];
-document.querySelectorAll('#view *, #tabs *, #dock *, #bar *, .sheet *').forEach(el=>{
+document.querySelectorAll('#view *, #tabbar *, #dock *, #bar *, .sheet *').forEach(el=>{
   const hasText=[...el.childNodes].some(n=>n.nodeType===3&&n.textContent.trim().length>1);if(!hasText)return;
   const r=el.getBoundingClientRect();if(!r.width||!r.height)return;
   const cs=getComputedStyle(el);if(cs.visibility==='hidden'||cs.opacity==='0')return;
@@ -211,7 +211,7 @@ def main():
         nav(page, '#/event/1', 620)
         check('detail opened', route(page) == '/event/1')
         check('the tab bar is gone on a pushed screen',
-              page.evaluate("document.getElementById('tabs').hidden") is True)
+              page.evaluate("document.getElementById('tabbar').hidden") is True)
         check('a back button is in the bar', count(page, '#bar [data-back]') == 1)
         check('the dock offers tickets', 'ticket' in dock(page).lower() or 'RSVP' in dock(page))
         check('when + where card', 'Pier 70' in text(page))
@@ -429,7 +429,7 @@ def main():
         check('back leaves the detail screen', route(page) != '/event/1')
         nav(page, '#/', 520)
         check('the tab bar comes back',
-              page.evaluate("document.getElementById('tabs').hidden") is False)
+              page.evaluate("document.getElementById('tabbar').hidden") is False)
         check('a bad route falls back to home', True)
         nav(page, '#/nonsense', 520)
         check('an unknown route renders home rather than nothing',
@@ -483,6 +483,12 @@ def main():
         # Tapping the tab you are on returns you to the top rather than
         # rebuilding a screen that has not changed.
         check('still on explore', route(page) == '/explore')
+        # Scrolling that far folded the bar, and the first tap on a folded bar
+        # opens it rather than navigating — otherwise you would be aiming at
+        # tabs you cannot see.
+        tap(page, '#tabs [data-tab="explore"]', 700)
+        check('the first tap on a folded bar just opens it',
+              page.evaluate("document.querySelector('#tabbar').classList.contains('min')") is False)
         tap(page, '#tabs [data-tab="explore"]', 900)
         check('tapping the active tab scrolls back to the top',
               page.evaluate('Math.round(scrollY)') == 0)
@@ -494,6 +500,118 @@ def main():
         check('the bar search opens Explore with the field focused',
               page.evaluate("document.activeElement && document.activeElement.id") == 'q',
               page.evaluate("document.activeElement && document.activeElement.id"))
+
+        # ---------------------------------------------------------- tab bar
+        print('\ntab bar — glass, lens, fold, drag')
+
+        # 1. Nothing above a glass surface may carry a transform, filter,
+        #    opacity < 1 or a blend mode. Any one of them makes that ancestor a
+        #    backdrop root and the glass blurs nothing at all — silently, and on
+        #    every screen. This is the check that catches it.
+        nav(page, '#/', 620)
+        broken = page.evaluate("""
+          (()=>{
+            const killers=(el)=>{const bad=[];let n=el.parentElement;
+              while(n&&n!==document.documentElement){const cs=getComputedStyle(n);
+                const id=(n.id||n.className||n.tagName).toString().slice(0,24);
+                if(cs.transform!=='none')bad.push(id+':transform');
+                if(cs.filter!=='none')bad.push(id+':filter');
+                if(parseFloat(cs.opacity)<1)bad.push(id+':opacity');
+                if(cs.mixBlendMode!=='normal')bad.push(id+':blend');
+                n=n.parentElement;}
+              return bad;};
+            return [...document.querySelectorAll('*')].filter(e=>{const f=getComputedStyle(e);
+                return (f.backdropFilter&&f.backdropFilter!=='none')
+                    || (f.webkitBackdropFilter&&f.webkitBackdropFilter!=='none');})
+              .map(e=>({el:(e.className||e.id||'').toString().slice(0,20),k:killers(e)}))
+              .filter(r=>r.k.length);
+          })()""")
+        check('no glass sits under a transformed ancestor', not broken,
+              str(broken[:3]))
+        check('and there is real glass to protect', page.evaluate(
+            "[...document.querySelectorAll('*')].filter(e=>{const f=getComputedStyle(e);"
+            "return (f.backdropFilter&&f.backdropFilter!=='none')"
+            "||(f.webkitBackdropFilter&&f.webkitBackdropFilter!=='none')}).length") >= 5)
+
+        # 2. The lens sits under the current tab and moves with it.
+        lens = lambda: page.evaluate(
+            "document.querySelector('#tabbar').style.getPropertyValue('--lens-x')")
+        lens_home = lens()
+        tap(page, '#tabs [data-tab="chat"]', 700)
+        check('tapping a tab navigates', route(page) == '/chat', f'got {route(page)!r}')
+        check('the lens follows the tab you are on', lens_home != lens(),
+              f'{lens_home!r} vs {lens()!r}')
+        check('and the lens is as wide as one tab', page.evaluate(
+            "Math.abs(parseFloat(document.querySelector('#tabbar').style.getPropertyValue('--lens-w'))"
+            " - document.querySelector('#tabs .tab').offsetWidth) < 2"))
+
+        # 2b. Going forward must land at the TOP. popstate fires on a plain
+        #     forward hash assignment exactly as it does on a real Back, so the
+        #     router used to restore a stale scroll on every navigation — you
+        #     tapped a tab and arrived 900px down the page you last read.
+        nav(page, '#/', 620)
+        page.evaluate('scrollTo(0, 900)'); page.wait_for_timeout(320)
+        nav(page, '#/explore', 700)
+        nav(page, '#/', 800)
+        check('tapping back into a tab lands at the top, not where you left it',
+              page.evaluate('Math.round(scrollY)') == 0,
+              f'at {page.evaluate("Math.round(scrollY)")}px')
+        check('and the bar is open when you get there',
+              page.evaluate("document.querySelector('#tabbar').classList.contains('min')") is False)
+
+        # 3. Folding. Reading down a long page shrinks the capsule to the
+        #    current tab; scrolling back opens it.
+        nav(page, '#/', 700)
+        open_w = page.evaluate(
+            "Math.round(document.querySelector('#tabs').getBoundingClientRect().width)")
+        page.evaluate('scrollTo(0, 300)'); page.wait_for_timeout(160)
+        page.evaluate('scrollTo(0, 760)'); page.wait_for_timeout(900)
+        folded = page.evaluate("document.querySelector('#tabbar').classList.contains('min')")
+        check('reading down folds the bar', folded)
+        fold_w = page.evaluate(
+            "Math.round(document.querySelector('#tabs').getBoundingClientRect().width)")
+        check('the folded bar is genuinely narrower', fold_w < open_w * 0.55,
+              f'{fold_w}px of {open_w}px')
+        shot(page, '17-tabbar-folded')
+
+        # The trap that bit on KAIRO: the folded width must come from the row's
+        # own geometry, not from a tab that shrank with the capsule. Fold twice
+        # and it must land on the same number both times.
+        page.evaluate('scrollTo(0, 200)'); page.wait_for_timeout(900)
+        check('scrolling back up opens it',
+              page.evaluate("document.querySelector('#tabbar').classList.contains('min')") is False)
+        page.evaluate('scrollTo(0, 900)'); page.wait_for_timeout(900)
+        fold_w2 = page.evaluate(
+            "Math.round(document.querySelector('#tabs').getBoundingClientRect().width)")
+        check('folding twice lands on the same width — it is not re-measuring itself',
+              fold_w == fold_w2, f'{fold_w}px then {fold_w2}px')
+
+        # 4. Going anywhere opens it again, so you never arrive at a folded bar.
+        nav(page, '#/explore', 700)
+        check('navigating opens the bar',
+              page.evaluate("document.querySelector('#tabbar').classList.contains('min')") is False)
+
+        # 5. A short page never folds — the bar would shut and reopen on one flick.
+        nav(page, '#/settings/legal', 620)
+        page.evaluate('scrollTo(0, 400)'); page.wait_for_timeout(700)
+        check('a short page never folds',
+              page.evaluate("document.querySelector('#tabbar').classList.contains('min')") is False)
+
+        # 6. Drag the lens — with a MOUSE, which is the only pointer that shows
+        #    the browser's own link-drag cancelling ours.
+        nav(page, '#/', 700)
+        box = page.locator('#tabs [data-tab="home"]').bounding_box()
+        far = page.locator('#tabs [data-tab="you"]').bounding_box()
+        page.mouse.move(box['x'] + box['width'] / 2, box['y'] + box['height'] / 2)
+        page.mouse.down()
+        page.mouse.move(far['x'] + far['width'] / 2, box['y'] + box['height'] / 2, steps=12)
+        page.wait_for_timeout(120)
+        dragging = page.evaluate("document.querySelector('#tabbar').classList.contains('dragging')")
+        check('a mouse drag moves the lens rather than being cancelled', dragging)
+        page.mouse.up()
+        page.wait_for_timeout(700)
+        check('letting go lands on the tab under it', route(page) == '/you',
+              f'got {route(page)!r}')
 
         # ------------------------------------------------------ persistence
         print('\npersistence + PWA')

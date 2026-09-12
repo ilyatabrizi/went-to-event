@@ -5,7 +5,7 @@ good ones, and publish your own in four steps.
 
 **Live:** https://ilyatabrizi.github.io/went-to-event/
 **Local:** `python3 serve.py` → http://localhost:8141
-**Tests:** `python3 e2e.py` → 169 checks + screenshots into `docs/shots/`
+**Tests:** `python3 e2e.py` → 185 checks + screenshots into `docs/shots/`
 
 Built by Alpha Agency. Installable on iOS and Android; works offline once opened.
 
@@ -57,9 +57,19 @@ and the "e." mark itself is geometric sans.
   a tab bar stretched across 1600px.
 - **A bar that earns its background.** Transparent over a hero, and only once
   content is under it does it take a blur and a hairline.
-- **A tab bar that is one object.** Five tabs, a Bone capsule that springs
-  between them, and unread dots that live on the bar so they survive every
-  navigation.
+- **A tab bar that is one object.** Five tabs on a floating capsule of glass,
+  a Bone lens that springs between them and follows a dragged finger, and
+  unread dots that live on the bar so they survive every navigation. Reading
+  down a long page folds it to the current tab alone; scrolling back, tapping
+  it, or going anywhere opens it again. A short page never folds, and the first
+  tap on a folded bar opens it rather than navigating — otherwise you would be
+  aiming at tabs you cannot see. Ported from KAIRO.
+- **Glass, the iOS way: thin, not frosted.** A small blur, a large saturation
+  lift, and a `brightness()` clamp *inside* `backdrop-filter`. The clamp is the
+  load-bearing part — it darkens the backdrop itself, which is what lets the
+  tint sit at 44% instead of 90% and still hold Bone type over a bright cover.
+  Browsers without `backdrop-filter` get solid surfaces instead of unreadable
+  ones.
 - **One dock, one primary action.** Each screen declares its own bar and dock;
   the shell just paints them. A screen that cannot say what its own back button
   and primary action are ends up wearing the previous screen's.
@@ -126,7 +136,7 @@ js/
   views/              home explore chat went profile detail booking
                       create settings pickers
 sw.js                 network-first for app files, cache-first for cover images
-e2e.py                169 checks in real Chrome, screenshots into docs/shots/
+e2e.py                185 checks in real Chrome, screenshots into docs/shots/
 serve.py              local preview on :8141, no-store
 ```
 
@@ -142,6 +152,21 @@ page three times and taps once to keep it that way.
 "navigates" to itself would silently do nothing, which is how a four-step
 publish flow stops advancing. Anything re-rendering its own screen calls
 `refresh()`, and `go()` catches the rest.
+
+**Nothing above a glass surface may carry a transform.** A transform, filter,
+opacity below 1 or blend mode on any ancestor makes that element a backdrop
+root, and the glass inside it blurs nothing at all — silently, everywhere. The
+bar and the dock are centred with padding rather than `translateX(-50%)` for
+exactly this reason, and the stagger uses `animation-fill-mode: backwards`
+rather than `both`, because a *filled* animation ending on `transform: none`
+still reports an identity matrix. `e2e.py` walks every glass element and fails
+if any ancestor is a backdrop root.
+
+**`popstate` fires on a plain forward hash assignment.** It is indistinguishable
+from a real Back by the event alone, so restoring scroll on it dropped you back
+down the page you had last read every time you tapped a tab. Each history entry
+is stamped with an index as it renders; a popstate is a Back only when the entry
+it lands on carries a lower one.
 
 **The bar's background is recomputed on every render, not only on scroll.**
 Arriving at a short screen from a scrolled one fires no scroll event, so the

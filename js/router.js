@@ -27,10 +27,26 @@ const match = (hash) => {
   return null;
 };
 
-/* Going back to a list should land where you left it, not at the top. Going
-   forward into a new screen should always start at the top. */
+/* Going back to a list should land where you left it; going anywhere else should
+   land at the top. Telling those apart is not as easy as it looks: `popstate`
+   fires on a plain forward `location.hash = …` exactly as it does on a real
+   Back, so listening for it alone restored a stale scroll position on EVERY
+   navigation — tapping a tab dropped you back down the page you had last read,
+   and the jump folded the tab bar on arrival.
+
+   So each history entry is stamped with an index as it renders. A popstate is a
+   Back only when the entry it lands on carries a LOWER index than the one being
+   left. A brand-new forward entry carries no stamp at all, which is the same
+   answer by a different route. */
 const scrollMemory = new Map();
+let navIndex = 0;
 let backing = false;
+
+function stampEntry() {
+  if (history.state && typeof history.state.wte === "number") return;
+  navIndex += 1;
+  try { history.replaceState({ ...(history.state || {}), wte: navIndex }, ""); } catch {}
+}
 
 /* A real cross-fade where the browser can do one, a staggered arrival where it
    cannot. Never both: the stagger would run inside a frame the transition has
@@ -38,7 +54,11 @@ let backing = false;
    read by CSS, which is what turns the stagger off. */
 const USE_VT = typeof document.startViewTransition === "function" && !reduced();
 document.documentElement.dataset.vt = USE_VT ? "1" : "0";
-addEventListener("popstate", () => { backing = true; });
+addEventListener("popstate", (e) => {
+  const i = e.state && typeof e.state.wte === "number" ? e.state.wte : null;
+  backing = i !== null && i < navIndex;
+  if (i !== null) navIndex = i;
+});
 
 export async function render() {
   const view = $("#view");
@@ -51,6 +71,7 @@ export async function render() {
     scrollMemory.set(current, scrollY);
   }
   current = (location.hash || "#/").split("?")[0];
+  stampEntry();
   closeSheet();
 
   /* Home runs a full-bleed hero under the bar; every other view starts below

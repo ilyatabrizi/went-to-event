@@ -39,13 +39,17 @@
   <!-- One primary action per screen, riding above the tab bar. -->
   <div class="dock" id="dock" hidden></div>
 
-  <nav id="tabs" class="tabs" aria-label="Main">
-    <a class="tab" href="#/" data-tab="home"><span class="tab-ico"></span><span class="tab-label">Home</span></a>
-    <a class="tab" href="#/explore" data-tab="explore"><span class="tab-ico"></span><span class="tab-label">Explore</span></a>
-    <a class="tab" href="#/chat" data-tab="chat"><span class="tab-ico"></span><span class="tab-label">Chat</span></a>
-    <a class="tab" href="#/went" data-tab="went"><span class="tab-ico"></span><span class="tab-label">Went</span></a>
-    <a class="tab" href="#/you" data-tab="you"><span class="tab-ico"></span><span class="tab-label">You</span></a>
-    <span class="tabs-ink" id="tabs-ink" aria-hidden="true"></span>
+  <nav id="tabbar" class="tabbar" aria-label="Main">
+    <div class="tabs" id="tabs">
+      <span class="tabs-lens" id="tabs-lens" aria-hidden="true"></span>
+      <div class="tabs-row" id="tabs-row">
+      <a class="tab" draggable="false" data-tab="home" href="#/"><span class="tab-ico"></span><span class="tab-label">Home</span></a>
+      <a class="tab" draggable="false" data-tab="explore" href="#/explore"><span class="tab-ico"></span><span class="tab-label">Explore</span></a>
+      <a class="tab" draggable="false" data-tab="chat" href="#/chat"><span class="tab-ico"></span><span class="tab-label">Chat</span></a>
+      <a class="tab" draggable="false" data-tab="went" href="#/went"><span class="tab-ico"></span><span class="tab-label">Went</span></a>
+      <a class="tab" draggable="false" data-tab="you" href="#/you"><span class="tab-ico"></span><span class="tab-label">You</span></a>
+      </div>
+    </div>
   </nav>
 
   <div id="sheet-root"></div>

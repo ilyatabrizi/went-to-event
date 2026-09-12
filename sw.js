@@ -9,7 +9,7 @@
    There is nothing else. Cover art is generated SVG, avatars are generated, and
    the two fonts are ours — so the whole app is same-origin and one cache. */
 
-const V = 'wte-v3';
+const V = 'wte-v4';
 const IMGS = 'wte-img-v2';
 const MARK = '__wte_install_kind__';
 
@@ -17,13 +17,13 @@ const SHELL = [
   './', './index.html', './manifest.webmanifest', './css/app.css', './js/app.js',
   './js/artwork.js', './js/data/events.js', './js/data/geo.js', './js/data/people.js',
   './js/icons.js', './js/install.js', './js/motion.js', './js/parts.js', './js/place.js',
-  './js/router.js', './js/store.js', './js/ui.js', './js/util.js', './js/views/booking.js',
-  './js/views/chat.js', './js/views/create.js', './js/views/detail.js',
-  './js/views/explore.js', './js/views/home.js', './js/views/pickers.js',
-  './js/views/profile.js', './js/views/settings.js', './js/views/verify.js',
-  './js/views/went.js', './assets/fonts/archivo.woff2', './assets/fonts/inter.woff2',
-  './assets/icons/favicon_192.png', './assets/icons/favicon_512.png',
-  './assets/icons/apple-touch-icon.png'
+  './js/router.js', './js/store.js', './js/tabbar.js', './js/ui.js', './js/util.js',
+  './js/views/booking.js', './js/views/chat.js', './js/views/create.js',
+  './js/views/detail.js', './js/views/explore.js', './js/views/home.js',
+  './js/views/pickers.js', './js/views/profile.js', './js/views/settings.js',
+  './js/views/verify.js', './js/views/went.js', './assets/fonts/archivo.woff2',
+  './assets/fonts/inter.woff2', './assets/icons/favicon_192.png',
+  './assets/icons/favicon_512.png', './assets/icons/apple-touch-icon.png'
 ];
 
 self.addEventListener('install', e => {

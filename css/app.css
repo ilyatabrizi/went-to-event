@@ -59,6 +59,7 @@
   --safe-b:env(safe-area-inset-bottom,0px);
   --bar-h:calc(var(--safe-t) + 58px);
   --tabs-h:64px;
+  --tabs-pad:6px;
   --dock-gap:calc(var(--tabs-h) + var(--safe-b) + 26px);
 
   --shadow-1:0 1px 2px rgba(0,0,0,.34);
@@ -66,7 +67,28 @@
   --shadow-3:0 16px 44px rgba(0,0,0,.56);
 
   --ease:cubic-bezier(.22,.61,.36,1);
+  --ease-out:cubic-bezier(.22,.61,.36,1);
   --spring:cubic-bezier(.34,1.4,.64,1);
+  --spring-soft:cubic-bezier(.3,1.18,.5,1);
+
+  /* ---- glass ----
+     iOS glass is THIN and genuinely see-through, not a thick frosted slab. A
+     small blur, a big saturation lift so the colour behind stays alive, and —
+     the load-bearing part — a brightness() clamp INSIDE backdrop-filter. That
+     darkens the backdrop itself, which is what lets the tint sit at 44%
+     instead of 90% and still hold Bone type over a bright cover photo. */
+  --glass-bg:rgba(22,20,26,.44);
+  --glass:blur(12px) saturate(180%) brightness(.62);
+  --glass-strong:blur(20px) saturate(180%) brightness(.55);
+  --glass-edge:inset 0 0 0 .5px rgba(244,241,236,.15),
+               inset 0 1px 0 rgba(244,241,236,.13),
+               0 0 0 .5px rgba(0,0,0,.55);
+  --glass-shadow:0 16px 38px -12px rgba(0,0,0,.78);
+  --sheen:.34;
+
+  /* The floating chrome all measures from one width, so the bar, the dock and
+     the toast line up with each other and with the page gutter. */
+  --group-w:min(calc(100vw - 24px),calc(var(--shell) - 24px));
 }
 
 /* ------------------------------------------------------------------ reset */
@@ -157,15 +179,19 @@ input,textarea{-webkit-appearance:none;appearance:none;border-radius:0}
 
 /* --------------------------------------------------------------- top bar */
 .bar{
-  position:fixed;top:0;left:50%;transform:translateX(-50%);z-index:60;
-  width:100%;max-width:var(--shell);height:var(--bar-h);
-  padding:var(--safe-t) 14px 0 var(--gutter);
+  /* Centred by padding, NOT by translateX(-50%). A transform here would make
+     this a backdrop root and every glass button inside it would blur nothing —
+     which is exactly what it used to do. */
+  position:fixed;top:0;left:0;right:0;z-index:60;
+  height:var(--bar-h);
+  padding:var(--safe-t) calc((100vw - var(--shell)) / 2 + 14px) 0
+          calc((100vw - var(--shell)) / 2 + var(--gutter));
   display:flex;align-items:center;justify-content:space-between;gap:12px;
   background:transparent;transition:background .3s var(--ease),box-shadow .3s var(--ease);
 }
 #shell[data-scrolled="1"] .bar{
-  background:rgba(11,10,12,.82);box-shadow:0 1px 0 var(--line);
-  -webkit-backdrop-filter:blur(18px) saturate(140%);backdrop-filter:blur(18px) saturate(140%);
+  background:var(--glass-bg);box-shadow:0 .5px 0 rgba(244,241,236,.12);
+  -webkit-backdrop-filter:var(--glass);backdrop-filter:var(--glass);
 }
 .bar-brand{display:flex;align-items:center;gap:10px;height:100%;min-width:0}
 /* The title in the bar is the page's own heading, arriving after it has
@@ -188,47 +214,111 @@ input,textarea{-webkit-appearance:none;appearance:none;border-radius:0}
 
 /* the round chrome button — back, search, bell, close */
 .gbtn{position:relative;width:40px;height:40px;flex:none;display:grid;place-items:center;
-  border-radius:var(--r-pill);background:var(--card);border:1px solid var(--line);
-  color:var(--ink);transition:transform .12s var(--ease),background .2s}
+  border-radius:var(--r-pill);color:var(--ink);
+  background:var(--glass-bg);
+  -webkit-backdrop-filter:var(--glass);backdrop-filter:var(--glass);
+  box-shadow:var(--glass-edge);
+  transition:transform .12s var(--ease),background-color .2s,box-shadow .2s}
 .gbtn:active{transform:scale(.93)}
 .gbtn svg{width:18px;height:18px}
 .gbtn-n{position:absolute;top:-2px;right:-2px;width:9px;height:9px;border-radius:50%;
   background:var(--ember);border:2px solid var(--paper)}
 
 /* ------------------------------------------------------- tab bar (glass) */
-.tabs{
-  position:fixed;z-index:70;left:50%;transform:translateX(-50%);
-  bottom:calc(var(--safe-b) + 12px);
-  width:min(calc(100% - 24px),calc(var(--shell) - 24px));height:var(--tabs-h);
-  display:grid;grid-template-columns:repeat(5,1fr);align-items:center;
-  background:rgba(22,20,24,.78);border:1px solid var(--line);border-radius:var(--r-xl);
-  -webkit-backdrop-filter:blur(24px) saturate(170%);backdrop-filter:blur(24px) saturate(170%);
-  box-shadow:0 1px 0 rgba(244,241,236,.06) inset,0 12px 34px rgba(0,0,0,.6);
+/* A floating capsule of glass that folds to the current tab as you read down a
+   long page, and opens again the moment you scroll back, tap it, or go
+   anywhere. Ported from KAIRO, which is where the shape was worked out.
+
+   The wrapper is NOT transformed — it is padded to centre instead. A transform
+   anywhere above a backdrop-filter makes that element a backdrop root's child
+   and it blurs nothing at all. */
+.tabbar{
+  position:fixed;z-index:70;left:0;right:0;bottom:calc(var(--safe-b) + 12px);
+  display:flex;align-items:center;
+  padding-left:calc((100vw - var(--group-w)) / 2);
+  pointer-events:none;
 }
-.tab{position:relative;z-index:1;display:grid;justify-items:center;gap:4px;height:100%;
-  align-content:center;color:var(--mute);transition:color .3s var(--ease)}
-.tab svg{width:20px;height:20px}
+.tabbar > *{pointer-events:auto}
+.tabbar[hidden]{display:none}
+
+.tabs{
+  position:relative;flex:none;height:var(--tabs-h);width:var(--group-w);
+  padding:var(--tabs-pad);border-radius:var(--r-xl);overflow:hidden;touch-action:none;
+  background:var(--glass-bg);
+  -webkit-backdrop-filter:var(--glass-strong);backdrop-filter:var(--glass-strong);
+  box-shadow:var(--glass-edge),var(--glass-shadow);
+  transition:width .55s var(--spring-soft),background-color .35s,box-shadow .35s;
+}
+/* the specular sweep — what makes glass read as glass rather than frosted plastic */
+.tabs::after{
+  content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;z-index:2;
+  background:linear-gradient(118deg,rgba(255,255,255,.5) 0%,rgba(255,255,255,0) 30%,
+    rgba(255,255,255,0) 66%,rgba(255,255,255,.2) 100%);
+  mix-blend-mode:soft-light;opacity:var(--sheen);
+}
+
+/* The row keeps the OPEN bar's width whatever the capsule is doing, so folding
+   clips the tabs instead of squeezing them — and a shrunken tab is never fed
+   back into the measurement. */
+.tabs-row{
+  position:relative;z-index:1;height:100%;display:grid;grid-template-columns:repeat(5,1fr);
+  width:calc(var(--group-w) - var(--tabs-pad) * 2);
+  transform:translateX(var(--row-x,0px));transition:transform .55s var(--spring-soft);
+}
+
+/* the Bone capsule under whichever tab you are on */
+.tabs-lens{
+  position:absolute;z-index:0;top:var(--tabs-pad);left:var(--tabs-pad);
+  height:calc(100% - var(--tabs-pad) * 2);width:var(--lens-w,0px);
+  border-radius:calc(var(--r-xl) - var(--tabs-pad));background:var(--act);opacity:0;
+  box-shadow:0 2px 10px -4px rgba(0,0,0,.5);
+  transform:translateX(var(--lens-x,0px));
+  transition:transform .55s var(--spring),width .3s var(--ease-out),opacity .2s,
+             scale .3s var(--spring);
+}
+.tabbar[data-ready="1"] .tabs-lens{opacity:1}
+.tabbar.no-lens .tabs-lens{opacity:0!important}
+.tabbar.dragging .tabs-lens{
+  transition:width .3s var(--ease-out),scale .3s var(--spring);
+  scale:1.08;box-shadow:0 8px 20px -6px rgba(0,0,0,.6)}
+
+.tab{
+  position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:3px;border-radius:var(--r-pill);color:var(--mute);
+  -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-user-drag:none;
+  transition:color .25s var(--ease),transform .2s var(--ease-out),opacity .3s;
+}
+.tab:active{transform:scale(.92)}
+.tab-ico{position:relative;width:24px;height:24px}
+.tab-ico svg{position:absolute;inset:2px;width:20px;height:20px;
+  transition:opacity .2s,transform .35s var(--spring)}
+/* the filled glyph swaps in for the tab you are on, the way iOS does it */
+.tab-ico svg + svg{opacity:0;transform:scale(.82)}
+.tab[aria-current="page"] .tab-ico svg:first-child{opacity:0}
+.tab[aria-current="page"] .tab-ico svg + svg{opacity:1;transform:none}
 .tab-label{font-size:10.5px;font-weight:600;letter-spacing:.01em}
-.tab[aria-current="page"]{color:var(--on-act)}
-.tab-dot{position:absolute;top:11px;right:calc(50% - 16px);width:7px;height:7px;
-  border-radius:50%;background:var(--ember)}
-/* the Bone capsule slides under whichever tab you are on */
-.tabs-ink{position:absolute;top:6px;bottom:6px;left:0;border-radius:calc(var(--r-xl) - 7px);
-  background:var(--act);opacity:0;
-  transition:transform .42s var(--spring),width .42s var(--spring),opacity .3s}
-.tabs[data-ready="1"] .tabs-ink{opacity:1}
+.tab[aria-current="page"],.tab.under{color:var(--on-act)}
+.tab-dot{position:absolute;top:6px;left:calc(50% + 6px);width:7px;height:7px;
+  border-radius:50%;background:var(--ember);box-shadow:0 0 0 2px rgba(11,10,12,.5)}
+.tab[aria-current="page"] .tab-dot{box-shadow:0 0 0 2px var(--act)}
+
+/* folded: the capsule shrinks to the current tab and the rest slide out of it */
+.tabbar.min .tabs{width:calc(var(--min-w,84px) + var(--tabs-pad) * 2)}
+.tabbar.min .tab:not([aria-current="page"]){opacity:0;pointer-events:none}
 
 /* --------------------------------------------------------------- the dock */
 /* The single primary action for a screen, riding above the tab bar. */
 .dock{
-  position:fixed;z-index:65;left:50%;transform:translateX(-50%);
+  position:fixed;z-index:65;left:0;right:0;
   bottom:calc(var(--safe-b) + var(--tabs-h) + 22px);
-  width:min(calc(100% - 24px),calc(var(--shell) - 24px));
-  animation:dock-in .45s var(--spring) both;
+  padding-left:calc((100vw - var(--group-w)) / 2);
+  width:100%;
+  animation:dock-in .45s var(--spring) backwards;
 }
+.dock > *{width:var(--group-w)}
 #shell[data-tabs="0"] .dock{bottom:calc(var(--safe-b) + 14px)}
 .dock[hidden]{display:none}
-@keyframes dock-in{from{opacity:0;transform:translateX(-50%) translateY(14px)}}
+@keyframes dock-in{from{opacity:0;transform:translateY(14px)}}
 .dock-row{display:flex;align-items:center;gap:10px}
 
 /* --------------------------------------------------------------- controls */
@@ -300,9 +390,10 @@ input,textarea{-webkit-appearance:none;appearance:none;border-radius:0}
 .pill svg{width:14px;height:14px;color:var(--mute)}
 
 .badge{display:inline-flex;align-items:center;gap:5px;padding:5px 10px;
-  border-radius:var(--r-pill);background:rgba(11,10,12,.62);color:var(--ink);
+  border-radius:var(--r-pill);background:rgba(11,10,12,.34);color:var(--ink);
   font-size:11.5px;font-weight:600;letter-spacing:.02em;
-  -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+  -webkit-backdrop-filter:var(--glass);backdrop-filter:var(--glass);
+  box-shadow:inset 0 0 0 .5px rgba(244,241,236,.16)}
 .badge svg{width:12px;height:12px}
 .badge-solid{background:var(--act);color:var(--on-act)}
 
@@ -513,14 +604,17 @@ input,textarea{-webkit-appearance:none;appearance:none;border-radius:0}
 .step-seg.on i{width:100%}
 
 /* ---------------------------------------------------------------- sheets */
-.scrim{position:fixed;inset:0;z-index:80;background:rgba(0,0,0,.6);opacity:0;
-  transition:opacity .34s var(--ease);-webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px)}
+.scrim{position:fixed;inset:0;z-index:80;background:rgba(0,0,0,.42);opacity:0;
+  transition:opacity .34s var(--ease);
+  -webkit-backdrop-filter:blur(6px) saturate(140%) brightness(.8);
+  backdrop-filter:blur(6px) saturate(140%) brightness(.8)}
 .scrim.in{opacity:1}
 .sheet{
   position:fixed;z-index:90;left:50%;bottom:0;transform:translateX(-50%) translateY(102%);
   width:100%;max-width:var(--shell);max-height:88svh;overflow-y:auto;
-  background:var(--card);border-radius:var(--r-xl) var(--r-xl) 0 0;
-  border-top:1px solid var(--line);box-shadow:0 -20px 60px rgba(0,0,0,.7);
+  background:rgba(22,20,26,.72);border-radius:var(--r-xl) var(--r-xl) 0 0;
+  -webkit-backdrop-filter:var(--glass-strong);backdrop-filter:var(--glass-strong);
+  box-shadow:inset 0 1px 0 rgba(244,241,236,.14),0 -20px 60px rgba(0,0,0,.72);
   padding:0 var(--gutter) calc(var(--safe-b) + 24px);
   transition:transform .44s var(--spring);-webkit-overflow-scrolling:touch;
 }
@@ -533,19 +627,29 @@ input,textarea{-webkit-appearance:none;appearance:none;border-radius:0}
   letter-spacing:-.028em;padding:4px 0 14px}
 
 /* ---------------------------------------------------------------- toasts */
-#toast-root{position:fixed;z-index:100;left:50%;transform:translateX(-50%);
+#toast-root{position:fixed;z-index:100;left:0;right:0;
   bottom:calc(var(--safe-b) + var(--tabs-h) + 26px);
-  width:min(calc(100% - 32px),calc(var(--shell) - 32px));
-  display:grid;gap:8px;pointer-events:none}
+  padding-inline:max(16px,calc((100vw - var(--shell)) / 2 + 16px));
+  display:grid;gap:8px;pointer-events:none;justify-items:center}
 .toast{display:flex;align-items:center;gap:10px;padding:13px 17px;border-radius:var(--r-pill);
-  background:rgba(32,29,35,.94);border:1px solid var(--line);color:var(--ink);
-  font-size:14px;font-weight:500;box-shadow:var(--shadow-3);
-  -webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);
-  animation:toast-in .4s var(--spring) both}
+  background:var(--glass-bg);color:var(--ink);
+  font-size:14px;font-weight:500;
+  -webkit-backdrop-filter:var(--glass-strong);backdrop-filter:var(--glass-strong);
+  box-shadow:var(--glass-edge),var(--glass-shadow);
+  animation:toast-in .4s var(--spring) backwards}
 .toast svg{width:16px;height:16px;color:var(--ember);flex:none}
 .toast.out{animation:toast-out .3s var(--ease) both}
 @keyframes toast-in{from{opacity:0;transform:translateY(14px) scale(.96)}}
 @keyframes toast-out{to{opacity:0;transform:translateY(8px) scale(.98)}}
+
+/* A browser with no backdrop-filter gets solid surfaces rather than unreadable
+   ones. Firefox without the flag and older iOS Safari both land here. */
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
+  .tabs,.gbtn,.toast,.badge{background:#1C1A20}
+  .sheet{background:#17151A}
+  #shell[data-scrolled="1"] .bar{background:rgba(11,10,12,.97)}
+  .scrim{background:rgba(0,0,0,.72)}
+}
 
 /* --------------------------------------------------- a11y accommodations */
 @media (prefers-reduced-transparency:reduce){
@@ -741,7 +845,12 @@ input,textarea{-webkit-appearance:none;appearance:none;border-radius:0}
    the whole page as a single block for half a second, which is the one thing
    this rule exists to prevent. Total arrival is ~330ms now: long enough to
    read as movement, short enough that nobody waits for it. */
-.screen > *{animation:rise .3s var(--ease) both}
+/* `backwards`, never `both`. A FILLED animation ending on `transform:none`
+   still reports matrix(1,0,0,1,0,0) from getComputedStyle — a transform — which
+   makes every element inside it a backdrop root's child, so any glass in the
+   page blurs nothing at all, permanently. `backwards` covers the delay and then
+   lets go, and the computed transform really is none. */
+.screen > *{animation:rise .3s var(--ease) backwards}
 .screen > *:nth-child(1){animation-delay:0s}
 .screen > *:nth-child(2){animation-delay:.04s}
 .screen > *:nth-child(3){animation-delay:.08s}
@@ -751,7 +860,7 @@ input,textarea{-webkit-appearance:none;appearance:none;border-radius:0}
 
 /* Cards inside a stack get their own, smaller stagger — the list should not
    land all at once either. */
-.stack.stagger > *{animation:rise .3s var(--ease) both}
+.stack.stagger > *{animation:rise .3s var(--ease) backwards}
 .stack.stagger > *:nth-child(1){animation-delay:.02s}
 .stack.stagger > *:nth-child(2){animation-delay:.06s}
 .stack.stagger > *:nth-child(3){animation-delay:.1s}

@@ -4,13 +4,13 @@
 import { $ } from "./util.js";
 import { icon } from "./icons.js";
 import { route, startRouter, go, render } from "./router.js";
-import { state, save, subscribe, unreadChats, unreadNotifs, toggleSave, isSaved } from "./store.js";
-import { iconFill } from "./icons.js";
+import { state, save, subscribe, unreadNotifs, toggleSave } from "./store.js";
 import { barPlace, barBack, barRoot, lazyImages } from "./parts.js";
+import { paintTabs, paintBadges, setVisible as setTabsVisible, TAB_FOR } from "./tabbar.js";
 import { GRAIN_DEFS } from "./artwork.js";
 import { cityName } from "./place.js";
-import { toast, closeSheet } from "./ui.js";
-import { haptic, reduced } from "./motion.js";
+import { toast } from "./ui.js";
+import { haptic } from "./motion.js";
 import { openCityPicker } from "./views/pickers.js";
 
 import home from "./views/home.js";
@@ -47,56 +47,16 @@ route("/settings",        () => settings({ key: "root" }));
 route("/settings/:key",   settings);
 
 /* ------------------------------------------------------------------- tabs */
+/* The tab bar owns itself — its lens, its folding, its drag and its badges all
+   live in tabbar.js. The shell only tells it which route is showing and whether
+   it should be on screen at all. */
 const shell = $("#shell");
-const tabs = $("#tabs");
-const ink = $("#tabs-ink");
 const bar = $("#bar");
 const dock = $("#dock");
 const view = $("#view");
 
-tabs.querySelectorAll(".tab").forEach((tab) => {
-  tab.querySelector(".tab-ico").innerHTML =
-    icon({ home: "home", explore: "compass", chat: "chat", went: "ticket", you: "user" }[tab.dataset.tab]);
-});
-
-/* Which tab owns a screen. A pushed page keeps its parent tab lit rather than
-   lighting none — losing the highlight reads as having left the app. */
-const TAB_FOR = {
-  "/": "home", "/explore": "explore", "/chat": "chat", "/went": "went", "/you": "you",
-  "/event": "explore", "/book": "explore", "/checkout": "explore", "/confirm": "explore",
-  "/pass": "went", "/thread": "chat", "/u": "chat", "/notifications": "home",
-  "/membership": "you", "/publish": "you", "/published": "you", "/settings": "you",
-  "/verify": "you",
-};
-
 const ROOT_TITLE = { "/explore": "Explore", "/chat": "Chat", "/went": "Went", "/you": "You" };
 
-function paintTabs(path) {
-  const p = path.replace(/^#/, "") || "/";
-  const key = TAB_FOR[p] || TAB_FOR["/" + p.split("/")[1]] || null;
-  let active = null;
-  tabs.querySelectorAll(".tab").forEach((tab) => {
-    const on = tab.dataset.tab === key;
-    tab.setAttribute("aria-current", on ? "page" : "false");
-    if (on) active = tab;
-  });
-  if (!active) { ink.style.opacity = "0"; return; }
-  ink.style.removeProperty("opacity");
-  const box = active.getBoundingClientRect();
-  const host = tabs.getBoundingClientRect();
-  const inset = 5;
-  ink.style.width = `${box.width - inset * 2}px`;
-  ink.style.transform = `translateX(${box.left - host.left + inset}px)`;
-  tabs.dataset.ready = "1";
-}
-addEventListener("resize", () => paintTabs(location.hash.replace(/^#/, "") || "/"));
-
-/* Unread markers live on the tab bar, so they survive every navigation. */
-function paintBadges() {
-  const chatTab = tabs.querySelector('[data-tab="chat"]');
-  chatTab.querySelector(".tab-dot")?.remove();
-  if (unreadChats()) chatTab.insertAdjacentHTML("beforeend", '<i class="tab-dot"></i>');
-}
 subscribe(paintBadges);
 
 /* ------------------------------------------------------------------- bars */
@@ -127,7 +87,7 @@ document.addEventListener("view:chrome", (e) => {
   dock.hidden = !d;
   shell.dataset.dock = d ? "1" : "0";
   shell.dataset.tabs = showTabs ? "1" : "0";
-  tabs.hidden = !showTabs;
+  setTabsVisible(showTabs);
 
   paintTabs(path);
   paintBadges();
@@ -192,22 +152,7 @@ document.addEventListener("click", (e) => {
      it saved nobody a tap. It arms the focus the view already knew how to use. */
   if (e.target.closest("[data-search]")) { state.focusSearch = true; return; }
 
-  /* Tapping a lit tab does one of two things, and the difference matters: a
-     pushed screen keeps its parent tab lit, so from there the tap has to go
-     back to that tab's ROOT. Only when you are already standing on the root
-     does it scroll to the top — the iOS idiom — instead of rebuilding a screen
-     that has not changed. */
-  const tab = e.target.closest("#tabs .tab");
-  if (tab && tab.getAttribute("aria-current") === "page") {
-    const root = tab.getAttribute("href");
-    const here = "#" + (location.hash.replace(/^#/, "") || "/");
-    if (here === root) {
-      e.preventDefault();
-      haptic(6);
-      scrollTo({ top: 0, behavior: reduced() ? "instant" : "smooth" });
-    }
-    return;                       // otherwise the href takes you to the root
-  }
+  /* Tapping a lit tab is the tab bar's own business — see tabbar.js. */
 
   const sv = e.target.closest("[data-save]");
   if (sv) {
