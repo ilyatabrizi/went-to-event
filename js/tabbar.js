@@ -46,18 +46,43 @@ export const TAB_FOR = {
 };
 
 /* ------------------------------------------------------------------- lens */
+/* Folded, the bar keeps Home and You — the two places you most often want from
+   halfway down a page — plus whichever tab you are actually on, when it is
+   neither of those. */
+const ALWAYS_KEPT = ["home", "you"];
+const keptKeys = () =>
+  tabs.map((t) => t.dataset.tab)
+      .filter((k) => ALWAYS_KEPT.includes(k) || k === active);
+
+/* One tab's width, measured ONLY while the bar is open. Measuring it folded
+   would read a tab in the middle of collapsing and feed the wrong number back
+   into the width that is doing the collapsing. */
+let tabW = 0;
+
 function place() {
   const i = tabs.findIndex((t) => t.dataset.tab === active);
   if (i < 0) { bar.classList.add("no-lens"); return; }
   bar.classList.remove("no-lens");
-  const t = tabs[i];
-  /* Folded, the whole row slides so the current tab sits at the left edge of
-     the shrunken capsule. */
-  const shift = minimized ? -t.offsetLeft : 0;
-  bar.style.setProperty("--row-x", `${shift}px`);
-  bar.style.setProperty("--lens-x", `${t.offsetLeft + shift}px`);
-  bar.style.setProperty("--lens-w", `${t.offsetWidth}px`);
-  bar.style.setProperty("--min-w", `${t.offsetWidth}px`);
+
+  if (!minimized) {
+    const w = tabs[0].getBoundingClientRect().width;
+    if (w > 8) tabW = w;                       // 0 while the bar is hidden
+  }
+  if (!tabW) return;
+
+  const kept = keptKeys();
+  tabs.forEach((t) => {
+    if (kept.includes(t.dataset.tab)) t.dataset.keep = "1";
+    else delete t.dataset.keep;
+  });
+
+  /* The lens is one tab wide in both states; only which slot it sits in
+     changes, and folded the slots are counted among the survivors. */
+  const slot = minimized ? kept.indexOf(active) : i;
+  bar.style.setProperty("--tab-w", `${tabW}px`);
+  bar.style.setProperty("--kept-n", String(kept.length));
+  bar.style.setProperty("--lens-x", `${slot * tabW}px`);
+  bar.style.setProperty("--lens-w", `${tabW}px`);
   bar.dataset.ready = "1";
 }
 
@@ -129,7 +154,7 @@ caps.addEventListener("pointermove", (e) => {
     bar.classList.add("dragging");
     bar.classList.remove("no-lens");
   }
-  const w = tabs[0].offsetWidth;
+  const w = tabW || tabs[0].offsetWidth;
   const r = row.getBoundingClientRect();
   const x = clamp(e.clientX - r.left - w / 2, 0, r.width - w);
   bar.style.setProperty("--lens-x", `${x}px`);

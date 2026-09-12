@@ -1,105 +1,96 @@
-/* One stroke weight, one join style, one 24-grid. Icons that disagree with
-   each other read as carelessness. */
+/* One icon set, one grid, one weight.
+ *
+ * These are Lucide (ISC), vendored as raw path data rather than pulled from a
+ * package — a 24 grid with round caps and joins, which is the geometry iOS's
+ * own symbols use. The hand-drawn set that came before them disagreed with
+ * itself about weight and corner radius, and that is what reads as cheap at
+ * 20px, however carefully each glyph is drawn.
+ *
+ * Lucide Icons, ISC License, Copyright (c) 2026 Lucide Contributors.
+ */
 const P = {
-  home:'<path d="M3.6 10.4 12 3.8l8.4 6.6V20a1 1 0 0 1-1 1h-4.6v-6h-5.6v6H4.6a1 1 0 0 1-1-1z"/>',
-  compass:'<circle cx="12" cy="12" r="8.6"/><path d="M15.4 8.6 13.7 13.7 8.6 15.4l1.7-5.1z"/>',
-  chat:'<path d="M20.5 11.6c0 4-3.8 7.2-8.5 7.2a10 10 0 0 1-2.6-.34L4.2 20.2l1.5-3.7A6.9 6.9 0 0 1 3.5 11.6c0-4 3.8-7.2 8.5-7.2s8.5 3.2 8.5 7.2z"/>',
-  ticket:'<path d="M4 8.2a1.6 1.6 0 0 1 1.6-1.6h12.8A1.6 1.6 0 0 1 20 8.2v2a2 2 0 0 0 0 3.6v2a1.6 1.6 0 0 1-1.6 1.6H5.6A1.6 1.6 0 0 1 4 15.8v-2a2 2 0 0 0 0-3.6z"/><path d="M14 7v1.6M14 11.2v1.6M14 15.4V17"/>',
-  user:'<circle cx="12" cy="8.2" r="3.7"/><path d="M4.8 20a7.2 7.2 0 0 1 14.4 0"/>',
-  search:'<circle cx="11" cy="11" r="6.6"/><path d="m16 16 4 4"/>',
-  bell:'<path d="M18 15.4V11a6 6 0 1 0-12 0v4.4L4.4 17.6h15.2z"/><path d="M10 20.4a2.2 2.2 0 0 0 4 0"/>',
-  heart:'<path d="M12 20s-7.4-4.4-7.4-9.3A4.2 4.2 0 0 1 12 8.1a4.2 4.2 0 0 1 7.4 2.6C19.4 15.6 12 20 12 20z"/>',
-  bookmark:'<path d="M6.4 4.8h11.2v15.4L12 16.4l-5.6 3.8z"/>',
-  plus:'<path d="M12 5.2v13.6M5.2 12h13.6"/>',
-  close:'<path d="m6.4 6.4 11.2 11.2M17.6 6.4 6.4 17.6"/>',
-  back:'<path d="M14.6 5.4 8 12l6.6 6.6"/>',
-  fwd:'<path d="m9.4 5.4 6.6 6.6-6.6 6.6"/>',
-  up:'<path d="m5.4 14.6 6.6-6.6 6.6 6.6"/>',
-  down:'<path d="m5.4 9.4 6.6 6.6 6.6-6.6"/>',
-  pin:'<path d="M12 21s6.4-6 6.4-10.4a6.4 6.4 0 1 0-12.8 0C5.6 15 12 21 12 21z"/><circle cx="12" cy="10.6" r="2.4"/>',
-  cal:'<rect x="3.8" y="5.4" width="16.4" height="14.8" rx="2.4"/><path d="M3.8 10h16.4M8.4 3.6v3.4M15.6 3.6v3.4"/>',
-  clock:'<circle cx="12" cy="12" r="8.4"/><path d="M12 7.4V12l3 1.8"/>',
-  users:'<circle cx="9.4" cy="8.6" r="3.3"/><path d="M3.6 19.4a5.8 5.8 0 0 1 11.6 0"/><path d="M16.2 6a3.3 3.3 0 0 1 0 6.4M17.6 14.6a5.4 5.4 0 0 1 3 4.8"/>',
-  userplus:'<circle cx="10" cy="8.4" r="3.5"/><path d="M3.8 19.6a6.2 6.2 0 0 1 12.4 0"/><path d="M18.4 8.4v5M15.9 10.9h5"/>',
-  send:'<path d="M20.2 3.8 3.8 10.4l6.5 2.9 2.9 6.5z"/><path d="M20.2 3.8 10.3 13.3"/>',
-  check:'<path d="m5.2 12.6 4.5 4.5 9.1-9.7"/>',
-  checkcirc:'<circle cx="12" cy="12" r="8.6"/><path d="m8.4 12.2 2.6 2.6 4.8-5.2"/>',
-  slider:'<path d="M4 7.4h9M17.4 7.4H20M4 16.6h3.2M11.6 16.6H20"/><circle cx="15" cy="7.4" r="2.3"/><circle cx="9.4" cy="16.6" r="2.3"/>',
-  sort:'<path d="M6.6 4.8v14.4M3.4 16l3.2 3.2L9.8 16"/><path d="M17.4 19.2V4.8M14.2 8 17.4 4.8 20.6 8"/>',
-  share:'<circle cx="17.6" cy="6" r="2.6"/><circle cx="6.4" cy="12" r="2.6"/><circle cx="17.6" cy="18" r="2.6"/><path d="m8.7 10.8 6.6-3.6M8.7 13.2l6.6 3.6"/>',
-  more:'<circle cx="5.4" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="18.6" cy="12" r="1.5"/>',
-  gear:'<circle cx="12" cy="12" r="3.1"/><path d="M19.6 14.2a1.6 1.6 0 0 0 .32 1.76l.06.06a1.94 1.94 0 1 1-2.74 2.74l-.06-.06a1.6 1.6 0 0 0-1.76-.32 1.6 1.6 0 0 0-.97 1.47v.17a1.94 1.94 0 1 1-3.88 0v-.09a1.6 1.6 0 0 0-1.05-1.46 1.6 1.6 0 0 0-1.76.32l-.06.06a1.94 1.94 0 1 1-2.74-2.74l.06-.06a1.6 1.6 0 0 0 .32-1.76 1.6 1.6 0 0 0-1.47-.97H3.7a1.94 1.94 0 1 1 0-3.88h.09a1.6 1.6 0 0 0 1.46-1.05 1.6 1.6 0 0 0-.32-1.76l-.06-.06a1.94 1.94 0 1 1 2.74-2.74l.06.06a1.6 1.6 0 0 0 1.76.32h.08a1.6 1.6 0 0 0 .97-1.47V3.7a1.94 1.94 0 1 1 3.88 0v.09a1.6 1.6 0 0 0 .97 1.47 1.6 1.6 0 0 0 1.76-.32l.06-.06a1.94 1.94 0 1 1 2.74 2.74l-.06.06a1.6 1.6 0 0 0-.32 1.76v.08a1.6 1.6 0 0 0 1.47.97h.17a1.94 1.94 0 1 1 0 3.88h-.09a1.6 1.6 0 0 0-1.47.97z"/>',
-  diamond:'<path d="M12 3.6 21 9.4 12 20.4 3 9.4z"/><path d="M3 9.4h18M8.4 9.4 12 3.6l3.6 5.8M8.4 9.4 12 20.4l3.6-11"/>',
-  sparkle:'<path d="M12 3.4 13.9 9 19.6 11l-5.7 2-1.9 5.6-1.9-5.6L4.4 11 10.1 9z"/>',
-  bolt:'<path d="M13.4 3 5.6 13.4h5.4L10.6 21l7.8-10.4H13z"/>',
-  note:'<path d="M9.4 17.6V6.2l9-1.8v11.4"/><circle cx="7" cy="17.9" r="2.5"/><circle cx="16" cy="15.9" r="2.5"/>',
-  leaf:'<path d="M20 4.6C10.4 4.6 5 8.6 5 15a5 5 0 0 0 5 5c6.4 0 10-5.4 10-15.4z"/><path d="M5.6 20.4C7.6 14.4 11.6 10.6 17 8.8"/>',
-  wine:'<path d="M7.6 4h8.8l-.7 5.2a4.1 4.1 0 0 1-8.14-.14z"/><path d="M12 13.4V20M8.4 20h7.2"/>',
-  palette:'<path d="M12 20.4a8.4 8.4 0 1 1 8.4-8.4c0 2-1.7 2.7-3.4 2.7h-1.4a2 2 0 0 0-1.5 3.4 1.8 1.8 0 0 1-2.1 2.3z"/><circle cx="8.2" cy="10.4" r="1.1"/><circle cx="12" cy="7.8" r="1.1"/><circle cx="15.8" cy="10.2" r="1.1"/>',
-  ball:'<circle cx="12" cy="12" r="8.6"/><path d="m12 7.2 3.9 2.8-1.5 4.6H9.6L8.1 10z"/><path d="M12 3.4v3.8M4.2 9.6 8.1 10M6.9 19l2.7-4.4M17.1 19l-2.7-4.4M19.8 9.6 15.9 10"/>',
-  mic:'<rect x="9.2" y="3.4" width="5.6" height="11" rx="2.8"/><path d="M5.6 11.4a6.4 6.4 0 0 0 12.8 0M12 17.8v2.8"/>',
-  mask:'<path d="M4.4 7.4c5-1.4 10.2-1.4 15.2 0-.3 6.6-3 12.4-7.6 12.4S4.7 14 4.4 7.4z"/><path d="M8.6 11.4a1.7 1.7 0 0 0 2.6 0M12.8 11.4a1.7 1.7 0 0 0 2.6 0"/>',
-  bag:'<path d="M6 8h12l-1 11.5a1 1 0 0 1-1 .9H8a1 1 0 0 1-1-.9z"/><path d="M9.4 8V6.4a2.6 2.6 0 0 1 5.2 0V8"/>',
-  clapper:'<rect x="3.4" y="9" width="17.2" height="11.4" rx="2.2"/><path d="m3.8 9 1.7-3.7 4 1 1.4-3 4 1 1.4-3 4 1L19.4 9"/>',
-  star:'<path d="m12 3.6 2.6 5.6 6 .8-4.4 4.2 1.1 6-5.3-2.9-5.3 2.9 1.1-6L3.4 10l6-.8z"/>',
-  tools:'<path d="M14.7 5.6a3.4 3.4 0 0 1 3.9 3.9L9.5 18.6l-4 1 1-4z"/><path d="m4.5 19.5 3-3"/>',
-  mountain:'<path d="m3 19 6-9 4 6 2.5-3.5L21 19z"/><circle cx="17" cy="6.6" r="2"/>',
-  shield:'<path d="M12 3.4 19.2 6v5.6c0 4.4-3 7.6-7.2 9-4.2-1.4-7.2-4.6-7.2-9V6z"/><path d="m9 12 2.2 2.2L15.2 10"/>',
-  card:'<rect x="3.2" y="6" width="17.6" height="12" rx="2.4"/><path d="M3.2 10.4h17.6"/>',
-  apple:'<path d="M16.3 12.5c0-2.3 1.9-3.4 2-3.5-1.1-1.6-2.8-1.8-3.4-1.8-1.4-.15-2.8.85-3.5.85s-1.8-.83-3-.8c-1.5.02-2.9.9-3.7 2.25-1.6 2.75-.4 6.8 1.1 9 .75 1.1 1.6 2.3 2.8 2.25 1.1-.05 1.5-.72 2.9-.72s1.7.72 2.9.7c1.2-.02 2-1.1 2.7-2.2.85-1.25 1.2-2.5 1.2-2.55-.03-.02-2.3-.9-2.3-3.5z"/><path d="M14.1 5.6c.6-.75 1-1.8.9-2.85-.87.04-1.93.58-2.56 1.32-.56.65-1.05 1.7-.92 2.7.97.08 1.96-.5 2.58-1.17"/>',
-  lock:'<rect x="4.8" y="10.4" width="14.4" height="9.6" rx="2.4"/><path d="M8.2 10.4V7.8a3.8 3.8 0 0 1 7.6 0v2.6"/>',
-  globe:'<circle cx="12" cy="12" r="8.6"/><path d="M3.4 12h17.2"/><path d="M12 3.4a13 13 0 0 1 0 17.2 13 13 0 0 1 0-17.2z"/>',
-  eye:'<path d="M2.6 12S6 5.8 12 5.8 21.4 12 21.4 12 18 18.2 12 18.2 2.6 12 2.6 12z"/><circle cx="12" cy="12" r="3"/>',
-  camera:'<path d="M3.4 8.6h3.4l1.6-2.4h7.2l1.6 2.4h3.4a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H3.4a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13.4" r="3.4"/>',
-  image:'<rect x="3.4" y="4.6" width="17.2" height="14.8" rx="2.4"/><circle cx="8.6" cy="9.6" r="1.7"/><path d="m4 17 4.6-4.6 3.6 3.6 3-2.8L20 18"/>',
-  trash:'<path d="M4.6 6.6h14.8M9 6.6V4.8a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1.8"/><path d="M6.4 6.6 7.3 20a1 1 0 0 0 1 .9h7.4a1 1 0 0 0 1-.9l.9-13.4"/>',
-  flag:'<path d="M5.4 21V3.8M5.4 4.6h11.4l-2 3.6 2 3.6H5.4"/>',
-  mute:'<path d="M11 5.4 6.6 9H3.4v6h3.2L11 18.6z"/><path d="m16 9.6 4.6 4.8M20.6 9.6 16 14.4"/>',
-  info:'<circle cx="12" cy="12" r="8.6"/><path d="M12 11v5.4M12 7.9v.1"/>',
-  qr:'<rect x="3.6" y="3.6" width="6.4" height="6.4" rx="1.4"/><rect x="14" y="3.6" width="6.4" height="6.4" rx="1.4"/><rect x="3.6" y="14" width="6.4" height="6.4" rx="1.4"/><path d="M14 14h2.8v2.8H14zM17.6 17.6h2.8v2.8h-2.8zM14 20.4h.1M20.4 14h.1"/>',
-  wallet:'<path d="M3.4 7.4a2 2 0 0 1 2-2h11a2 2 0 0 1 2 2v1.2"/><rect x="3.4" y="7.4" width="17.2" height="11.6" rx="2.4"/><circle cx="16.4" cy="13.2" r="1.3"/>',
-  logout:'<path d="M14.6 7.4V5.6a1.6 1.6 0 0 0-1.6-1.6H5.6A1.6 1.6 0 0 0 4 5.6v12.8A1.6 1.6 0 0 0 5.6 20H13a1.6 1.6 0 0 0 1.6-1.6v-1.8"/><path d="M9.4 12h11M17.4 8.6l3.4 3.4-3.4 3.4"/>',
-  refresh:'<path d="M20.2 11.4A8.2 8.2 0 0 0 6.3 6.7L3.8 9.2"/><path d="M3.8 4.6v4.6h4.6"/><path d="M3.8 12.6a8.2 8.2 0 0 0 13.9 4.7l2.5-2.5"/><path d="M20.2 19.4v-4.6h-4.6"/>',
-  route:'<circle cx="6" cy="18.4" r="2.6"/><circle cx="18" cy="5.6" r="2.6"/><path d="M15.4 5.6H10a3.4 3.4 0 0 0 0 6.8h4a3.4 3.4 0 0 1 0 6.8H8.6"/>',
-  wave:'<path d="M3.4 12c1.5-2.6 3-2.6 4.5 0s3 2.6 4.5 0 3-2.6 4.5 0 2.2 1.9 3.7.5"/><path d="M3.4 17c1.5-2.6 3-2.6 4.5 0s3 2.6 4.5 0 3-2.6 4.5 0 2.2 1.9 3.7.5"/>',
+  home:'<path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+  compass:'<circle cx="12" cy="12" r="10"/><path d="m16.24 7.76-1.804 5.411a2 2 0 0 1-1.265 1.265L7.76 16.24l1.804-5.411a2 2 0 0 1 1.265-1.265z"/>',
+  chat:'<path d="M2.992 16.342a2 2 0 0 1 .094 1.167l-1.065 3.29a1 1 0 0 0 1.236 1.168l3.413-.998a2 2 0 0 1 1.099.092 10 10 0 1 0-4.777-4.719"/>',
+  ticket:'<path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/><path d="M13 5v2"/><path d="M13 17v2"/><path d="M13 11v2"/>',
+  user:'<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
+  search:'<path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/>',
+  bell:'<path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/>',
+  heart:'<path d="M2 9.5a5.5 5.5 0 0 1 9.591-3.676.56.56 0 0 0 .818 0A5.49 5.49 0 0 1 22 9.5c0 2.29-1.5 4-3 5.5l-5.492 5.313a2 2 0 0 1-3 .019L5 15c-1.5-1.5-3-3.2-3-5.5"/>',
+  bookmark:'<path d="M17 3a2 2 0 0 1 2 2v15a1 1 0 0 1-1.496.868l-4.512-2.578a2 2 0 0 0-1.984 0l-4.512 2.578A1 1 0 0 1 5 20V5a2 2 0 0 1 2-2z"/>',
+  plus:'<path d="M5 12h14"/><path d="M12 5v14"/>',
+  close:'<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+  back:'<path d="m15 18-6-6 6-6"/>',
+  fwd:'<path d="m9 18 6-6-6-6"/>',
+  up:'<path d="m18 15-6-6-6 6"/>',
+  down:'<path d="m6 9 6 6 6-6"/>',
+  pin:'<path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/>',
+  cal:'<path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/>',
+  clock:'<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
+  users:'<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><path d="M16 3.128a4 4 0 0 1 0 7.744"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><circle cx="9" cy="7" r="4"/>',
+  userplus:'<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" x2="19" y1="8" y2="14"/><line x1="22" x2="16" y1="11" y2="11"/>',
+  send:'<path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"/><path d="m21.854 2.147-10.94 10.939"/>',
+  check:'<path d="M20 6 9 17l-5-5"/>',
+  checkcirc:'<circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>',
+  slider:'<path d="M10 5H3"/><path d="M12 19H3"/><path d="M14 3v4"/><path d="M16 17v4"/><path d="M21 12h-9"/><path d="M21 19h-5"/><path d="M21 5h-7"/><path d="M8 10v4"/><path d="M8 12H3"/>',
+  sort:'<path d="m21 16-4 4-4-4"/><path d="M17 20V4"/><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/>',
+  share:'<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" x2="15.42" y1="13.51" y2="17.49"/><line x1="15.41" x2="8.59" y1="6.51" y2="10.49"/>',
+  more:'<circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>',
+  gear:'<path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"/><circle cx="12" cy="12" r="3"/>',
+  diamond:'<path d="M10.5 3 8 9l4 13 4-13-2.5-6"/><path d="M17 3a2 2 0 0 1 1.6.8l3 4a2 2 0 0 1 .013 2.382l-7.99 10.986a2 2 0 0 1-3.247 0l-7.99-10.986A2 2 0 0 1 2.4 7.8l2.998-3.997A2 2 0 0 1 7 3z"/><path d="M2 9h20"/>',
+  sparkle:'<path d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"/><path d="M20 2v4"/><path d="M22 4h-4"/><circle cx="4" cy="20" r="2"/>',
+  bolt:'<path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/>',
+  note:'<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>',
+  leaf:'<path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/>',
+  wine:'<path d="M8 22h8"/><path d="M7 10h10"/><path d="M12 15v7"/><path d="M12 15a5 5 0 0 0 5-5c0-2-.5-4-2-8H9c-1.5 4-2 6-2 8a5 5 0 0 0 5 5Z"/>',
+  palette:'<path d="M12 22a1 1 0 0 1 0-20 10 9 0 0 1 10 9 5 5 0 0 1-5 5h-2.25a1.75 1.75 0 0 0-1.4 2.8l.3.4a1.75 1.75 0 0 1-1.4 2.8z"/><circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/>',
+  ball:'<path d="M11 7a16 16 20 0 1 10.98 4.362"/><path d="M12 12a13 13 0 0 1-8.66 5"/><path d="M16.83 13.634a16 16 0 0 1-9.267 7.328"/><path d="M20.66 17A13 13 0 0 0 12 12a13 13 0 0 1 0-10"/><path d="M8.17 15.366a16 16 0 0 1-1.713-11.69"/><circle cx="12" cy="12" r="10"/>',
+  mic:'<path d="M12 19v3"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><rect x="9" y="2" width="6" height="13" rx="3"/>',
+  mask:'<path d="M10 11h.01"/><path d="M14 6h.01"/><path d="M18 6h.01"/><path d="M6.5 13.1h.01"/><path d="M22 5c0 9-4 12-6 12s-6-3-6-12c0-2 2-3 6-3s6 1 6 3"/><path d="M17.4 9.9c-.8.8-2 .8-2.8 0"/><path d="M10.1 7.1C9 7.2 7.7 7.7 6 8.6c-3.5 2-4.7 3.9-3.7 5.6 4.5 7.8 9.5 8.4 11.2 7.4.9-.5 1.9-2.1 1.9-4.7"/><path d="M9.1 16.5c.3-1.1 1.4-1.7 2.4-1.4"/>',
+  bag:'<path d="M16 10a4 4 0 0 1-8 0"/><path d="M3.103 6.034h17.794"/><path d="M3.4 5.467a2 2 0 0 0-.4 1.2V20a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6.667a2 2 0 0 0-.4-1.2l-2-2.667A2 2 0 0 0 17 2H7a2 2 0 0 0-1.6.8z"/>',
+  clapper:'<path d="m12.296 3.464 3.02 3.956"/><path d="M20.2 6 3 11l-.9-2.4c-.3-1.1.3-2.2 1.3-2.5l13.5-4c1.1-.3 2.2.3 2.5 1.3z"/><path d="M3 11h18v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="m6.18 5.276 3.1 3.899"/>',
+  star:'<path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z"/>',
+  tools:'<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.106-3.105c.32-.322.863-.22.983.218a6 6 0 0 1-8.259 7.057l-7.91 7.91a1 1 0 0 1-2.999-3l7.91-7.91a6 6 0 0 1 7.057-8.259c.438.12.54.662.219.984z"/>',
+  mountain:'<path d="m8 3 4 8 5-5 5 15H2L8 3z"/>',
+  shield:'<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>',
+  card:'<rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/>',
+  apple:'<path d="M12 6.528V3a1 1 0 0 1 1-1h0"/><path d="M18.237 21A15 15 0 0 0 22 11a6 6 0 0 0-10-4.472A6 6 0 0 0 2 11a15.1 15.1 0 0 0 3.763 10 3 3 0 0 0 3.648.648 5.5 5.5 0 0 1 5.178 0A3 3 0 0 0 18.237 21"/>',
+  lock:'<rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
+  globe:'<circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/>',
+  eye:'<path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/>',
+  camera:'<path d="M13.997 4a2 2 0 0 1 1.76 1.05l.486.9A2 2 0 0 0 18.003 7H20a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h1.997a2 2 0 0 0 1.759-1.048l.489-.904A2 2 0 0 1 10.004 4z"/><circle cx="12" cy="13" r="3"/>',
+  image:'<rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/>',
+  trash:'<path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',
+  flag:'<path d="M4 22V4a1 1 0 0 1 .4-.8A6 6 0 0 1 8 2c3 0 5 2 7.333 2q2 0 3.067-.8A1 1 0 0 1 20 4v10a1 1 0 0 1-.4.8A6 6 0 0 1 16 16c-3 0-5-2-8-2a6 6 0 0 0-4 1.528"/>',
+  mute:'<path d="M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z"/><line x1="22" x2="16" y1="9" y2="15"/><line x1="16" x2="22" y1="9" y2="15"/>',
+  info:'<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>',
+  qr:'<rect width="5" height="5" x="3" y="3" rx="1"/><rect width="5" height="5" x="16" y="3" rx="1"/><rect width="5" height="5" x="3" y="16" rx="1"/><path d="M21 16h-3a2 2 0 0 0-2 2v3"/><path d="M21 21v.01"/><path d="M12 7v3a2 2 0 0 1-2 2H7"/><path d="M3 12h.01"/><path d="M12 3h.01"/><path d="M12 16v.01"/><path d="M16 12h1"/><path d="M21 12v.01"/><path d="M12 21v-1"/>',
+  wallet:'<path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/>',
+  logout:'<path d="m16 17 5-5-5-5"/><path d="M21 12H9"/><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>',
+  refresh:'<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>',
+  route:'<circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/><circle cx="18" cy="5" r="3"/>',
+  wave:'<path d="M2 10v3"/><path d="M6 6v11"/><path d="M10 3v18"/><path d="M14 8v7"/><path d="M18 5v13"/><path d="M22 10v3"/>',
 };
 
-/* filled variants where a filled shape reads better than a stroke */
-const FILL = { heart: 1, bookmark: 1, star: 1, sparkle: 1, diamond: 0 };
-
+/* 1.75 rather than Lucide's default 2: at the 18–20px these are rendered at, a
+   2px stroke on a 24 grid is heavier than anything Apple ships. */
 export function ico(name, size = 22, cls = '') {
   const d = P[name] || P.sparkle;
   return `<svg class="${cls}" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none"
-    stroke="currentColor" stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round"
+    stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"
     aria-hidden="true">${d}</svg>`;
 }
+
+/* The filled glyph, for the tab you are on. Filling an outline set is only
+   honest for closed shapes — which is every icon the tab bar uses. */
 export function icoFill(name, size = 22, cls = '') {
   const d = P[name] || P.sparkle;
   return `<svg class="${cls}" width="${size}" height="${size}" viewBox="0 0 24 24"
-    fill="currentColor" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"
-    aria-hidden="true">${d}</svg>`;
+    fill="currentColor" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"
+    stroke-linecap="round" aria-hidden="true">${d}</svg>`;
 }
-export const hasIcon = n => !!P[n];
-export { FILL };
 
-/* A verification badge needs two colours: a filled disc and a check knocked out
-   of it. Running the stroke icon through icoFill floods the disc and swallows
-   the check, which is why this is its own shape. */
-export const badge = (size = 14, fill = 'var(--act)', tick = '#0B0A0C') => `
-<svg width="${size}" height="${size}" viewBox="0 0 24 24" aria-hidden="true" style="flex:none">
-  <circle cx="12" cy="12" r="9.4" fill="${fill}"/>
-  <path d="m8.1 12.3 2.6 2.6 5.2-5.6" fill="none" stroke="${tick}"
-        stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/>
-</svg>`;
-
-/* The brand mark, inline, so it never waits on a network round trip. */
-export const markSVG = (size = 34, colour = 'var(--ink)') => `
-<svg width="${size}" height="${size}" viewBox="0 0 1024 1024" aria-hidden="true">
-  <g transform="matrix(0.79929,0,0,-0.79929,188.694,733.403)">
-    <path fill="${colour}" d="M580 235H175Q180 175 217.0 141.0Q254 107 308 107Q386 107 419 174H570Q546 94 478.0 42.5Q410 -9 311 -9Q231 -9 167.5 26.5Q104 62 68.5 127.0Q33 192 33 277Q33 363 68.0 428.0Q103 493 166.0 528.0Q229 563 311 563Q390 563 452.5 529.0Q515 495 549.5 432.5Q584 370 584 289Q584 259 580 235ZM439 329Q438 383 400.0 415.5Q362 448 307 448Q255 448 219.5 416.5Q184 385 176 329Z"/>
-  </g>
-  <circle cx="759.43" cy="683.90" r="49.5" fill="var(--ember)"/>
-</svg>`;
+export const hasIcon = (n) => !!P[n];
 
 /* The house calls these icon()/iconFill(); ico()/icoFill() stay for anything
    still spelling them the old way. */

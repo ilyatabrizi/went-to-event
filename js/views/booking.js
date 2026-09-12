@@ -164,7 +164,7 @@ export function confirm({ id }) {
   <div class="wrap" style="padding-top:8vh">
     <div style="display:grid;justify-items:center;text-align:center;gap:18px">
       <span id="mark" style="width:88px;height:88px;border-radius:50%;display:grid;place-items:center;
-        background:var(--ember-wash);box-shadow:inset 0 0 0 1px var(--ember-line);color:var(--ember)">
+        background:var(--act);color:var(--on-act)">
         ${icon("check", 40)}</span>
       <div>
         <h1 class="display d-2">You are going.</h1>

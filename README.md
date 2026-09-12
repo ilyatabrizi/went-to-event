@@ -5,7 +5,7 @@ good ones, and publish your own in four steps.
 
 **Live:** https://ilyatabrizi.github.io/went-to-event/
 **Local:** `python3 serve.py` → http://localhost:8141
-**Tests:** `python3 e2e.py` → 185 checks + screenshots into `docs/shots/`
+**Tests:** `python3 e2e.py` → 194 checks + screenshots into `docs/shots/`
 
 Built by Alpha Agency. Installable on iOS and Android; works offline once opened.
 
@@ -27,29 +27,44 @@ change is the brand: the palette and the `e.` mark are the client's own.
 | Ink | `#0B0A0C` | 70% | the ground everything sits on |
 | Bone | `#F4F1EC` | 25% | the words, and **every action** |
 | Ash | `#8A848F` | 4% | secondary copy, inactive tabs, hairlines |
-| Ember | `#FF5B3D` | 1% | the one thing in a view that is *live* |
+| Ember | `#FF5B3D` | <1% | states and effects only — see below |
 | Milk | `#F7F2E9` | — | the ticket pass, and nothing else |
 
 **Bone is the action colour.** In a dark room it does the job black does in a
 light app: the primary button, the active tab capsule, the chip you chose.
 
-**Ember is not a second brand colour.** It marks the thing that is actually
-happening — the Tonight pill, the live dot, the pin on the map, the confirm
-mark, the unread badge. Never body copy; it passes contrast for large text and
-graphics only. If two things in a view are Ember, one of them is wrong.
+**Ember is a state and effect colour, and nothing else.** The keyboard focus
+ring, the pulse on a live dot, the press on a save, an unread marker, a
+destructive action, the scan sweep, and the dot in the mark. That is the whole
+list. Nothing that is merely *information* is orange: the Tonight pill is glass
+with Bone type and a single 7px dot, the confirm mark is Bone, the map pin is
+Bone. A whole block of Ember is a block that is wrong. A field focused by touch
+gets a quiet Bone ring, never an orange box — on a phone, every tap into a field
+would otherwise flash the accent colour.
 
 Gold is gone. The previous pass invented it for membership; membership now uses
 Bone, which is what the guidelines already had.
 
 ### Type
 
-Two grotesques, no serif. **Archivo** carries every headline — 700–760 weight with
-tracking that tightens as the size grows — and **Inter** does the small work, where
-it is still the best face on a dark screen. Both are self-hosted variable subsets
-(≈35 KB and ≈48 KB); nothing is fetched from a font CDN.
+**SF Pro**, via `-apple-system`. On an iPhone this app is set in Apple's own
+face — already on the device, optically sized at every step by the browser, and
+the single largest reason an interface reads as native rather than as a web page
+wearing a costume. There is no file to ship and nothing to wait for.
 
-A serif was tried and dropped: it read like a recipe column on a nightlife product,
-and the "e." mark itself is geometric sans.
+**Inter** is the vendored fallback for Android and Windows: the same
+humanist-grotesque skeleton, so nothing moves when it stands in. Archivo is
+gone — at 700+ it was doing the shouting the old headlines leaned on, and that
+is what made them look cheap.
+
+### Icons
+
+**Lucide** (ISC), vendored as raw path data rather than pulled from a package —
+a 24 grid with round caps and joins, which is the geometry iOS's own symbols
+use, at 1.75 rather than Lucide's default 2 because a 2px stroke at 20px is
+heavier than anything Apple ships. The hand-drawn set before it disagreed with
+itself about weight and corner radius, and that disagreement is what reads as
+cheap however carefully each glyph is drawn.
 
 ## The interface
 
@@ -61,9 +76,19 @@ and the "e." mark itself is geometric sans.
   a Bone lens that springs between them and follows a dragged finger, and
   unread dots that live on the bar so they survive every navigation. Reading
   down a long page folds it to the current tab alone; scrolling back, tapping
-  it, or going anywhere opens it again. A short page never folds, and the first
-  tap on a folded bar opens it rather than navigating — otherwise you would be
-  aiming at tabs you cannot see. Ported from KAIRO.
+  it, or going anywhere opens it again. Folded it keeps **Home and You** — the
+  two places you most often want from halfway down a page — plus the tab you are
+  actually on when it is neither; the tabs it drops collapse to nothing rather
+  than sliding away. A short page never folds, and the first tap on a folded bar
+  opens it rather than navigating. Ported from KAIRO.
+- **Chat is built the way iMessage is.** Runs of messages from one person are
+  one block: only the last of a run carries a tail and a time, and the gap
+  inside a run is a third of the gap between them. The list insets its hairline
+  to where the text starts, and an unread is a dot, not a number — the count was
+  never the point.
+- **Anywhere is browsable, not only searchable.** Places you know keep their
+  art, because you recognise a city by its picture faster than by its name; under
+  them every country in the world is a sticky-headed group you can scroll to.
 - **Glass, the iOS way: thin, not frosted.** A small blur, a large saturation
   lift, and a `brightness()` clamp *inside* `backdrop-filter`. The clamp is the
   load-bearing part — it darkens the backdrop itself, which is what lets the
@@ -136,7 +161,7 @@ js/
   views/              home explore chat went profile detail booking
                       create settings pickers
 sw.js                 network-first for app files, cache-first for cover images
-e2e.py                185 checks in real Chrome, screenshots into docs/shots/
+e2e.py                194 checks in real Chrome, screenshots into docs/shots/
 serve.py              local preview on :8141, no-store
 ```
 

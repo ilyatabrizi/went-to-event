@@ -18,15 +18,16 @@ export default function chat() {
   const html = `
   <div class="wrap">
     ${pageTitle("Chat")}
-    <div class="search" style="margin-top:18px">
+    <div class="search" style="margin-top:16px">
       ${icon("search")}
-      <input id="cq" type="search" placeholder="Search messages" aria-label="Search messages" autocomplete="off">
+      <input id="cq" type="search" placeholder="Search" aria-label="Search messages" autocomplete="off">
     </div>
   </div>
 
-  <section class="section wrap">
-    ${list.length ? `<div class="rows" id="clist">${list.map(convoRow).join("")}</div>`
+  <section class="section">
+    ${list.length ? `<div class="chat-list" id="clist">${list.map(convoRow).join("")}</div>`
       : empty("chat", "No messages", "Conversations with people you meet at events land here.")}
+    <p class="chat-note" id="cnone" hidden>No conversations match that.</p>
   </section>`;
 
   return {
@@ -36,30 +37,40 @@ export default function chat() {
     mount(el) {
       lazyImages(el);
       const q = el.querySelector("#cq");
+      const none = el.querySelector("#cnone");
       q?.addEventListener("input", () => {
         const v = q.value.trim().toLowerCase();
+        let shown = 0;
         el.querySelectorAll("#clist [data-user]").forEach((row) => {
           const c = convoOf(row.dataset.user);
           const hay = `${USERS[c.user].name} ${c.msgs.map((m) => m.t).join(" ")}`.toLowerCase();
-          row.hidden = !!v && !hay.includes(v);
+          const hit = !v || hay.includes(v);
+          row.hidden = !hit;
+          if (hit) shown++;
         });
+        none.hidden = shown > 0;
       });
       el.querySelector("#compose")?.addEventListener("click", openCompose);
     },
   };
 }
 
+/* One row, the way iOS builds one: the avatar sets the inset, the hairline
+   starts where the text does, and an unread is a dot rather than a number —
+   the count is not the point, the fact that you have not read it is. */
 function convoRow(c) {
   const last = c.msgs[c.msgs.length - 1];
   return `
-  <a class="row-btn" href="#/thread/${c.user}" data-user="${c.user}">
-    ${avatar(c.user, 46)}
-    <span class="row-copy">
-      <span class="spread"><span class="row-t">${userName(c.user)}</span>
-        <span class="row-s" style="flex:none">${esc(c.ago)}</span></span>
-      <span class="row-s clip">${last.f === "me" ? "You: " : ""}${esc(last.t)}</span>
+  <a class="chat-row" href="#/thread/${c.user}" data-user="${c.user}">
+    <span class="chat-dot${c.unread ? " on" : ""}" aria-hidden="true"></span>
+    ${avatar(c.user, 52)}
+    <span class="chat-body">
+      <span class="chat-top">
+        <span class="chat-name">${userName(c.user)}</span>
+        <span class="chat-when">${esc(c.ago)}${icon("fwd", 14, "chat-chev")}</span>
+      </span>
+      <span class="chat-prev">${last.f === "me" ? "You: " : ""}${esc(last.t)}</span>
     </span>
-    ${c.unread ? `<span class="badge badge-solid" style="min-width:22px;justify-content:center">${c.unread}</span>` : ""}
   </a>`;
 }
 
@@ -74,49 +85,51 @@ export function thread({ key }) {
   const u = USERS[key];
 
   const html = `
-  <div class="wrap" style="padding-top:6px">
-    <div style="display:grid;justify-items:center;text-align:center;gap:10px;padding:8px 0 26px">
-      <a href="#/u/${key}">${avatar(key, 64)}</a>
-      <div><div class="strong" style="font-size:16px">${userName(key)}</div>
-        <div class="small">@${esc(u.handle)}</div></div>
-    </div>
+  <div class="wrap" style="padding-top:4px">
+    <a class="thread-head" href="#/u/${key}">
+      ${avatar(key, 62)}
+      <span class="thread-name">${userName(key)}</span>
+      <span class="thread-handle">@${esc(u.handle)} ${icon("fwd", 13)}</span>
+    </a>
 
-    <div class="stack" id="msgs" style="gap:9px">
-      ${c.msgs.map(bubble).join("")}
-    </div>
+    <div class="bubbles" id="msgs">${render(c.msgs)}</div>
   </div>`;
 
   return {
     html, tabs: false,
     bar: { back: true, title: u.name },
-    dock: `<div class="dock-row">
-      <span class="search" style="flex:1;height:50px">
-        <input id="msg" placeholder="Message ${esc(u.name.split(" ")[0])}" aria-label="Write a message"
-          autocomplete="off"></span>
-      <button class="gbtn" type="button" id="send" style="width:50px;height:50px;background:var(--act);color:var(--on-act);border-color:transparent"
-        aria-label="Send">${icon("send")}</button>
+    dock: `<div class="composer">
+      <input id="msg" placeholder="Message" aria-label="Write a message" autocomplete="off">
+      <button class="send" type="button" id="send" aria-label="Send" disabled>${icon("up", 19)}</button>
     </div>`,
     mount(el) {
       const msgs = el.querySelector("#msgs");
       const input = document.querySelector("#msg");
       const send = document.querySelector("#send");
-      scrollTo({ top: document.body.scrollHeight, behavior: "instant" });
+      const bottom = () => scrollTo({ top: document.body.scrollHeight, behavior: "instant" });
+      bottom();
 
-      const push = (m) => {
-        c.msgs.push(m);
-        msgs.insertAdjacentHTML("beforeend", bubble(m));
-        scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
-      };
+      input?.addEventListener("input", () => { send.disabled = !input.value.trim(); });
+
       const submit = () => {
         const t = (input?.value || "").trim();
         if (!t) return;
-        input.value = "";
+        input.value = ""; send.disabled = true;
         haptic(8);
-        push({ f: "me", t, w: "now" });
-        setTimeout(() => push({
-          f: "them", w: "now",
-          t: "(scripted reply — the preview answers once so the thread is not a dead end)",
-        }), 900);
+        c.msgs.push({ f: "me", t, w: "now" });
+        msgs.innerHTML = render(c.msgs);
+        scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
+        setTimeout(() => {
+          msgs.insertAdjacentHTML("beforeend", `<div class="typing" id="typing">
+            <span></span><span></span><span></span></div>`);
+          scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
+        }, 420);
+        setTimeout(() => {
+          c.msgs.push({ f: "them", w: "now",
+            t: "(a scripted reply — the preview answers once so the thread is not a dead end)" });
+          msgs.innerHTML = render(c.msgs);
+          scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
+        }, 1500);
       };
       send?.addEventListener("click", submit);
       input?.addEventListener("keydown", (e) => { if (e.key === "Enter") submit(); });
@@ -124,28 +137,24 @@ export function thread({ key }) {
   };
 }
 
-const bubble = (m) => `
-  <div style="display:flex;justify-content:${m.f === "me" ? "flex-end" : "flex-start"}">
-    <div style="max-width:78%;padding:11px 15px;border-radius:var(--r-lg);font-size:14.5px;line-height:1.45;
-      ${m.f === "me" ? "background:var(--act);color:var(--on-act);border-bottom-right-radius:8px"
-                     : "background:var(--wash);border-bottom-left-radius:8px"}">
-      ${esc(m.t)}
-      <div style="font-size:10.5px;opacity:.5;margin-top:4px;text-align:right">${esc(m.w)}</div>
-    </div>
-  </div>`;
-
-function openCompose() {
-  const people = Object.keys(USERS).filter((k) => k !== me && !state.blocked[k]);
-  sheet(`
-    <div class="sheet-t">New message</div>
-    <div class="stack" style="gap:2px;padding-bottom:8px">
-      ${people.map((k) => `
-        <a class="row-btn" href="#/thread/${k}" data-close>
-          ${avatar(k, 40)}
-          <span class="row-copy"><span class="row-t" style="font-size:14.5px">${userName(k)}</span>
-            <span class="row-s">@${esc(USERS[k].handle)}</span></span>
-        </a>`).join("")}
-    </div>`, { label: "New message" });
+/* Consecutive messages from one person are one block: only the last of a run
+   carries the tail and the time, and the gap inside a run is a third of the gap
+   between them. That grouping is most of what makes a thread read as a
+   conversation rather than a list of rows. */
+function render(msgs) {
+  return msgs.map((m, i) => {
+    const prev = msgs[i - 1], next = msgs[i + 1];
+    const runStart = !prev || prev.f !== m.f;
+    const runEnd = !next || next.f !== m.f;
+    const cls = [
+      "bub", m.f === "me" ? "mine" : "theirs",
+      runStart ? "start" : "", runEnd ? "end" : "",
+    ].filter(Boolean).join(" ");
+    return `<div class="${cls}">
+      <span class="bub-t">${esc(m.t)}</span>
+      ${runEnd ? `<span class="bub-w">${esc(m.w)}</span>` : ""}
+    </div>`;
+  }).join("");
 }
 
 /* -------------------------------------------------------- notifications */
@@ -186,7 +195,7 @@ function notifRow(n, i) {
     : n.go.to === "premium" ? "#/membership" : "#/you";
   return `
   <a class="row-btn" href="${href}" data-n="${i}">
-    <span class="ico" ${n.unread ? 'style="color:var(--ember)"' : ""}>${icon(n.ic)}</span>
+    <span class="ico" ${n.unread ? 'style="color:var(--ink)"' : ""}>${icon(n.ic)}</span>
     <span class="row-copy">
       <span class="row-t" style="font-size:14.5px;font-weight:${n.unread ? 600 : 500}">
         ${n.user ? `<b>${esc(USERS[n.user]?.name || n.user)}</b> ` : ""}${esc(n.text)}</span>

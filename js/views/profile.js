@@ -174,7 +174,7 @@ export function userProfile({ key }) {
                 ${muted ? "Unmute" : "Mute"}</span>
                 <span class="row-s">Their posts stop showing in your feed.</span></span></button>
             <button class="row-btn" type="button" id="block" style="background:var(--wash)">
-              <span class="ico" style="color:var(--ember-ink)">${icon("shield")}</span>
+              <span class="ico">${icon("shield")}</span>
               <span class="row-copy"><span class="row-t" style="font-size:14.5px;color:var(--ember-ink)">
                 ${blocked ? "Unblock" : "Block"}</span>
                 <span class="row-s">They can no longer message you.</span></span></button>

@@ -279,6 +279,8 @@ def main():
         tap(page, '[data-tab="chat"]', 560)
         check('chat opened', route(page) == '/chat')
         check('conversations listed', count(page, '[data-user]') >= 5)
+        audit(page, 'chat list')
+        shot(page, '09a-chat')
         tap(page, '[data-user="maya"]', 620)
         check('a thread opened', route(page) == '/thread/maya')
         page.fill('#msg', 'on my way')
@@ -391,10 +393,20 @@ def main():
         nav(page, '#/', 560)
         tap(page, '.bar-brand', 700)
         check('the city picker opens', count(page, '.sheet') == 1)
-        check('places are offered as cards', count(page, '.sheet .place') >= 8)
-        check('each carries its own art', count(page, '.sheet .place svg.cover-art') >= 8)
+        check('the places worth suggesting are offered as art',
+              count(page, '.sheet .place') >= 4)
+        check('each carries its own art', count(page, '.sheet .place svg.cover-art') >= 4)
         check('living here vs visiting', count(page, '[data-mode]') == 2)
         check('anywhere is searchable', count(page, '#pq') == 1)
+
+        # The list underneath is the part that makes a country you only
+        # half-remember reachable at all — grouped, with a sticky header each.
+        check('every country is browsable, not just searchable',
+              count(page, '.sheet .pl-group') >= 20)
+        check('and every city is in it',
+              count(page, '.sheet .pl-row') >= 100)
+        check('the country headers stick', page.evaluate(
+            "getComputedStyle(document.querySelector('.sheet .pl-head')).position") == 'sticky')
         shot(page, '15-city')
 
         # search reaches a city that is not on the idle list
@@ -406,7 +418,9 @@ def main():
         check('a dead search says so', has(page, 'No such place', '.sheet'))
         page.fill('#pq', 'new york')
         page.wait_for_timeout(340)
-        tap(page, '.sheet .place', 900)
+        check('a search groups its results by country',
+              count(page, '.sheet .pl-group') >= 1)
+        tap(page, '.sheet .pl-row', 900)
         check('changing city changes the feed', 'New York' in text(page, '#bar'))
 
         tap(page, '.bar-brand', 900)
@@ -414,7 +428,7 @@ def main():
               has(page, 'Recent', '.sheet'))
         page.fill('#pq', 'san franc')
         page.wait_for_timeout(340)
-        tap(page, '.sheet .place', 900)
+        tap(page, '.sheet .pl-row', 900)
         check('and changes back', 'San Francisco' in text(page, '#bar'))
 
         nav(page, '#/notifications', 560)
@@ -568,6 +582,18 @@ def main():
         page.evaluate('scrollTo(0, 760)'); page.wait_for_timeout(900)
         folded = page.evaluate("document.querySelector('#tabbar').classList.contains('min')")
         check('reading down folds the bar', folded)
+        kept = page.evaluate(
+            "[...document.querySelectorAll('#tabs .tab')].filter(t=>t.dataset.keep)"
+            ".map(t=>t.dataset.tab)")
+        check('folded, it keeps Home and You', kept == ['home', 'you'], str(kept))
+        check('and the tabs it drops really take no width', page.evaluate(
+            "[...document.querySelectorAll('#tabs .tab')].filter(t=>!t.dataset.keep)"
+            ".every(t=>t.getBoundingClientRect().width < 1)"))
+        check('the kept tabs sit inside the folded capsule', page.evaluate(
+            "(()=>{const c=document.querySelector('#tabs').getBoundingClientRect();"
+            "return [...document.querySelectorAll('#tabs .tab')].filter(t=>t.dataset.keep)"
+            ".every(t=>{const r=t.getBoundingClientRect();"
+            "return r.left >= c.left - 1 && r.right <= c.right + 1})})()"))
         fold_w = page.evaluate(
             "Math.round(document.querySelector('#tabs').getBoundingClientRect().width)")
         check('the folded bar is genuinely narrower', fold_w < open_w * 0.55,
@@ -585,6 +611,18 @@ def main():
             "Math.round(document.querySelector('#tabs').getBoundingClientRect().width)")
         check('folding twice lands on the same width — it is not re-measuring itself',
               fold_w == fold_w2, f'{fold_w}px then {fold_w2}px')
+
+        # On a tab that is neither Home nor You, that tab survives as well — you
+        # should always be able to see where you are.
+        nav(page, '#/explore', 700)
+        page.evaluate('scrollTo(0, 300)'); page.wait_for_timeout(160)
+        page.evaluate('scrollTo(0, 820)'); page.wait_for_timeout(900)
+        kept3 = page.evaluate(
+            "[...document.querySelectorAll('#tabs .tab')].filter(t=>t.dataset.keep)"
+            ".map(t=>t.dataset.tab)")
+        check('the tab you are on survives the fold too',
+              kept3 == ['home', 'explore', 'you'], str(kept3))
+        page.evaluate('scrollTo(0, 0)'); page.wait_for_timeout(700)
 
         # 4. Going anywhere opens it again, so you never arrive at a folded bar.
         nav(page, '#/explore', 700)

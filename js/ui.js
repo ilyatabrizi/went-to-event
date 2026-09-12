@@ -97,7 +97,12 @@ export function sheet(render, { mount, onClose, label = "Details" } = {}) {
     y0 = null;
   });
 
-  setTimeout(() => focusable()[0]?.focus(), reduced() ? 0 : 460);
+  /* Move focus INTO the sheet without landing it on a control. Focusing the
+     first button made every sheet open wearing a focus ring around its close
+     button — the trap still works, and a screen reader still starts inside the
+     dialog, but nothing is lit up as though you had tabbed to it. */
+  el.tabIndex = -1;
+  setTimeout(() => el.focus({ preventScroll: true }), reduced() ? 0 : 460);
   mount?.(el);
   return el;
 }

@@ -30,9 +30,9 @@ function miniMap(ev) {
     </svg>
     <span style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:grid;place-items:center">
       <span style="position:absolute;width:70px;height:70px;border-radius:50%;
-        background:radial-gradient(circle,rgba(255,91,61,.28),transparent 70%)"></span>
-      <span style="width:15px;height:15px;border-radius:50%;background:var(--ember);
-        box-shadow:0 0 0 4px rgba(255,91,61,.22),0 4px 14px rgba(0,0,0,.6)"></span>
+        background:radial-gradient(circle,rgba(244,241,236,.18),transparent 70%)"></span>
+      <span style="width:14px;height:14px;border-radius:50%;background:var(--act);
+        box-shadow:0 0 0 4px rgba(244,241,236,.16),0 4px 14px rgba(0,0,0,.6)"></span>
     </span>
   </div>`;
 }

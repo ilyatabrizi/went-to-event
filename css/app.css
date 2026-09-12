@@ -5,18 +5,26 @@
    light app. Ember is not a second brand colour — it marks the one thing in a
    view that is actually live, and nothing else.
 
-   70 Ink · 25 Bone · 4 Ash · 1 Ember. The guidelines, kept.
+   70 Ink · 25 Bone · 4 Ash · 1 Ember. The guidelines, kept — and Ember kept
+   tighter still: a STATE and EFFECT colour only. The focus ring, the pulse on a
+   live dot, the press on a save, a destructive action, the scan sweep, and the
+   dot in the mark. Nothing that is merely information is orange; a whole block
+   of Ember is a block that is wrong.
    ========================================================================== */
 
 /* ------------------------------------------------------------------ fonts */
-/* Two grotesques, no serif. A serif title read like a recipe column on a
-   nightlife product; the genre — and the "e." mark itself — is geometric sans.
-   Archivo carries every headline with real weight; Inter does the small work,
-   where it is still the best face on a dark screen. */
-@font-face{font-family:Archivo;src:url(../assets/fonts/archivo.woff2)format("woff2");
-  font-weight:400 800;font-display:swap;font-style:normal}
+/* On an iPhone this app is set in SF Pro — Apple's own face, already on the
+   device, correctly optically sized at every step, and the single largest
+   reason an interface reads as native rather than as a web page wearing a
+   costume. `-apple-system` is how you ask for it; there is no file to ship and
+   nothing to wait for.
+ *
+ * Inter is the fallback for Android and Windows, and it is a good one: the same
+ * humanist-grotesque skeleton, so the layout does not move when it stands in.
+ * Archivo is gone — at 700+ it was doing the shouting that the old headlines
+ * relied on, and shouting is what made them look cheap. */
 @font-face{font-family:InterVar;src:url(../assets/fonts/inter.woff2)format("woff2");
-  font-weight:300 700;font-display:swap;font-style:normal}
+  font-weight:300 800;font-display:swap;font-style:normal}
 
 /* ----------------------------------------------------------------- tokens */
 :root{
@@ -47,8 +55,11 @@
 
   --milk:#F7F2E9;          /* the pass, and only the pass */
 
-  --sans:InterVar,-apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif;
-  --display:Archivo,-apple-system,BlinkMacSystemFont,"SF Pro Display",system-ui,sans-serif;
+  /* SF Pro first, Inter behind it. Text and Display are the same family on
+     Apple — the optical size is chosen by the browser from the rendered size,
+     which is precisely what hand-picking two files cannot do. */
+  --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text",InterVar,system-ui,sans-serif;
+  --display:-apple-system,BlinkMacSystemFont,"SF Pro Display",InterVar,system-ui,sans-serif;
 
   --gutter:20px;
   --shell:448px;
@@ -109,7 +120,7 @@ picture{display:block;min-width:0}
 button,input,textarea,select{font:inherit;color:inherit;margin:0;background:none;border:0}
 button{padding:0;cursor:pointer;-webkit-tap-highlight-color:transparent}
 a{color:inherit;text-decoration:none;-webkit-tap-highlight-color:transparent}
-:focus-visible{outline:2px solid var(--ember);outline-offset:2px;border-radius:8px}
+:focus-visible{outline:2px solid var(--ember);outline-offset:2px;border-radius:10px}
 ::selection{background:var(--ember);color:#fff}
 input,textarea{-webkit-appearance:none;appearance:none;border-radius:0}
 [hidden]{display:none!important}
@@ -146,12 +157,12 @@ input,textarea{-webkit-appearance:none;appearance:none;border-radius:0}
 .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 
 /* ------------------------------------------------------------- typography */
-.title{font-family:var(--display);font-weight:760;font-size:clamp(34px,9.4vw,40px);
+.title{font-family:var(--display);font-weight:700;font-size:clamp(34px,9.4vw,40px);
   will-change:opacity,transform;
   letter-spacing:-.036em;
   line-height:1.02;letter-spacing:-.015em;padding-top:8px}
 .title-sub{margin-top:10px;color:var(--mute);font-size:15px;line-height:1.5;max-width:32ch}
-.display{font-family:var(--display);font-weight:740;line-height:1.06;letter-spacing:-.032em}
+.display{font-family:var(--display);font-weight:700;line-height:1.06;letter-spacing:-.032em}
 .d-2{font-size:clamp(27px,7.4vw,31px)}
 .d-3{font-size:22px}
 .d-4{font-size:18px}
@@ -257,14 +268,15 @@ input,textarea{-webkit-appearance:none;appearance:none;border-radius:0}
   mix-blend-mode:soft-light;opacity:var(--sheen);
 }
 
-/* The row keeps the OPEN bar's width whatever the capsule is doing, so folding
-   clips the tabs instead of squeezing them — and a shrunken tab is never fed
-   back into the measurement. */
+/* Every tab is exactly one fifth of the open bar, in both states. Folding
+   collapses the tabs it drops to zero width rather than squeezing the ones it
+   keeps — so the survivors never move, and nothing measures a tab that is in
+   the middle of shrinking. That was the trap on KAIRO. */
 .tabs-row{
-  position:relative;z-index:1;height:100%;display:grid;grid-template-columns:repeat(5,1fr);
+  position:relative;z-index:1;height:100%;display:flex;
   width:calc(var(--group-w) - var(--tabs-pad) * 2);
-  transform:translateX(var(--row-x,0px));transition:transform .55s var(--spring-soft);
 }
+.tab{flex:0 0 var(--tab-w,20%);min-width:0;overflow:hidden}
 
 /* the Bone capsule under whichever tab you are on */
 .tabs-lens{
@@ -303,8 +315,21 @@ input,textarea{-webkit-appearance:none;appearance:none;border-radius:0}
 .tab[aria-current="page"] .tab-dot{box-shadow:0 0 0 2px var(--act)}
 
 /* folded: the capsule shrinks to the current tab and the rest slide out of it */
-.tabbar.min .tabs{width:calc(var(--min-w,84px) + var(--tabs-pad) * 2)}
-.tabbar.min .tab:not([aria-current="page"]){opacity:0;pointer-events:none}
+/* Folded, the capsule is as wide as the tabs it keeps. Home and You always
+   survive — they are the two places you most often want from halfway down a
+   page — plus the tab you are actually on, when it is neither. */
+.tabbar.min .tabs{width:calc(var(--tab-w) * var(--kept-n,2) + var(--tabs-pad) * 2)}
+/* flex-basis:0 alone is not zero width — the icon and label still push the
+   item out to its min-content size, which shoved the kept tabs past the edge of
+   the folded capsule. min-width:0 on .tab is what actually collapses it. */
+.tabbar.min .tab:not([data-keep]){
+  flex-basis:0;opacity:0;pointer-events:none;
+  transition:flex-basis .42s var(--ease-out),opacity .16s var(--ease-out),
+             transform .3s var(--ease-out);
+  transform:scale(.8);
+}
+.tab{transition:color .25s var(--ease),transform .2s var(--ease-out),
+     opacity .26s var(--ease-out) .1s,flex-basis .46s var(--spring-soft)}
 
 /* --------------------------------------------------------------- the dock */
 /* The single primary action for a screen, riding above the tab bar. */
@@ -377,9 +402,10 @@ input,textarea{-webkit-appearance:none;appearance:none;border-radius:0}
 .dot{width:7px;height:7px;border-radius:50%;background:var(--ember);flex:0 0 auto}
 .dot.off{background:var(--faint)}
 .live{display:inline-flex;align-items:center;gap:7px;padding:7px 13px;
-  border-radius:var(--r-pill);background:var(--ember-wash);
-  box-shadow:inset 0 0 0 1px var(--ember-line);
-  color:var(--ember-ink);font-size:12px;font-weight:600;letter-spacing:.05em;
+  border-radius:var(--r-pill);background:rgba(11,10,12,.34);
+  -webkit-backdrop-filter:var(--glass);backdrop-filter:var(--glass);
+  box-shadow:inset 0 0 0 .5px rgba(244,241,236,.16);
+  color:var(--ink);font-size:12px;font-weight:600;letter-spacing:.05em;
   text-transform:uppercase}
 .live .dot{animation:pulse 2.4s var(--ease) infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
@@ -403,7 +429,13 @@ input,textarea{-webkit-appearance:none;appearance:none;border-radius:0}
 .field input,.field textarea{width:100%;font:400 16px/1.5 var(--sans);color:var(--ink);
   background:var(--wash);border-radius:var(--r-sm);padding:14px 16px;resize:none}
 .field input::placeholder,.field textarea::placeholder{color:var(--faint)}
-.field input:focus,.field textarea:focus{outline:2px solid var(--ember);outline-offset:-2px}
+/* A field focused by TOUCH gets a quiet Bone ring, not an orange box — on a
+   phone every tap into a field would otherwise flash the accent colour. The
+   ember ring is kept for :focus-visible, which is keyboard navigation, where a
+   loud ring is the point. */
+.field input:focus,.field textarea:focus,.search:focus-within,.composer input:focus{
+  outline:none;box-shadow:0 0 0 2px rgba(244,241,236,.24)}
+.composer input:focus{box-shadow:var(--glass-edge),0 0 0 2px rgba(244,241,236,.24)}
 .field-note{font-size:12px;color:var(--faint)}
 
 .search{display:flex;align-items:center;gap:10px;background:var(--wash);
@@ -506,7 +538,7 @@ input,textarea{-webkit-appearance:none;appearance:none;border-radius:0}
 .ev-save:active{transform:scale(.86)}
 .ev-save[aria-pressed="true"]{color:var(--ember)}
 .ev-title{position:absolute;left:16px;right:16px;bottom:14px;z-index:2;
-  font-family:var(--display);font-weight:720;font-size:22px;line-height:1.14;letter-spacing:-.026em;
+  font-family:var(--display);font-weight:650;font-size:22px;line-height:1.14;letter-spacing:-.026em;
   letter-spacing:-.012em;text-shadow:0 1px 14px rgba(11,10,12,.6)}
 .ev-body{padding:14px 16px 16px;display:grid;gap:9px}
 .ev-when{display:flex;align-items:center;gap:7px;font-size:13.5px;color:var(--ink-2)}
@@ -515,7 +547,7 @@ input,textarea{-webkit-appearance:none;appearance:none;border-radius:0}
 .ev-price{font-size:15px;font-weight:600;font-variant-numeric:tabular-nums}
 .ev-why{display:flex;align-items:center;gap:8px;padding:0 4px 10px;
   font-size:13px;color:var(--ink-2)}
-.ev-why svg{width:15px;height:15px;color:var(--ember);flex:none}
+.ev-why svg{width:15px;height:15px;color:var(--mute);flex:none}
 
 /* the compact card used inside rails */
 .ev-sm{width:210px}
@@ -550,7 +582,7 @@ input,textarea{-webkit-appearance:none;appearance:none;border-radius:0}
 .hero .cover::after{background:linear-gradient(180deg,rgba(11,10,12,.52) 0%,
   rgba(11,10,12,.12) 34%,rgba(11,10,12,.88) 82%,var(--paper) 100%)}
 .hero-body{position:relative;z-index:2;display:grid;gap:13px;width:100%}
-.hero-title{font-family:var(--display);font-weight:760;font-size:clamp(31px,8.6vw,38px);
+.hero-title{font-family:var(--display);font-weight:700;font-size:clamp(31px,8.6vw,38px);
   letter-spacing:-.034em;
   line-height:1.04;letter-spacing:-.018em;text-shadow:0 2px 20px rgba(11,10,12,.5)}
 .hero-meta{display:flex;flex-wrap:wrap;gap:8px}
@@ -560,7 +592,7 @@ input,textarea{-webkit-appearance:none;appearance:none;border-radius:0}
 .pass{background:var(--milk);color:#141216;border-radius:var(--r-lg);overflow:hidden;
   box-shadow:var(--shadow-3)}
 .pass-head{padding:20px 22px 16px;display:grid;gap:5px}
-.pass-t{font-family:var(--display);font-weight:740;font-size:23px;line-height:1.12;letter-spacing:-.03em}
+.pass-t{font-family:var(--display);font-weight:700;font-size:23px;line-height:1.12;letter-spacing:-.03em}
 .pass-s{font-size:13.5px;color:#544E59}
 .pass-rip{position:relative;height:22px;display:flex;align-items:center}
 .pass-rip::before,.pass-rip::after{content:"";position:absolute;width:22px;height:22px;
@@ -580,7 +612,7 @@ input,textarea{-webkit-appearance:none;appearance:none;border-radius:0}
 .empty{display:grid;justify-items:center;text-align:center;gap:14px;padding:52px 24px}
 .empty .ico{width:56px;height:56px}
 .empty .ico svg{width:24px;height:24px}
-.empty-t{font-family:var(--display);font-weight:720;font-size:21px;line-height:1.2;letter-spacing:-.026em}
+.empty-t{font-family:var(--display);font-weight:650;font-size:21px;line-height:1.2;letter-spacing:-.026em}
 .empty-s{font-size:14px;color:var(--mute);max-width:30ch;line-height:1.55}
 
 /* Quiet by default. An Ember-washed panel with a warning glyph reads as an
@@ -603,6 +635,119 @@ input,textarea{-webkit-appearance:none;appearance:none;border-radius:0}
   transition:width .4s var(--ease)}
 .step-seg.on i{width:100%}
 
+/* ------------------------------------------------------------------ chat */
+/* The list. The avatar sets the inset and the hairline starts where the text
+   does — the detail that makes an iOS list look like one object rather than a
+   stack of cards. */
+.chat-list{display:grid}
+.chat-row{
+  position:relative;display:flex;align-items:center;gap:12px;
+  padding:10px var(--gutter) 10px 8px;
+  transition:background-color .18s var(--ease);
+}
+.chat-row:active{background:var(--wash)}
+.chat-row + .chat-row::before{
+  content:"";position:absolute;top:0;left:calc(8px + 52px + 12px);right:0;
+  height:.5px;background:var(--line);
+}
+.chat-dot{width:9px;height:9px;border-radius:50%;flex:none;background:transparent}
+.chat-dot.on{background:var(--ember)}
+.chat-body{flex:1;min-width:0;display:grid;gap:2px}
+.chat-top{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+.chat-name{font-size:16px;font-weight:600;letter-spacing:-.015em;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chat-when{display:flex;align-items:center;gap:2px;flex:none;
+  font-size:13px;color:var(--faint)}
+.chat-chev{color:var(--faint);opacity:.7;margin-right:-4px}
+.chat-prev{font-size:14.5px;line-height:1.35;color:var(--mute);
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.chat-note{padding:30px var(--gutter);text-align:center;color:var(--mute);font-size:14px}
+
+/* The thread head — tapping it is how you get to the profile, so it says so. */
+.thread-head{display:grid;justify-items:center;text-align:center;gap:7px;padding:10px 0 28px}
+.thread-name{font-size:17px;font-weight:600;letter-spacing:-.018em}
+.thread-handle{display:flex;align-items:center;gap:3px;font-size:13.5px;color:var(--mute)}
+.thread-handle svg{opacity:.7}
+
+/* Bubbles. 20px radius, 4px where a run continues — the corner that makes a
+   group read as one block. */
+.bubbles{display:grid;gap:2px;padding-bottom:8px}
+.bub{
+  position:relative;max-width:78%;padding:9px 14px 9px;border-radius:20px;
+  font-size:15.5px;line-height:1.38;letter-spacing:-.01em;width:fit-content;
+  animation:bub-in .32s var(--spring-soft) backwards;
+}
+@keyframes bub-in{from{opacity:0;transform:translateY(6px) scale(.97)}}
+.bub.mine{margin-left:auto;background:var(--act);color:var(--on-act)}
+.bub.theirs{margin-right:auto;background:var(--wash);color:var(--ink)}
+.bub.mine:not(.start){border-top-right-radius:5px}
+.bub.mine:not(.end){border-bottom-right-radius:5px}
+.bub.theirs:not(.start){border-top-left-radius:5px}
+.bub.theirs:not(.end){border-bottom-left-radius:5px}
+.bub.end{margin-bottom:12px}
+.bub-w{display:block;margin-top:3px;font-size:10.5px;line-height:1;opacity:.45;
+  text-align:right;font-variant-numeric:tabular-nums}
+.bub.theirs .bub-w{text-align:left}
+
+/* they are writing */
+.typing{display:flex;gap:4px;align-items:center;width:fit-content;margin-right:auto;
+  padding:13px 16px;border-radius:20px;background:var(--wash);margin-bottom:12px;
+  animation:bub-in .3s var(--spring-soft) backwards}
+.typing span{width:7px;height:7px;border-radius:50%;background:var(--mute);
+  animation:typing 1.25s var(--ease) infinite}
+.typing span:nth-child(2){animation-delay:.16s}
+.typing span:nth-child(3){animation-delay:.32s}
+@keyframes typing{0%,60%,100%{opacity:.3;transform:translateY(0)}
+  30%{opacity:1;transform:translateY(-3px)}}
+
+/* the composer */
+.composer{display:flex;align-items:flex-end;gap:9px}
+.composer input{
+  flex:1;min-width:0;height:46px;padding:0 18px;border-radius:var(--r-pill);
+  font:400 16px/1 var(--sans);color:var(--ink);
+  background:var(--glass-bg);
+  -webkit-backdrop-filter:var(--glass-strong);backdrop-filter:var(--glass-strong);
+  box-shadow:var(--glass-edge);
+}
+.composer input::placeholder{color:var(--faint)}
+.composer .send{
+  width:46px;height:46px;flex:none;display:grid;place-items:center;border-radius:50%;
+  background:var(--act);color:var(--on-act);
+  transition:transform .2s var(--spring),opacity .2s var(--ease),background-color .2s;
+}
+.composer .send:active{transform:scale(.9)}
+.composer .send[disabled]{opacity:.32;transform:scale(.88);pointer-events:none}
+
+/* ------------------------------------------------------- the place picker */
+/* A long list with sticky country headers — the iOS pattern for anything you
+   scroll rather than search, and the reason you can now reach a country you
+   only half-remember the name of. */
+.pl-count{font-size:13px;color:var(--mute);padding:2px 2px 12px}
+.pl-group{margin-bottom:18px}
+.pl-head{
+  position:sticky;top:0;z-index:3;
+  padding:7px 4px;margin-bottom:6px;
+  font-size:12px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;
+  color:var(--mute);
+  background:rgba(22,20,26,.72);
+  -webkit-backdrop-filter:var(--glass);backdrop-filter:var(--glass);
+}
+.pl-rows{background:var(--wash);border-radius:var(--r-md);overflow:hidden}
+.pl-row{
+  position:relative;display:flex;align-items:center;gap:10px;width:100%;text-align:left;
+  padding:13px 14px;transition:background-color .16s var(--ease);
+}
+.pl-row:active{background:rgba(244,241,236,.07)}
+.pl-row + .pl-row::before{
+  content:"";position:absolute;top:0;left:14px;right:0;height:.5px;background:var(--line-2);
+}
+.pl-city{flex:1;min-width:0;font-size:15.5px;font-weight:500;letter-spacing:-.012em;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pl-n{flex:none;font-size:13px;color:var(--faint);font-variant-numeric:tabular-nums}
+.pl-go{flex:none;color:var(--faint);opacity:.6;display:grid;place-items:center}
+.pl-on{flex:none;color:var(--ink);display:grid;place-items:center}
+.pl-row[aria-pressed="true"] .pl-city{font-weight:650}
+
 /* ---------------------------------------------------------------- sheets */
 .scrim{position:fixed;inset:0;z-index:80;background:rgba(0,0,0,.42);opacity:0;
   transition:opacity .34s var(--ease);
@@ -619,11 +764,12 @@ input,textarea{-webkit-appearance:none;appearance:none;border-radius:0}
   transition:transform .44s var(--spring);-webkit-overflow-scrolling:touch;
 }
 .sheet.in{transform:translateX(-50%) translateY(0)}
+.sheet:focus{outline:none}
 .grab{position:sticky;top:0;z-index:2;height:26px;display:grid;place-items:center;
   background:var(--card);margin-inline:calc(var(--gutter) * -1)}
 .grab::after{content:"";width:38px;height:4px;border-radius:2px;background:var(--line);
   box-shadow:0 0 0 1px rgba(0,0,0,.2)}
-.sheet-t{font-family:var(--display);font-weight:730;font-size:21px;line-height:1.16;
+.sheet-t{font-family:var(--display);font-weight:650;font-size:21px;line-height:1.16;
   letter-spacing:-.028em;padding:4px 0 14px}
 
 /* ---------------------------------------------------------------- toasts */
@@ -637,7 +783,7 @@ input,textarea{-webkit-appearance:none;appearance:none;border-radius:0}
   -webkit-backdrop-filter:var(--glass-strong);backdrop-filter:var(--glass-strong);
   box-shadow:var(--glass-edge),var(--glass-shadow);
   animation:toast-in .4s var(--spring) backwards}
-.toast svg{width:16px;height:16px;color:var(--ember);flex:none}
+.toast svg{width:16px;height:16px;color:var(--ink);flex:none}
 .toast.out{animation:toast-out .3s var(--ease) both}
 @keyframes toast-in{from{opacity:0;transform:translateY(14px) scale(.96)}}
 @keyframes toast-out{to{opacity:0;transform:translateY(8px) scale(.98)}}
@@ -685,19 +831,19 @@ input,textarea{-webkit-appearance:none;appearance:none;border-radius:0}
 /* ------------------------------------------------------------ place picker */
 /* Tall by default: choosing a city is a task, not a confirmation, and a sheet
    that shows four rows makes you scroll to do it. */
-.sheet-tall{height:88svh;display:flex;flex-direction:column}
+.sheet-tall{height:92svh;display:flex;flex-direction:column}
 .sheet-tall .place-body-wrap{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;
   margin:16px -4px 0;padding:0 4px 8px;overscroll-behavior:contain}
-.place-foot{padding-top:14px;border-top:1px solid var(--line);margin-top:12px;flex:none}
+.place-foot{padding-top:12px;border-top:.5px solid var(--line);margin-top:10px;flex:none}
 
 .place-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
 .place{
   position:relative;border-radius:var(--r-md);overflow:hidden;text-align:left;
-  aspect-ratio:5/3.1;border:1px solid var(--line);background:var(--card);
+  aspect-ratio:5/2.6;border:1px solid var(--line);background:var(--card);
   transition:transform .14s var(--ease),border-color .2s var(--ease);
 }
 .place:active{transform:scale(.965)}
-.place[aria-pressed="true"]{border-color:var(--ember-line)}
+.place[aria-pressed="true"]{border-color:rgba(244,241,236,.34)}
 .place-art{position:absolute;inset:0}
 .place-art svg{position:absolute;inset:0;width:100%;height:100%}
 .place-body{position:absolute;left:12px;right:12px;bottom:10px;display:grid;gap:2px}
@@ -705,7 +851,7 @@ input,textarea{-webkit-appearance:none;appearance:none;border-radius:0}
   line-height:1.15;color:var(--ink)}
 .place-meta{font-size:11.5px;color:var(--ink-2);opacity:.78;letter-spacing:.02em}
 .place-on{position:absolute;top:9px;right:9px;width:24px;height:24px;border-radius:50%;
-  display:grid;place-items:center;background:var(--ember);color:#1A0703}
+  display:grid;place-items:center;background:var(--act);color:var(--on-act)}
 .place-none{padding:44px 8px;text-align:center}
 
 
@@ -766,7 +912,7 @@ input,textarea{-webkit-appearance:none;appearance:none;border-radius:0}
 .vz-bl{bottom:24px;left:26px;border-right:0;border-top:0;border-radius:0 0 0 8px}
 .vz-br{bottom:24px;right:26px;border-left:0;border-top:0;border-radius:0 0 8px 0}
 .vz[data-state="busy"] .vz-c{border-color:var(--ink-2)}
-.vz[data-state="ok"] .vz-c{border-color:var(--ember);transform:scale(1.12)}
+.vz[data-state="ok"] .vz-c{border-color:var(--act);transform:scale(1.12)}
 
 /* the scan line, which only exists while something is being read */
 .vz-scan{position:absolute;left:8%;right:8%;height:2px;border-radius:2px;opacity:0;
@@ -780,7 +926,7 @@ input,textarea{-webkit-appearance:none;appearance:none;border-radius:0}
   border:2.5px dashed rgba(138,132,143,.6);
   transition:border-color .3s var(--ease),transform .4s var(--spring)}
 .vz[data-state="busy"] .vz-oval{border-style:solid;border-color:var(--ink-2)}
-.vz[data-state="ok"] .vz-oval{border-style:solid;border-color:var(--ember);transform:scale(1.04)}
+.vz[data-state="ok"] .vz-oval{border-style:solid;border-color:var(--act);transform:scale(1.04)}
 .vz-sweep{position:absolute;inset:0;opacity:0;
   background:conic-gradient(from 0deg,transparent 0 78%,rgba(255,91,61,.5) 92%,transparent 100%)}
 .vz[data-state="busy"] .vz-sweep{opacity:1;animation:vz-spin 1.5s linear 1}
@@ -797,11 +943,11 @@ input,textarea{-webkit-appearance:none;appearance:none;border-radius:0}
   animation:vz-pop .6s var(--spring) both}
 @keyframes vz-pop{from{opacity:0;transform:scale(.8)}}
 .vz-badge{position:absolute;right:-2px;bottom:-2px;width:34px;height:34px;border-radius:50%;
-  display:grid;place-items:center;background:var(--ember);color:#1A0703;
+  display:grid;place-items:center;background:var(--act);color:var(--on-act);
   box-shadow:0 0 0 4px var(--paper);
   animation:vz-pop .5s var(--spring) .28s both}
 .vz-spin{width:54px;height:54px;border-radius:50%;
-  border:3px solid var(--wash);border-top-color:var(--ember);
+  border:3px solid var(--wash);border-top-color:var(--act);
   animation:vz-spin 1s linear infinite}
 
 @media (prefers-reduced-motion:reduce){

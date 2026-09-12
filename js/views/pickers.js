@@ -49,11 +49,42 @@ export function openCityPicker() {
       </button>`;
   };
 
+  /* A grouped list, the way iOS lists anything long: a sticky country header,
+     then its cities. It is the part the old sheet was missing — searching works
+     only if you already know the name of the place you want, and browsing to a
+     country you half-remember was impossible. */
+  const rowFor = (p) => {
+    const n = eventsForCity(p.city).length;
+    const on = p.ci === state.country && p.i === state.cityIdx;
+    return `
+      <button class="pl-row" type="button" data-ci="${p.ci}" data-i="${p.i}"
+        aria-pressed="${on}" aria-label="${esc(p.city)}, ${esc(p.country)}">
+        <span class="pl-city">${esc(p.city)}</span>
+        <span class="pl-n">${n}</span>
+        ${on ? `<span class="pl-on">${icon("check", 15)}</span>`
+             : `<span class="pl-go">${icon("fwd", 15)}</span>`}
+      </button>`;
+  };
+
+  const groups = (places) => {
+    const by = new Map();
+    places.forEach((p) => {
+      if (!by.has(p.country)) by.set(p.country, []);
+      by.get(p.country).push(p);
+    });
+    return [...by.entries()].sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([country, ps]) => `
+        <div class="pl-group">
+          <div class="pl-head">${esc(country)}</div>
+          <div class="pl-rows">${ps.map(rowFor).join("")}</div>
+        </div>`).join("");
+  };
+
   const results = () => {
     const t = q.trim().toLowerCase();
     if (!t) return null;
     return PLACES.filter((p) =>
-      p.city.toLowerCase().includes(t) || p.country.toLowerCase().includes(t)).slice(0, 24);
+      p.city.toLowerCase().includes(t) || p.country.toLowerCase().includes(t));
   };
 
   const body = () => {
@@ -61,7 +92,8 @@ export function openCityPicker() {
 
     if (found) {
       return found.length
-        ? `<div class="place-grid">${found.map(card).join("")}</div>`
+        ? `<div class="pl-count">${found.length} ${found.length === 1 ? "place" : "places"}</div>
+           ${groups(found)}`
         : `<div class="place-none">
              <div class="empty-t" style="font-size:18px">No such place</div>
              <p class="small" style="margin-top:6px">Nothing matches “${esc(q.trim())}”.
@@ -69,13 +101,14 @@ export function openCityPicker() {
            </div>`;
     }
 
-    /* Idle: where you have been, then the cities with the most on. */
+    /* Idle: where you have been gets the art, because you recognise a place you
+       know by its picture faster than by its name. Everything else is the list. */
     const recents = (state.recentCities || [])
       .map((name) => PLACES.find((p) => p.city === name)).filter(Boolean).slice(0, 4);
     const busiest = PLACES
       .filter((p) => !recents.some((r) => r.city === p.city))
       .map((p) => ({ p, n: eventsForCity(p.city).length }))
-      .sort((a, b) => b.n - a.n).slice(0, 10).map((x) => x.p);
+      .sort((a, b) => b.n - a.n).slice(0, 6).map((x) => x.p);
 
     return `
       ${recents.length ? `
@@ -83,7 +116,9 @@ export function openCityPicker() {
         <div class="place-grid">${recents.map(card).join("")}</div>` : ""}
       <span class="label rows-label" style="${recents.length ? "margin-top:22px;display:block" : ""}">
         ${recents.length ? "Busiest right now" : "Where the most is on"}</span>
-      <div class="place-grid">${busiest.map(card).join("")}</div>`;
+      <div class="place-grid">${busiest.map(card).join("")}</div>
+      <span class="label rows-label" style="margin-top:24px;display:block">Every city</span>
+      ${groups(PLACES)}`;
   };
 
   const render = () => `
@@ -117,6 +152,9 @@ export function openCityPicker() {
       el.classList.add("sheet-tall");
       const input = el.querySelector("#pq");
       const pbody = el.querySelector("#pbody");
+      /* The sheet exists to find a place, so the keyboard is up for it — but
+         not on a touch device, where it would cover the list you came to read. */
+      if (!matchMedia("(pointer: coarse)").matches) setTimeout(() => input.focus(), 480);
 
       let t = 0;
       input.addEventListener("input", () => {

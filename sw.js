@@ -9,7 +9,7 @@
    There is nothing else. Cover art is generated SVG, avatars are generated, and
    the two fonts are ours — so the whole app is same-origin and one cache. */
 
-const V = 'wte-v4';
+const V = 'wte-v5';
 const IMGS = 'wte-img-v2';
 const MARK = '__wte_install_kind__';
 
@@ -21,9 +21,9 @@ const SHELL = [
   './js/views/booking.js', './js/views/chat.js', './js/views/create.js',
   './js/views/detail.js', './js/views/explore.js', './js/views/home.js',
   './js/views/pickers.js', './js/views/profile.js', './js/views/settings.js',
-  './js/views/verify.js', './js/views/went.js', './assets/fonts/archivo.woff2',
-  './assets/fonts/inter.woff2', './assets/icons/favicon_192.png',
-  './assets/icons/favicon_512.png', './assets/icons/apple-touch-icon.png'
+  './js/views/verify.js', './js/views/went.js', './assets/fonts/inter.woff2',
+  './assets/icons/favicon_192.png', './assets/icons/favicon_512.png',
+  './assets/icons/apple-touch-icon.png'
 ];
 
 self.addEventListener('install', e => {
