@@ -27,15 +27,15 @@ export async function promptInstall() {
   }
   /* iOS: no API exists, so show the two taps it actually takes. */
   sheet(`
-    <div class="sheet-t">Add to your home screen</div>
-    <div class="stack" style="gap:14px">
-      <div class="row"><span class="ico">${icon("share")}</span>
-        <span class="row-copy"><span class="row-t">Tap Share</span>
-          <span class="row-s">The square with an arrow, in Safari’s bar.</span></span></div>
-      <div class="row"><span class="ico">${icon("plus")}</span>
-        <span class="row-copy"><span class="row-t">Add to Home Screen</span>
-          <span class="row-s">It opens full screen after that, like an app.</span></span></div>
-      <button class="btn btn-soft" data-close style="margin-top:6px">Got it</button>
+    <div class="sheet-t t-2">Add to your home screen</div>
+    <div class="stack">
+      <div class="row"><span class="mark mark--3">${icon("share")}</span>
+        <span class="row-copy"><span class="t-4 w-600">Tap Share</span>
+          <span class="t-5 c-ash">The square with an arrow, in Safari’s bar.</span></span></div>
+      <div class="row"><span class="mark mark--3">${icon("plus")}</span>
+        <span class="row-copy"><span class="t-4 w-600">Add to Home Screen</span>
+          <span class="t-5 c-ash">It opens full screen after that, like an app.</span></span></div>
+      <button class="btn btn--quiet btn--block t-4 w-600 s5" data-close>Got it</button>
     </div>`, { label: "How to install" });
   state.installDismissed = true; save();
   return false;

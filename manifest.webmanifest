@@ -1,7 +1,7 @@
 {
   "name": "Went To Event",
   "short_name": "Went To Event",
-  "description": "What is on near you, and who is going. Join in two taps, or publish your own in four steps.",
+  "description": "What is on near you. Join in two taps, keep a record, publish your own.",
   "id": "/went-to-event/",
   "start_url": "./",
   "scope": "./",
@@ -40,18 +40,7 @@
   ],
   "shortcuts": [
     {
-      "name": "Explore",
-      "short_name": "Explore",
-      "url": "./?go=explore",
-      "icons": [
-        {
-          "src": "assets/icons/favicon_192.png",
-          "sizes": "192x192"
-        }
-      ]
-    },
-    {
-      "name": "Events you went to",
+      "name": "Went",
       "short_name": "Went",
       "url": "./?go=went",
       "icons": [
@@ -64,7 +53,7 @@
     {
       "name": "Publish an event",
       "short_name": "Publish",
-      "url": "./?go=create",
+      "url": "./?go=publish",
       "icons": [
         {
           "src": "assets/icons/favicon_192.png",

@@ -72,27 +72,25 @@ const P = {
   wave:'<path d="M2 10v3"/><path d="M6 6v11"/><path d="M10 3v18"/><path d="M14 8v7"/><path d="M18 5v13"/><path d="M22 10v3"/>',
 };
 
-/* 1.75 rather than Lucide's default 2: at the 18–20px these are rendered at, a
-   2px stroke on a 24 grid is heavier than anything Apple ships. */
-export function ico(name, size = 22, cls = '') {
+/* THE STROKE IS DERIVED FROM THE RENDERED SIZE, so optical weight holds at
+   ~1.4 CSS px at every size: stroke = 33.6 / rendered_px → 16:2.1 20:1.7 24:1.4.
+   One fixed 1.75 drawn at nine sizes made effective stroke vary 2x, and made
+   the smallest and most frequent icons the thinnest. */
+export function ico(name, size = 20, cls = '') {
   const d = P[name] || P.sparkle;
+  const w = (33.6 / size).toFixed(2);
   return `<svg class="${cls}" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none"
-    stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"
+    stroke="currentColor" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round"
     aria-hidden="true">${d}</svg>`;
 }
 
-/* The filled glyph, for the tab you are on. Filling an outline set is only
-   honest for closed shapes — which is every icon the tab bar uses. */
-export function icoFill(name, size = 22, cls = '') {
-  const d = P[name] || P.sparkle;
-  return `<svg class="${cls}" width="${size}" height="${size}" viewBox="0 0 24 24"
-    fill="currentColor" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"
-    stroke-linecap="round" aria-hidden="true">${d}</svg>`;
-}
+/* icoFill is DELETED. It applied fill='currentColor' to every subpath, which
+   floods a compass's r=10 circle into a solid disc and destroys four of five
+   active tab glyphs. The active tab is carried by colour alone — 17.54:1
+   against 5.44:1 is a bigger signal than a fill. */
 
 export const hasIcon = (n) => !!P[n];
 
 /* The house calls these icon()/iconFill(); ico()/icoFill() stay for anything
    still spelling them the old way. */
 export const icon = ico;
-export const iconFill = icoFill;

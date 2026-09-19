@@ -1,43 +1,35 @@
-/* State, what survives a reload, and a way for the chrome to keep up with it. */
+/* State, what survives a reload, and a way for the shell to keep up with it.
+ *
+ * Everything the audit found unread is gone: `sound` (nothing read it, and its
+ * one control was labelled "Show me on events I join"), `member`, `verified`,
+ * `notif`, `blocked`, `muted`, `privateAcct`, `posts`, `followingUsers` and
+ * `homeFeed`. `haptics` is the one settings flag any code reads. */
 
-import { CONVOS, NOTIFS, POSTS, ME } from "./data/people.js";
+import { byId } from "./data/events.js";
 
-const KEY = "wte.v2";
+const KEY = "wte.v3";
 
-/* Deliberately not the whole state — a demo should reopen where you left it,
-   not halfway through a checkout. */
-const PERSIST = ["country", "cityIdx", "visiting", "saved", "followingUsers", "followingHosts",
-                 "member", "posts", "myTickets", "blocked", "muted", "notif", "sound",
-                 "haptics", "privateAcct", "homeFeed", "installDismissed",
-                 "recentCities", "verified", "verifyStep"];
+const PERSIST = ["country", "cityIdx", "saved", "followingHosts", "myTickets",
+                 "published", "haptics", "recentCities", "seeded"];
 
 export const state = {
   /* place */
-  country: 0, cityIdx: 0, visiting: false, recentCities: [],
+  country: 0, cityIdx: 0,
 
-  /* identity — a verified account is the badge hosts look for */
-  verified: false, verifyStep: 0,
+  /* search and filters */
+  query: "", cat: null, whenIdx: 0, priceIdx: 0, sortIdx: 0, focusSearch: false,
 
-  /* explore */
-  query: "", cat: null, whenIdx: 0, priceIdx: 0, sortIdx: 0,
-
-  /* selection + flows */
-  eventId: 1, tierIdx: 0, qty: 1, methodIdx: 0,
-  homeFeed: "foryou", wentTab: "upcoming", profileTab: "posts",
-  threadUser: null, profileUser: null, publishedId: null,
+  /* selection */
+  eventId: 1, tierIdx: 0, publishedId: null, create: null,
 
   /* the person */
   saved: [7, 3],
-  followingUsers: { maya: true, theo: true, jules: true, kenji: true },
-  followingHosts: { "Substrata Collective": true, "The Assembly": true, "Ridgeline Run Club": true },
-  blocked: {}, muted: {},
-  member: false, privateAcct: false,
-  posts: [], myTickets: [],
-  notif: { starting: true, friends: true, hosts: false, messages: true, drops: false },
-  sound: true, haptics: true, installDismissed: false,
-
-  /* drafts */
-  create: null, composeText: "", draftPhoto: null,
+  followingHosts: { "Substrata Collective": true },
+  myTickets: [],
+  published: [],
+  haptics: true,
+  recentCities: [],
+  seeded: false,
 };
 
 export function load() {
@@ -49,9 +41,20 @@ export function load() {
   } catch {}
 }
 
-/* ------------------------------------------------------------ subscribers */
-/* The bars and the dock have to stay in step with state no matter which view
-   is on screen. They subscribe once; everything that mutates calls save(). */
+/* Went is the tab the product is named after; opening it to an empty screen is
+   the worst first impression in the app. Two upcoming and two past, written
+   once, with real dayOffsets so past is DERIVED and not a flag. */
+function seed() {
+  if (state.seeded) return;
+  state.seeded = true;
+  state.myTickets = [
+    { eventId: 1,  tier: 0, qty: 2, dayOffset: 0 },
+    { eventId: 4,  tier: 0, qty: 1, dayOffset: 5 },
+    { eventId: 7,  tier: 0, qty: 2, dayOffset: -4 },
+    { eventId: 12, tier: 0, qty: 1, dayOffset: -11 },
+  ];
+}
+
 const subs = new Set();
 export const subscribe = (fn) => { subs.add(fn); fn(); return () => subs.delete(fn); };
 export const emit = () => subs.forEach((fn) => fn());
@@ -75,21 +78,7 @@ export function reset() {
   location.reload();
 }
 
-/* Runtime collections — mutated, never persisted, so the demo data stays
-   pristine for whoever opens the link next. */
-export const convos = CONVOS.map((c) => ({ ...c, msgs: c.msgs.slice() }));
-export const notifs = NOTIFS.map((n) => ({ ...n }));
-
-export const me = ME;
-export const isMember = (key) => (key === ME ? state.member : false);
-
-export const unreadChats = () =>
-  convos.reduce((a, c) => a + (c.unread && !state.blocked[c.user] ? 1 : 0), 0);
-export const unreadNotifs = () => notifs.filter((n) => n.unread).length;
-export const convoOf = (key) => convos.find((c) => c.user === key);
-
-export const allPosts = () => state.posts.concat(POSTS)
-  .filter((p) => !state.blocked[p.author] && !state.muted[p.author]);
+export const me = "ava";
 
 export const isSaved = (id) => state.saved.includes(id);
 export function toggleSave(id) {
@@ -97,14 +86,6 @@ export function toggleSave(id) {
   if (i > -1) state.saved.splice(i, 1); else state.saved.unshift(id);
   save();
   return i === -1;
-}
-
-export const isFollowing = (key) => !!state.followingUsers[key];
-export function toggleFollow(key) {
-  if (state.followingUsers[key]) delete state.followingUsers[key];
-  else state.followingUsers[key] = true;
-  save();
-  return !!state.followingUsers[key];
 }
 
 export const followsHost = (name) => !!state.followingHosts[name];
@@ -115,6 +96,13 @@ export function toggleHost(name) {
   return !!state.followingHosts[name];
 }
 
-export const ticketCount = () => state.myTickets.filter((t) => !t.past).length;
+/* Do you already hold a ticket to this? The dock reads it, and it is why a
+   commit never needs a confirmation screen. */
+export const holds = (eventId) => state.myTickets.some((t) => t.eventId === eventId);
 
 load();
+seed();
+
+/* events.js imports geo, util and people — never this file — so a direct
+   import here is acyclic. */
+export const myEvents = () => state.published.map(byId).filter(Boolean);
