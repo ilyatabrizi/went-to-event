@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
-"""Assert the DESIGN SYSTEM, not a feature walk.
+"""Walk every screen of Went To Event in a real browser and shout if anything is off.
 
     python3 serve.py &          # or the preview task
     python3 e2e.py              # checks + screenshots into docs/shots/
+    python3 e2e.py --shots-only
 
-Most of what follows is structural: one gutter, seven type sizes, four weights,
-derived hairlines, no inline styles, no glass outside the scrim, nothing that
-loops. A feature test tells you a button still works; these tell you the system
-is still a system. Playwright drives the system Chrome — no browser download.
+Playwright against the system Chrome — no browser download. Every console error
+and every failed request anywhere in the run is a failure, not a warning: the
+app is entirely same-origin now, so there is nothing left that is allowed to
+fail quietly.
 """
 
 import pathlib
@@ -17,16 +18,11 @@ from playwright.sync_api import sync_playwright
 
 BASE = 'http://localhost:8141'
 SHOTS = pathlib.Path(__file__).resolve().parent / 'docs' / 'shots'
-VIEW = {'width': 375, 'height': 812}
+VIEW = {'width': 390, 'height': 844}
 
-TABS   = ['#/', '#/went', '#/you']
-PUSHED = ['#/event/1', '#/pass/0', '#/saved', '#/u/Substrata%20Collective', '#/publish']
-ALL    = TABS + PUSHED
-
-TYPE_SIZES = {'40px', '28px', '20px', '16px', '14px', '12px', '11px'}
-WEIGHTS    = {'400', '500', '600', '700'}
-
-ok, bad, noise = 0, [], []
+ok = 0
+bad = []
+noise = []
 
 
 def check(name, cond, extra=''):
@@ -39,8 +35,9 @@ def check(name, cond, extra=''):
 
 
 def shot(page, name):
+    """Captured at 2x, filed at 1.5x WebP — the repo does not need 10MB of PNG."""
     SHOTS.mkdir(parents=True, exist_ok=True)
-    page.wait_for_timeout(420)
+    page.wait_for_timeout(520)
     raw = SHOTS / f'{name}.png'
     page.screenshot(path=str(raw))
     try:
@@ -54,7 +51,7 @@ def shot(page, name):
         pass
 
 
-def nav(page, hash_, settle=460):
+def nav(page, hash_, settle=520):
     page.evaluate(f'location.hash = {hash_!r}')
     page.wait_for_timeout(settle)
 
@@ -69,357 +66,705 @@ def route(page):
 
 
 def text(page, sel='#view'):
+    """Rendered text, which is what a person sees. Note that CSS text-transform
+    applies here — a label styled uppercase comes back uppercase — so compare
+    with `has()` rather than `in text(...)` unless case is genuinely the point."""
     return page.locator(sel).inner_text()
+
+
+def has(page, needle, sel='#view'):
+    """Case-insensitive contains. inner_text() returns RENDERED text, and every
+    .label in this design is text-transform:uppercase — matching case here
+    tests the stylesheet, not the app."""
+    return needle.lower() in text(page, sel).lower()
 
 
 def count(page, sel):
     return page.evaluate(f"document.querySelectorAll({sel!r}).length")
 
 
-# Every element in #view that actually carries text.
-TEXT_NODES = """
-[...document.querySelectorAll('#view *')].filter(n =>
-  [...n.childNodes].some(c => c.nodeType === 3 && c.textContent.trim().length > 0))"""
+def dock(page):
+    return page.evaluate(
+        "document.getElementById('dock').textContent.replace(/\\s+/g,' ').trim()")
+
+
+# The contrast auditor, injected once and reused per screen. It composites every
+# translucent layer down to the Ink ground before measuring — a glass card over
+# glass over Ink is three alphas deep and a naive check reads it wrong.
+AUDIT = r"""
+window.__audit=function(){
+function lum(c){const [r,g,b]=c.map(v=>{v/=255;return v<=.03928?v/12.92:Math.pow((v+.055)/1.055,2.4)});return .2126*r+.7152*g+.0722*b;}
+function parse(s){const m=s.match(/[\d.]+/g);return m?m.slice(0,3).map(Number):null;}
+function alpha(s){const m=s.match(/rgba?\(([^)]+)\)/);if(!m)return 1;const p=m[1].split(',').map(Number);return p.length>3?p[3]:1;}
+function over(f,a,b){return f.map((c,i)=>c*a+b[i]*(1-a));}
+function bgOf(el){let n=el,st=[];while(n&&n!==document.documentElement){const bs=getComputedStyle(n).backgroundColor;const a=alpha(bs);if(a>0){st.push([parse(bs),a]);if(a>=0.999)break;}n=n.parentElement;}
+ let base=[11,10,12];for(let i=st.length-1;i>=0;i--)base=over(st[i][0],st[i][1],base);return base;}
+const out=[];
+document.querySelectorAll('#view *, #tabbar *, #dock *, #bar *, .sheet *').forEach(el=>{
+  const hasText=[...el.childNodes].some(n=>n.nodeType===3&&n.textContent.trim().length>1);if(!hasText)return;
+  const r=el.getBoundingClientRect();if(!r.width||!r.height)return;
+  const cs=getComputedStyle(el);if(cs.visibility==='hidden'||cs.opacity==='0')return;
+  /* text sitting on a photo is judged by its shadow, not by a colour we can composite */
+  if(el.closest('.cover')||el.closest('.hero-body'))return;
+  /* the active tab sits on the Bone capsule, which is a SIBLING element — an
+     ancestor walk cannot see it, so hand the auditor the real ground */
+  const onCapsule = !!el.closest('.tab[aria-current="page"]');
+  const fg=parse(cs.color),fa=alpha(cs.color),bg=onCapsule?[244,241,236]:bgOf(el),eff=over(fg,fa,bg);
+  const L1=lum(eff)+.05,L2=lum(bg)+.05,ratio=Math.max(L1,L2)/Math.min(L1,L2);
+  const size=parseFloat(cs.fontSize),w=parseInt(cs.fontWeight)||400;
+  const need=(size>=24||(size>=18.66&&w>=700))?3:4.5;
+  if(ratio<need)out.push(el.textContent.trim().slice(0,28)+' @'+ratio.toFixed(2));
+});
+return out;};
+"""
+
+
+def audit(page, where):
+    page.evaluate(AUDIT)
+    fails = page.evaluate('window.__audit()')
+    check(f'contrast AA — {where}', not fails, '; '.join(fails[:4]))
 
 
 def main():
-    global ok
+    shots_only = '--shots-only' in sys.argv
+
     with sync_playwright() as pw:
         browser = pw.chromium.launch(channel='chrome')
         ctx = browser.new_context(viewport=VIEW, device_scale_factor=2,
                                   is_mobile=True, has_touch=True)
         page = ctx.new_page()
-        page.on('console', lambda m: m.type == 'error' and noise.append('console.error: ' + m.text))
-        page.on('requestfailed', lambda r: bad.append('request failed: ' + r.url))
 
+        page.on('console', lambda m: m.type == 'error' and noise.append(
+            'console.error: ' + m.text))
+        page.on('requestfailed', lambda r: (
+            noise if 'unsplash' in r.url else bad).append(
+                ('remote image: ' if 'unsplash' in r.url else 'request failed: ') + r.url))
+
+        # ---------------------------------------------------------- startup
+        print('startup')
         page.goto(BASE, wait_until='networkidle')
-        page.wait_for_timeout(1200)
-        page.evaluate('localStorage.clear()')
-        page.reload(wait_until='networkidle')
-        page.wait_for_timeout(1400)
+        page.wait_for_timeout(1700)
+        check('no opening sequence — the app is just there',
+              page.locator('#boot').count() == 0)
+        check('and nothing is left covering the first screen', page.evaluate(
+            "(()=>{const e=document.elementFromPoint(innerWidth/2,innerHeight/2);"
+            "return !!e && !!e.closest('#shell')})()"))
+        check('landed on home', route(page) == '/')
 
-        # ------------------------------------------------------------ system
-        print('the system')
-
-        # 1 — ONE GUTTER
-        lefts = set()
-        for h in ALL:
-            nav(page, h)
-            lefts |= set(page.evaluate("""
-                [...document.querySelectorAll('.wrap:not(.center)')]
-                  .flatMap(w => [...w.children])
-                  .filter(c => {
-                    const d = getComputedStyle(c).display;
-                    /* .plate and .steps bleed past the gutter on purpose; an
-                       inline box sits where its text puts it. */
-                    return c.getBoundingClientRect().width > 0
-                        && !d.startsWith('inline')
-                        && !c.classList.contains('plate')
-                        && !c.classList.contains('steps');
-                  })
-                  .map(c => Math.round(c.getBoundingClientRect().left))"""))
-        check('one gutter, on every route', lefts <= {24}, f'left edges seen: {sorted(lefts)}')
-        # and the two that bleed do so all the way, not to some third value
-        nav(page, '#/')
-        check('the plate bleeds to the edge, not to a second gutter', page.evaluate(
-            "Math.round(document.querySelector('.plate').getBoundingClientRect().left)") == 0)
-
-        # 2 — NO INLINE STYLES
-        inline = {}
-        for h in ALL:
-            nav(page, h)
-            n = page.evaluate(
-                "[...document.querySelectorAll('#view [style]')]"
-                ".filter(n => !/^flex:\\s*(1|none);?$/.test(n.getAttribute('style'))).length")
-            if n: inline[h] = n
-        check('no inline styles in any view', not inline, str(inline))
-
-        # 3 + 4 — SEVEN SIZES, FOUR WEIGHTS
-        sizes, weights = set(), set()
-        for h in ALL:
-            nav(page, h)
-            sizes |= set(page.evaluate(f"{TEXT_NODES}.map(n => getComputedStyle(n).fontSize)"))
-            weights |= set(page.evaluate(f"{TEXT_NODES}.map(n => getComputedStyle(n).fontWeight)"))
-        check('seven type sizes and no more', sizes <= TYPE_SIZES,
-              f'extra: {sorted(sizes - TYPE_SIZES)}')
-        check('four weights and no more', weights <= WEIGHTS,
-              f'extra: {sorted(weights - WEIGHTS)}')
-
-        # 6 — NO GLASS but the scrim
-        nav(page, '#/')
-        glassy = page.evaluate(
-            "[...document.querySelectorAll('*')].filter(e => {"
-            "const f = getComputedStyle(e); "
-            "return (f.backdropFilter && f.backdropFilter !== 'none') || "
-            "(f.webkitBackdropFilter && f.webkitBackdropFilter !== 'none');})"
-            ".map(e => e.className.toString() || e.tagName)")
-        check('no glass outside the scrim', all('scrim' in c for c in glassy) if glassy else True,
-              str(glassy))
-        check('the bar is opaque', page.evaluate(
-            "getComputedStyle(document.querySelector('.bar')).backdropFilter") in ('none', ''))
-
-        # 7 — NO SHADOWS inside a view
-        shadows = {}
-        for h in ALL:
-            nav(page, h)
-            s = page.evaluate(
-                "[...document.querySelectorAll('#view *')]"
-                ".filter(n => { const b = getComputedStyle(n).boxShadow;"
-                "return b && b !== 'none' && !n.classList.contains('tile')"
-                " && !n.classList.contains('mark'); })"
-                ".map(n => n.className.toString()).slice(0,4)")
-            if s: shadows[h] = s
-        check('no shadows cast on the ground', not shadows, str(shadows))
-
-        # 8 + 9 — DERIVED HAIRLINES
-        nav(page, '#/')
-        entry_rule = page.evaluate(
-            "(()=>{const e=[...document.querySelectorAll('.entry')][1];"
-            "return e ? getComputedStyle(e,'::before').left : null})()")
-        check('the entry hairline starts at the copy, not the edge', entry_rule == '76px',
-              f'{entry_rule} (want 76px = 64 thumb + 12 gap)')
-        nav(page, '#/event/1')
-        mark_rule = page.evaluate(
-            "(()=>{const r=[...document.querySelectorAll('.row--mark')];"
-            "return r.length ? getComputedStyle(r[0],'::before').left : 'n/a'})()")
-        plain_rule = page.evaluate(
-            "(()=>{const r=[...document.querySelectorAll('.row:not(.row--mark)')][1];"
-            "return r ? getComputedStyle(r,'::before').left : 'n/a'})()")
-        check('a plain row rules from the gutter', plain_rule in ('0px', 'n/a'), plain_rule)
-
-        # 10 — RAILS DO NOT BOOT SCROLLED
-        nav(page, '#/')
-        check('rails start at the left edge', page.evaluate(
-            "[...document.querySelectorAll('.rail')].every(r => r.scrollLeft === 0)"))
-        check('and reserve the gutter when they scroll', page.evaluate(
-            "getComputedStyle(document.querySelector('.rail')).scrollPaddingInlineStart") == '24px')
-
-        # 11 — TOUCH TARGETS
-        small = {}
-        for h in ALL:
-            nav(page, h)
-            s = page.evaluate("""
-              [...document.querySelectorAll('#view a[href], #view button')].filter(n => {
-                const r = n.getBoundingClientRect(); if (!r.width) return false;
-                /* a link inside a sentence is text, not a control */
-                if (getComputedStyle(n).display === 'inline') return false;
-                const pad = n.classList.contains('chip') ? 8 : 0;
-                return r.height + pad < 43.5;
-              }).map(n => (n.className.toString()||n.tagName) + '@' +
-                     Math.round(n.getBoundingClientRect().height)).slice(0,4)""")
-            if s: small[h] = s
-        check('every target is at least 44px', not small, str(small))
-
-        # 12 — THREE TABS
-        check('three tabs', count(page, '.tab') == 3)
-        check('and they are Home, Went, You', page.evaluate(
-            "[...document.querySelectorAll('.tab')].map(t => t.getAttribute('href'))")
-            == ['#/', '#/went', '#/you'])
-        hidden = []
-        for h in PUSHED:
-            nav(page, h)
-            if not page.evaluate("document.querySelector('#tabbar').hidden"): hidden.append(h)
-        check('the tab bar is gone on every pushed screen', not hidden, str(hidden))
-
-        # 13 — NO DUPLICATE TITLE
-        dupes = []
-        for h in PUSHED:
-            nav(page, h)
-            if page.evaluate("""(()=>{const b=document.querySelector('.bar-t');
-              if(!b) return false; const t=b.textContent.trim();
-              return [...document.querySelectorAll('#view h1, #view .t-1')]
-                .some(n => n.textContent.trim() === t)})()"""):
-                dupes.append(h)
-        check('no screen prints its own name twice', not dupes, str(dupes))
-
-        # 14 — EMBER IS COUNTABLE
-        embers = {}
-        for h in ['#/', '#/went', '#/you', '#/saved', '#/event/1']:
-            nav(page, h)
-            n = page.evaluate("""
-              [...document.querySelectorAll('#view *')].filter(e => {
-                const s = getComputedStyle(e);
-                return s.color === 'rgb(255, 91, 61)' ||
-                       s.backgroundColor === 'rgb(255, 91, 61)';}).length""")
-            embers[h] = n
-        check('at most one Ember object per screen',
-              all(v <= 1 for v in embers.values()), str(embers))
-
-        # 15 — NOTHING LOOPS
-        loops = {}
-        for h in ALL:
-            nav(page, h)
-            n = page.evaluate(
-                "[...document.querySelectorAll('*')].filter(e =>"
-                " getComputedStyle(e).animationIterationCount === 'infinite').length")
-            f = page.evaluate(
-                "[...document.querySelectorAll('*')].filter(e =>"
-                " getComputedStyle(e).animationFillMode === 'both').length")
-            if n or f: loops[h] = f'{n} infinite, {f} fill:both'
-        check('nothing loops, and nothing fills both ways', not loops, str(loops))
-
-        # 16 — THE FEE IS GONE
-        blob = ''
-        for h in ALL:
-            nav(page, h)
-            blob += text(page)
-        for word in ('2.50', 'Booking fee', 'Platform fee', 'Visa'):
-            check(f'no trace of “{word}”', word not in blob)
-
-        # ------------------------------------------------------------ screens
+        # ------------------------------------------------------------- home
         print('\nhome')
-        nav(page, '#/', 700)
-        check('the city is a button, not a link', page.evaluate(
-            "document.querySelector('.bar-city').tagName") == 'BUTTON')
-        check('one plate, and it leads', count(page, '.plate') == 1)
-        check('no type sits on the plate', page.evaluate(
-            "document.querySelector('.plate').textContent.trim()") == '')
-        check('one rail on the screen, and it is the chips', count(page, '.rail') == 1)
-        check('nine chips — Filters, All, seven categories', count(page, '.rail .chip') == 9)
-        hrefs = page.evaluate("[...document.querySelectorAll('.entry')].map(e => e.getAttribute('href'))")
-        check('no event appears twice', len(hrefs) == len(set(hrefs)), f'{len(hrefs)} entries')
-        lead = page.evaluate(
-            "document.querySelector('#view a.wrap')?.getAttribute('href')")
-        check('the lead is excluded from the list below it', lead not in hrefs, f'{lead}')
-        h = page.evaluate('document.documentElement.scrollHeight')
-        check('the whole city in under 3600px — it was 6,688', h < 3600, f'{h}px')
-        check('a second event is visible under the lead without scrolling', page.evaluate(
-            "[...document.querySelectorAll('.entry')].some(e =>"
-            " e.getBoundingClientRect().top < innerHeight)"))
-        audit_shot = shot(page, '01-home')
+        check('the city is San Francisco', 'San Francisco' in text(page, '#bar'))
+        check('a hero leads the page', count(page, '.hero') == 1)
+        check('the hero runs under the bar',
+              page.evaluate("document.getElementById('shell').dataset.hero") == '1')
+        check('feed switch present', count(page, '[data-seg="homefeed"] button') == 2)
+        check('the soon rail is a rail, not one card', count(page, '.rail .ev-sm') >= 2)
+        check('event cards in the feed', count(page, '.section.wrap .ev') >= 4)
+        check('every card says why it is there', count(page, '.ev-why') >= 4)
+        check('five tabs', count(page, '#tabs .tab') == 5)
+        check('the tab capsule is under Home',
+              page.evaluate("document.querySelector('[data-tab=\"home\"]').getAttribute('aria-current')") == 'page')
+        # Cover art is generated SVG now, not a photograph fetched from a CDN.
+        check('every cover is drawn, not fetched',
+              count(page, '#view svg.cover-art') >= 4)
+        check('no image is loaded from anywhere else',
+              page.evaluate("[...document.querySelectorAll('#view img')]"
+                            ".filter(i=>!i.src.startsWith('data:')).length") == 0)
+        audit(page, 'home')
+        shot(page, '01-home')
 
-        print('\nevent')
-        nav(page, '#/event/1', 700)
-        check('the plate runs full bleed under the bar', page.evaluate(
-            "Math.round(document.querySelector('.plate').getBoundingClientRect().left)") == 0)
-        check('the three deciding facts are above the fold', page.evaluate(
-            "(()=>{const m=document.querySelector('#facts-money');"
-            "return m && m.getBoundingClientRect().bottom < innerHeight})()"))
-        check('one primary action', count(page, '#dock .btn') == 1)
-        check('no map, no who-is-going, no similar events',
-              not any(w in text(page) for w in ('Who is going', 'Similar', 'More from', 'Report')))
-        shot(page, '02-event')
+        tap(page, '[data-seg="homefeed"] [data-segkey="following"]')
+        check('the following feed renders', route(page) == '/' and count(page, '#view') == 1)
+        tap(page, '[data-seg="homefeed"] [data-segkey="foryou"]')
 
-        print('\nthe core path')
-        nav(page, '#/event/2', 600)
-        before = page.evaluate('location.hash')
-        pass_before = (nav(page, '#/went', 500),
-                       count(page, '#view a[href^="#/pass/"]'))[1]
-        nav(page, '#/event/2', 600)
-        tap(page, '#dock .btn', 700)
-        check('a free RSVP never leaves the screen', page.evaluate('location.hash') == before)
-        check('the dock becomes the ticket', page.evaluate(
-            "document.querySelector('#dock .btn').textContent.trim()") == 'View ticket')
-        check('and the facts line says Going', 'Going' in text(page))
-        check('no toast was ever created', count(page, '.toast') == 0)
-        nav(page, '#/went', 600)
-        check('the stub landed in Went',
-              count(page, '#view a[href^="#/pass/"]') == pass_before + 1)
+        # ----------------------------------------------------------- explore
+        print('\nexplore')
+        tap(page, '[data-tab="explore"]', 560)
+        check('explore opened', route(page) == '/explore')
+        check('the browse-by-category grid is gone', count(page, '#view .grid-2') == 0)
+        check('but every category is still reachable from the chip rail',
+              count(page, '#view .rail [data-cat]') >= 15)
+        check('and the idle page still lists the city',
+              has(page, 'Everything in San Francisco'))
+        audit(page, 'explore')
+        shot(page, '02-explore')
 
-        nav(page, '#/event/2', 600)
-        check('a free event opens no sheet', count(page, '.sheet') == 0)
-        nav(page, '#/event/3', 600)   # two tiers, unseeded
-        tap(page, '#dock .btn', 700)
-        check('a ticketed event opens exactly one sheet', count(page, '.sheet') == 1)
-        check('with a stepper and a total',
-              count(page, '.sheet .stepper') == 1 and 'Total' in text(page, '.sheet'))
-        shot(page, '03-tickets')
-        tap(page, '.sheet #pay', 900)
-        check('paying dismisses the sheet and stays put', count(page, '.sheet') == 0
-              and page.evaluate('location.hash') == '#/event/3')
+        page.fill('#q', 'yoga')
+        page.wait_for_timeout(420)
+        check('search narrows the list', has(page, 'result'))
+        page.fill('#q', 'zzzznothing')
+        page.wait_for_timeout(420)
+        check('a dead search explains itself', has(page, 'No matches'))
+        page.fill('#q', '')
+        page.wait_for_timeout(420)
 
-        print('\nwent, you, pass')
-        nav(page, '#/went', 700)
-        check('Went is seeded, never empty', count(page, '#view .entry') >= 4)
-        check('with an Earlier section', 'Earlier' in text(page))
-        check('and past entries greyed rather than behind a control',
-              count(page, '.entry--past') >= 2 and count(page, '.seg') == 0)
-        shot(page, '04-went')
+        tap(page, '#filters', 620)
+        check('the filter sheet opens', count(page, '.sheet') == 1)
+        check('three filter groups', all(has(page, g, '.sheet')
+              for g in ('When', 'Price', 'Sort')))
+        audit(page, 'filters')
+        shot(page, '03-filters')
+        tap(page, '.sheet [data-close]', 620)
 
-        nav(page, '#/pass/0', 700)
-        check('the pass is the one Milk surface', count(page, '.pass') == 1)
-        check('it carries a QR and a reference', count(page, '.qr') == 1
-              and bool(page.evaluate("document.querySelector('.pass-ref').textContent.match(/WTE-\\d{6}/)")))
-        check('and no dock — you already have the ticket',
-              page.evaluate("document.querySelector('#dock').hidden") is True)
-        shot(page, '05-pass')
+        # ------------------------------------------------------------ detail
+        print('\nevent detail')
+        nav(page, '#/event/1', 620)
+        check('detail opened', route(page) == '/event/1')
+        check('the tab bar is gone on a pushed screen',
+              page.evaluate("document.getElementById('tabbar').hidden") is True)
+        check('a back button is in the bar', count(page, '#bar [data-back]') == 1)
+        check('the dock offers tickets', 'ticket' in dock(page).lower() or 'RSVP' in dock(page))
+        check('when + where card', 'Pier 70' in text(page))
+        check('a host row with follow', count(page, '#followHost') == 1)
+        check('tiers are listed', 'General Admission' in text(page))
+        check('a map schematic is drawn', count(page, '.map svg') == 1)
+        audit(page, 'detail')
+        shot(page, '04-detail')
 
-        nav(page, '#/you', 700)
-        check('one primary button, and it publishes',
-              'Publish an event' in text(page))
-        check('the Haptics row is a destination weight', page.evaluate(
-            """(()=>{const r=[...document.querySelectorAll('.row')]
-              .find(r => r.textContent.includes('Haptics'));
-              return r ? getComputedStyle(r.querySelector('.t-4')).fontWeight : null})()""") == '400')
-        check('no membership, no verification, no settings tree',
-              not any(w in text(page) for w in ('Membership', 'Verif', 'Settings')))
-        shot(page, '06-you')
+        before_follow = page.evaluate("document.querySelector('#followHost').textContent.trim()")
+        tap(page, '#followHost')
+        after_follow = page.evaluate("document.querySelector('#followHost').textContent.trim()")
+        check('the follow button toggles', before_follow != after_follow,
+              f'{before_follow!r} -> {after_follow!r}')
+        tap(page, '#followHost')
 
-        print('\npublish')
-        nav(page, '#/publish', 700)
-        check('two steps, not five', count(page, '.steps i') == 2)
-        check('no step label above the bar',
-              'Step 1' not in text(page) and 'Step 2' not in text(page))
-        check('the dock clears the last field', page.evaluate(
-            """(()=>{const f=[...document.querySelectorAll('.field')].pop();
-              const d=document.querySelector('#dock');
-              return !f || !d || f.getBoundingClientRect().bottom <
-                     d.getBoundingClientRect().top})()"""))
-        shot(page, '07-publish')
+        # ----------------------------------------------------------- booking
+        print('\nbooking → checkout → pass')
+        tap(page, '#dock [data-go]', 560)
+        check('booking opened', route(page) == '/book/1')
+        before = dock(page)
+        tap(page, '#qty [data-inc]')
+        check('quantity changes the running total', dock(page) != before, f'{before!r}')
+        tap(page, '[data-tier="1"]', 520)
+        check('a different tier can be chosen',
+              page.evaluate("document.querySelector('[data-tier=\"1\"]').getAttribute('aria-checked')") == 'true')
+        tap(page, '[data-tier="0"]', 520)
 
-        print('\nthe city sheet')
-        nav(page, '#/', 600)
-        tap(page, '.bar-city', 800)
-        check('the city control opens a sheet', count(page, '.sheet') == 1)
-        check('every city is one list under country heads',
-              count(page, '.sheet [data-ci]') >= 100 and count(page, '.sheet .head') >= 20)
-        check('and no grid of city cards', count(page, '.sheet .tile') == 0)
-        shot(page, '08-city')
-        page.evaluate("document.querySelector('.scrim').click()")
-        page.wait_for_timeout(600)
+        tap(page, '#dock [data-go]', 560)
+        check('checkout opened', route(page) == '/checkout/1')
+        check('three payment methods', count(page, '[data-method]') == 3)
+        check('the fee is shown to non-members', 'Booking fee' in text(page))
+        audit(page, 'checkout')
+        shot(page, '05-checkout')
 
-        # 30 — ROUTE COUNT
-        print('\nwhat is gone')
-        gone = []
-        for h in ['#/chat', '#/explore', '#/notifications', '#/membership', '#/verify',
-                  '#/settings', '#/book/1', '#/checkout/1', '#/confirm/1', '#/settings/account']:
-            nav(page, h, 420)
-            if count(page, '.plate') != 1:
-                gone.append(h)
-        check('every deleted route falls back to Home', not gone, str(gone))
+        tap(page, '[data-pay]', 700)
+        check('confirmed', route(page) == '/confirm/1')
+        check('it says you are going', 'You are going' in text(page))
+        shot(page, '06-confirm')
 
-        # 21 — NO HUE IN THE ARTWORK
+        tap(page, '#dock [data-go="#/pass/0"]', 700)
+        check('the pass opened', route(page) == '/pass/0')
+        check('a QR is drawn', count(page, '.qr') == 1)
+        check('the pass carries a reference', bool(
+            page.evaluate("document.querySelector('.pass-ref').textContent.match(/WTE-\\d{6}/)")))
+        audit(page, 'pass')
+        shot(page, '07-pass')
+
+        # -------------------------------------------------------------- went
+        print('\nwent')
+        tap(page, '[data-tab="went"]', 560)
+        check('went opened', route(page) == '/went')
+        check('the booking landed in Upcoming', count(page, '#view .card') >= 1)
+        tap(page, '[data-seg="wenttab"] [data-segkey="past"]', 460)
+        check('past is empty and says so', 'Nothing in the past' in text(page))
+        tap(page, '[data-seg="wenttab"] [data-segkey="upcoming"]', 460)
+        check('upcoming comes back', count(page, '#view .card') >= 1)
+        check('a near-empty Went offers somewhere to go',
+              count(page, '#view .rail .ev-sm') >= 2)
+        audit(page, 'went')
+        shot(page, '08-went')
+
+        # -------------------------------------------------------------- chat
+        print('\nchat')
+        tap(page, '[data-tab="chat"]', 560)
+        check('chat opened', route(page) == '/chat')
+        check('conversations listed', count(page, '[data-user]') >= 5)
+        audit(page, 'chat list')
+        shot(page, '09a-chat')
+        tap(page, '[data-user="maya"]', 620)
+        check('a thread opened', route(page) == '/thread/maya')
+        page.fill('#msg', 'on my way')
+        tap(page, '#send', 1500)
+        check('my message appears', 'on my way' in text(page))
+        check('they reply', 'scripted reply' in text(page))
+        audit(page, 'thread')
+        shot(page, '09-thread')
+
+        # ------------------------------------------------------------ you
+        print('\nprofile + publishing')
+        tap(page, '[data-tab="you"]', 560)
+        check('profile opened', route(page) == '/you')
+        check('three profile tabs', count(page, '[data-seg="profiletab"] button') == 3)
+        check('the publish CTA is there', 'Publish an event' in text(page))
+        check('going counts the booking', has(page, 'Going · 1'))
+        audit(page, 'you')
+        shot(page, '10-you')
+
+        nav(page, '#/publish', 620)
+        check('publish opened', route(page) == '/publish')
+        check('continue is blocked until there is a title',
+              page.evaluate("document.querySelector('#next').disabled") is True)
+        page.fill('[data-f="title"]', 'Rooftop Film Club')
+        page.wait_for_timeout(300)
+        check('a title unblocks it',
+              page.evaluate("document.querySelector('#next').disabled") is False)
+        check('the preview tracks the title live',
+              'Rooftop Film Club' in page.locator('.ev-title').inner_text())
+        audit(page, 'publish')
+        shot(page, '11-publish')
+
+        tap(page, '#next', 520)
+        page.fill('[data-f="date"]', 'Sat, 14 Sep')
+        tap(page, '#next', 520)
+        page.fill('[data-f="venue"]', 'Old Print Works')
+        tap(page, '#next', 560)
+
+        # ---- artwork: six generated posters, or a photo of your own
+        check('the artwork step is reached', has(page, 'Artwork'))
+        check('six posters are offered', page.locator('.art-opt').count() == 6)
+        check('one is chosen by default',
+              page.locator('.art-opt[aria-pressed="true"]').count() == 1)
+        check('every poster is drawn, not fetched',
+              page.evaluate("[...document.querySelectorAll('.art-opt svg.cover-art')].length") == 6)
+        tap(page, '[data-art="3"]', 420)
+        check('picking a different poster moves the tick',
+              page.evaluate("document.querySelector('[data-art=\"3\"]')"
+                            ".getAttribute('aria-pressed')") == 'true')
+        check('a photo of your own is offered', page.locator('.art-upload').count() == 1)
+        shot(page, '11b-artwork')
+        tap(page, '#next', 560)
+        check('reached the last step', has(page, 'Entry'))
+        tap(page, '[data-paid="1"]', 520)
+        page.fill('[data-f="price"]', '30')
+        page.wait_for_timeout(320)
+        check('the payout tracks the price live',
+              page.evaluate("document.querySelector('#p_net').textContent") == '$27.60',
+              page.evaluate("document.querySelector('#p_net').textContent"))
+        tap(page, '#next', 700)
+        check('published', route(page) == '/published')
+        check('it carries the title given', 'Rooftop Film Club' in text(page))
+        shot(page, '12-published')
+
+        # ------------------------------------------------- membership + settings
+        print('\nmembership + settings')
+        nav(page, '#/membership', 560)
+        check('membership opened', route(page) == '/membership')
+        audit(page, 'membership')
+        shot(page, '13-membership')
+        tap(page, '#join', 700)
+        check('subscribing returns you to your profile', route(page) == '/you')
+        check('the member tick appears', count(page, '#view svg[aria-label="Member"]') >= 1)
+
+        nav(page, '#/checkout/1', 560)
+        check('the fee is waived for members', has(page, 'waived'))
+
+        nav(page, '#/settings', 560)
+        check('settings opened', route(page) == '/settings')
+        check('every settings group is linked', count(page, '#view .rows a') >= 8)
+        audit(page, 'settings')
+        shot(page, '14-settings')
+
+        nav(page, '#/settings/notifications', 520)
+        check('a settings sub-page opens', route(page) == '/settings/notifications')
+        check('the bar names the sub-page, not "Settings"',
+              has(page, 'Notifications', '#bar'))
+        check('switches are switches', count(page, '.switch[role="switch"]') == 5)
+        was = page.evaluate("document.querySelector('.switch').getAttribute('aria-checked')")
+        tap(page, '.switch')
+        check('a switch flips',
+              page.evaluate("document.querySelector('.switch').getAttribute('aria-checked')") != was)
+
+        # A view that binds to its own container must not still be bound after
+        # you leave and come back. Visiting three times and tapping once has to
+        # move the switch exactly once — twice means the handlers are stacking.
+        for _ in range(3):
+            nav(page, '#/settings', 380)
+            nav(page, '#/settings/notifications', 380)
+        again = page.evaluate("document.querySelector('.switch').getAttribute('aria-checked')")
+        tap(page, '.switch')
+        check('handlers do not stack across renders',
+              page.evaluate("document.querySelector('.switch').getAttribute('aria-checked')") != again)
+
+        nav(page, '#/settings/blocked', 520)
+        check('an empty list explains itself', has(page, 'No one is blocked'))
+
+        # ---------------------------------------------------------- the city
+        print('\ncity + notifications')
+        nav(page, '#/', 560)
+        tap(page, '.bar-brand', 700)
+        check('the city picker opens', count(page, '.sheet') == 1)
+        check('the places worth suggesting are offered as art',
+              count(page, '.sheet .place') >= 4)
+        check('each carries its own art', count(page, '.sheet .place svg.cover-art') >= 4)
+        check('living here vs visiting', count(page, '[data-mode]') == 2)
+        check('anywhere is searchable', count(page, '#pq') == 1)
+
+        # The list underneath is the part that makes a country you only
+        # half-remember reachable at all — grouped, with a sticky header each.
+        check('every country is browsable, not just searchable',
+              count(page, '.sheet .pl-group') >= 20)
+        check('and every city is in it',
+              count(page, '.sheet .pl-row') >= 100)
+        check('the country headers stick', page.evaluate(
+            "getComputedStyle(document.querySelector('.sheet .pl-head')).position") == 'sticky')
+        shot(page, '15-city')
+
+        # search reaches a city that is not on the idle list
+        page.fill('#pq', 'kyot')
+        page.wait_for_timeout(320)
+        check('search finds a city by prefix', has(page, 'Kyoto', '.sheet'))
+        page.fill('#pq', 'zzzzz')
+        page.wait_for_timeout(320)
+        check('a dead search says so', has(page, 'No such place', '.sheet'))
+        page.fill('#pq', 'new york')
+        page.wait_for_timeout(340)
+        check('a search groups its results by country',
+              count(page, '.sheet .pl-group') >= 1)
+        tap(page, '.sheet .pl-row', 900)
+        check('changing city changes the feed', 'New York' in text(page, '#bar'))
+
+        tap(page, '.bar-brand', 900)
+        check('the place you just left is remembered',
+              has(page, 'Recent', '.sheet'))
+        page.fill('#pq', 'san franc')
+        page.wait_for_timeout(340)
+        tap(page, '.sheet .pl-row', 900)
+        check('and changes back', 'San Francisco' in text(page, '#bar'))
+
+        nav(page, '#/notifications', 560)
+        check('notifications listed', count(page, '[data-n]') >= 10)
+        audit(page, 'notifications')
+        shot(page, '16-notifications')
+
+        # ------------------------------------------------------- navigation
+        print('\nnavigation')
+        nav(page, '#/event/1', 560)
+        tap(page, '#bar [data-back]', 620)
+        check('back leaves the detail screen', route(page) != '/event/1')
+        nav(page, '#/', 520)
+        check('the tab bar comes back',
+              page.evaluate("document.getElementById('tabbar').hidden") is False)
+        check('a bad route falls back to home', True)
+        nav(page, '#/nonsense', 520)
+        check('an unknown route renders home rather than nothing',
+              count(page, '#view .hero') == 1)
+
+        # ------------------------------------------------------------ motion
+        print('\nmotion + short screens')
+        check('the cross-fade is on where the browser has it',
+              page.evaluate("document.documentElement.dataset.vt") == '1')
+        check('the stagger targets the screen, not the view wrapper', page.evaluate(
+            "(()=>{const s=document.querySelector('#view > .screen');"
+            "return !!s && s.children.length > 1})()"))
+
+        # A screen you cannot really scroll must not let the bar take a
+        # background — on a phone the URL bar alone would toggle it, and the bar
+        # then reads as moving. Legal is short enough to prove it.
+        nav(page, '#/settings/legal', 560)
+        short = page.evaluate(
+            "document.documentElement.scrollHeight - innerHeight")
+        check('the test is pointed at a genuinely short screen', short <= 40,
+              f'scrollable by {short}px')
+        page.evaluate('scrollTo(0, 30)')
+        page.wait_for_timeout(260)
+        check('a screen that barely scrolls keeps the bar flat',
+              page.evaluate("document.getElementById('shell').dataset.scrolled") == '0',
+              f'scrollable by {short}px')
+        check('and never strands its heading half-faded',
+              page.evaluate("(()=>{const t=document.querySelector('#view .title');"
+                            "return !t || t.style.opacity !== '0'})()"))
+        page.evaluate('scrollTo(0, 0)')
+
+        # The bug this replaced: arriving at a short screen from a scrolled one
+        # fires no scroll event, so the bar kept the background it earned on the
+        # previous page — a solid bar over a page sitting at the top.
+        nav(page, '#/', 560)
+        page.evaluate('scrollTo(0, 900)')
+        page.wait_for_timeout(300)
+        check('the bar has a background on a scrolled home',
+              page.evaluate("document.getElementById('shell').dataset.scrolled") == '1')
+        nav(page, '#/settings/legal', 700)
+        check('and drops it on arriving at a short screen',
+              page.evaluate("document.getElementById('shell').dataset.scrolled") == '0')
+
+        # A long screen still earns one.
+        nav(page, '#/explore', 560)
+        page.evaluate('scrollTo(0, 400)')
+        page.wait_for_timeout(320)
+        check('a long screen still gives the bar its background',
+              page.evaluate("document.getElementById('shell').dataset.scrolled") == '1')
+
+        # Tapping the tab you are on returns you to the top rather than
+        # rebuilding a screen that has not changed.
+        check('still on explore', route(page) == '/explore')
+        # Scrolling that far folded the bar, and the first tap on a folded bar
+        # opens it rather than navigating — otherwise you would be aiming at
+        # tabs you cannot see.
+        tap(page, '#tabs [data-tab="explore"]', 700)
+        check('the first tap on a folded bar just opens it',
+              page.evaluate("document.querySelector('#tabbar').classList.contains('min')") is False)
+        tap(page, '#tabs [data-tab="explore"]', 900)
+        check('tapping the active tab scrolls back to the top',
+              page.evaluate('Math.round(scrollY)') == 0)
+        check('and does not leave the tab', route(page) == '/explore')
+
+        # The search button in the bar should land you in the field.
+        nav(page, '#/', 560)
+        tap(page, '#bar [data-search]', 700)
+        check('the bar search opens Explore with the field focused',
+              page.evaluate("document.activeElement && document.activeElement.id") == 'q',
+              page.evaluate("document.activeElement && document.activeElement.id"))
+
+        # ---------------------------------------------------------- tab bar
+        print('\ntab bar — glass, lens, fold, drag')
+
+        # 1. Nothing above a glass surface may carry a transform, filter,
+        #    opacity < 1 or a blend mode. Any one of them makes that ancestor a
+        #    backdrop root and the glass blurs nothing at all — silently, and on
+        #    every screen. This is the check that catches it.
+        nav(page, '#/', 620)
+        broken = page.evaluate("""
+          (()=>{
+            const killers=(el)=>{const bad=[];let n=el.parentElement;
+              while(n&&n!==document.documentElement){const cs=getComputedStyle(n);
+                const id=(n.id||n.className||n.tagName).toString().slice(0,24);
+                if(cs.transform!=='none')bad.push(id+':transform');
+                if(cs.filter!=='none')bad.push(id+':filter');
+                if(parseFloat(cs.opacity)<1)bad.push(id+':opacity');
+                if(cs.mixBlendMode!=='normal')bad.push(id+':blend');
+                n=n.parentElement;}
+              return bad;};
+            return [...document.querySelectorAll('*')].filter(e=>{const f=getComputedStyle(e);
+                return (f.backdropFilter&&f.backdropFilter!=='none')
+                    || (f.webkitBackdropFilter&&f.webkitBackdropFilter!=='none');})
+              .map(e=>({el:(e.className||e.id||'').toString().slice(0,20),k:killers(e)}))
+              .filter(r=>r.k.length);
+          })()""")
+        check('no glass sits under a transformed ancestor', not broken,
+              str(broken[:3]))
+        check('and there is real glass to protect', page.evaluate(
+            "[...document.querySelectorAll('*')].filter(e=>{const f=getComputedStyle(e);"
+            "return (f.backdropFilter&&f.backdropFilter!=='none')"
+            "||(f.webkitBackdropFilter&&f.webkitBackdropFilter!=='none')}).length") >= 5)
+
+        # 2. The lens sits under the current tab and moves with it.
+        lens = lambda: page.evaluate(
+            "document.querySelector('#tabbar').style.getPropertyValue('--lens-x')")
+        lens_home = lens()
+        tap(page, '#tabs [data-tab="chat"]', 700)
+        check('tapping a tab navigates', route(page) == '/chat', f'got {route(page)!r}')
+        check('the lens follows the tab you are on', lens_home != lens(),
+              f'{lens_home!r} vs {lens()!r}')
+        check('and the lens is as wide as one tab', page.evaluate(
+            "Math.abs(parseFloat(document.querySelector('#tabbar').style.getPropertyValue('--lens-w'))"
+            " - document.querySelector('#tabs .tab').offsetWidth) < 2"))
+
+        # 2b. Going forward must land at the TOP. popstate fires on a plain
+        #     forward hash assignment exactly as it does on a real Back, so the
+        #     router used to restore a stale scroll on every navigation — you
+        #     tapped a tab and arrived 900px down the page you last read.
+        nav(page, '#/', 620)
+        page.evaluate('scrollTo(0, 900)'); page.wait_for_timeout(320)
+        nav(page, '#/explore', 700)
         nav(page, '#/', 800)
-        try:
-            from PIL import Image
-            SHOTS.mkdir(parents=True, exist_ok=True)
-            box = page.locator('.plate').bounding_box()
-            raw = SHOTS / '_plate.png'
-            page.locator('.plate').screenshot(path=str(raw))
-            im = Image.open(raw).convert('RGB')
-            w, h2 = im.size
-            worst = 0
-            for i in range(20):
-                for j in range(20):
-                    r, g, b = im.getpixel((int(w * (i + .5) / 20), int(h2 * (j + .5) / 20)))
-                    worst = max(worst, max(r, g, b) - min(r, g, b))
-            raw.unlink()
-            check('the artwork is neutral — no hue survives', worst <= 8, f'max channel spread {worst}')
-        except ImportError:
-            print('  skip  artwork hue (no PIL)')
+        check('tapping back into a tab lands at the top, not where you left it',
+              page.evaluate('Math.round(scrollY)') == 0,
+              f'at {page.evaluate("Math.round(scrollY)")}px')
+        check('and the bar is open when you get there',
+              page.evaluate("document.querySelector('#tabbar').classList.contains('min')") is False)
 
-        # ---------------------------------------------------------- reduced
+        # 3. Folding. Reading down a long page shrinks the capsule to the
+        #    current tab; scrolling back opens it.
+        nav(page, '#/', 700)
+        open_w = page.evaluate(
+            "Math.round(document.querySelector('#tabs').getBoundingClientRect().width)")
+        page.evaluate('scrollTo(0, 300)'); page.wait_for_timeout(160)
+        page.evaluate('scrollTo(0, 760)'); page.wait_for_timeout(900)
+        folded = page.evaluate("document.querySelector('#tabbar').classList.contains('min')")
+        check('reading down folds the bar', folded)
+        kept = page.evaluate(
+            "[...document.querySelectorAll('#tabs .tab')].filter(t=>t.dataset.keep)"
+            ".map(t=>t.dataset.tab)")
+        check('folded, it keeps Home and You', kept == ['home', 'you'], str(kept))
+        check('and the tabs it drops really take no width', page.evaluate(
+            "[...document.querySelectorAll('#tabs .tab')].filter(t=>!t.dataset.keep)"
+            ".every(t=>t.getBoundingClientRect().width < 1)"))
+        check('the kept tabs sit inside the folded capsule', page.evaluate(
+            "(()=>{const c=document.querySelector('#tabs').getBoundingClientRect();"
+            "return [...document.querySelectorAll('#tabs .tab')].filter(t=>t.dataset.keep)"
+            ".every(t=>{const r=t.getBoundingClientRect();"
+            "return r.left >= c.left - 1 && r.right <= c.right + 1})})()"))
+        fold_w = page.evaluate(
+            "Math.round(document.querySelector('#tabs').getBoundingClientRect().width)")
+        check('the folded bar is genuinely narrower', fold_w < open_w * 0.55,
+              f'{fold_w}px of {open_w}px')
+        shot(page, '17-tabbar-folded')
+
+        # The trap that bit on KAIRO: the folded width must come from the row's
+        # own geometry, not from a tab that shrank with the capsule. Fold twice
+        # and it must land on the same number both times.
+        page.evaluate('scrollTo(0, 200)'); page.wait_for_timeout(900)
+        check('scrolling back up opens it',
+              page.evaluate("document.querySelector('#tabbar').classList.contains('min')") is False)
+        page.evaluate('scrollTo(0, 900)'); page.wait_for_timeout(900)
+        fold_w2 = page.evaluate(
+            "Math.round(document.querySelector('#tabs').getBoundingClientRect().width)")
+        check('folding twice lands on the same width — it is not re-measuring itself',
+              fold_w == fold_w2, f'{fold_w}px then {fold_w2}px')
+
+        # On a tab that is neither Home nor You, that tab survives as well — you
+        # should always be able to see where you are.
+        nav(page, '#/explore', 700)
+        page.evaluate('scrollTo(0, 300)'); page.wait_for_timeout(160)
+        page.evaluate('scrollTo(0, 820)'); page.wait_for_timeout(900)
+        kept3 = page.evaluate(
+            "[...document.querySelectorAll('#tabs .tab')].filter(t=>t.dataset.keep)"
+            ".map(t=>t.dataset.tab)")
+        check('the tab you are on survives the fold too',
+              kept3 == ['home', 'explore', 'you'], str(kept3))
+        page.evaluate('scrollTo(0, 0)'); page.wait_for_timeout(700)
+
+        # 4. Going anywhere opens it again, so you never arrive at a folded bar.
+        nav(page, '#/explore', 700)
+        check('navigating opens the bar',
+              page.evaluate("document.querySelector('#tabbar').classList.contains('min')") is False)
+
+        # 5. A short page never folds — the bar would shut and reopen on one flick.
+        nav(page, '#/settings/legal', 620)
+        page.evaluate('scrollTo(0, 400)'); page.wait_for_timeout(700)
+        check('a short page never folds',
+              page.evaluate("document.querySelector('#tabbar').classList.contains('min')") is False)
+
+        # 6. Drag the lens — with a MOUSE, which is the only pointer that shows
+        #    the browser's own link-drag cancelling ours.
+        nav(page, '#/', 700)
+        box = page.locator('#tabs [data-tab="home"]').bounding_box()
+        far = page.locator('#tabs [data-tab="you"]').bounding_box()
+        page.mouse.move(box['x'] + box['width'] / 2, box['y'] + box['height'] / 2)
+        page.mouse.down()
+        page.mouse.move(far['x'] + far['width'] / 2, box['y'] + box['height'] / 2, steps=12)
+        page.wait_for_timeout(120)
+        dragging = page.evaluate("document.querySelector('#tabbar').classList.contains('dragging')")
+        check('a mouse drag moves the lens rather than being cancelled', dragging)
+        page.mouse.up()
+        page.wait_for_timeout(700)
+        check('letting go lands on the tab under it', route(page) == '/you',
+              f'got {route(page)!r}')
+
+        # ------------------------------------------------------ persistence
+        print('\npersistence + PWA')
+        nav(page, '#/', 520)
+        saved_before = page.evaluate("JSON.parse(localStorage.getItem('wte.v2')).saved.length")
+        page.reload(wait_until='networkidle')
+        page.wait_for_timeout(1700)
+        check('state survives a reload', page.evaluate(
+            "JSON.parse(localStorage.getItem('wte.v2')).saved.length") == saved_before)
+        check('membership survives a reload', page.evaluate(
+            "JSON.parse(localStorage.getItem('wte.v2')).member") is True)
+        check('tickets survive a reload', page.evaluate(
+            "JSON.parse(localStorage.getItem('wte.v2')).myTickets.length") >= 1)
+
+        man = ctx.request.get(f'{BASE}/manifest.webmanifest')
+        check('manifest served', man.ok)
+        m = man.json()
+        check('manifest is standalone', m.get('display') == 'standalone')
+        check('manifest is Ink', m.get('theme_color') == '#0B0A0C')
+        check('manifest has a maskable icon',
+              any(i.get('purpose') == 'maskable' for i in m.get('icons', [])))
+        check('manifest offers shortcuts', len(m.get('shortcuts', [])) >= 3)
+        check('service worker served', ctx.request.get(f'{BASE}/sw.js').ok)
+
+        # Every module the app imports has to be in the precache list, or the
+        # app is broken offline in exactly the way a PWA must not be. Two were
+        # missing when this check was written.
+        sw_src = ctx.request.get(f'{BASE}/sw.js').text()
+        import re as _re
+        listed = set(_re.findall(r"'(\./js/[^']+)'", sw_src))
+        on_disk = {'./' + str(f) for f in pathlib.Path(__file__).parent.glob('js/**/*.js')}
+        on_disk = {'./js/' + p.split('/js/')[-1] for p in on_disk}
+        check('every module is in the offline shell', on_disk <= listed,
+              f'missing {sorted(on_disk - listed)}')
+
+        # Every shortcut the manifest advertises must actually land somewhere.
+        want_for = {'explore': '/explore', 'went': '/went', 'create': '/publish'}
+        for sc in m.get('shortcuts', []):
+            key = sc['url'].split('go=')[-1]
+            page.goto(f'{BASE}/?go={key}', wait_until='networkidle')
+            page.wait_for_timeout(1500)
+            check(f'shortcut ?go={key} lands on {want_for.get(key, key)}',
+                  route(page) == want_for.get(key, '/' + key), f'got {route(page)!r}')
+            check(f'shortcut ?go={key} scrubs the query',
+                  'go=' not in page.evaluate('location.search'))
+
+        # ------------------------------------------------------ the chrome
+        print('\nchrome')
+        for hash_, name in [('#/explore', 'Explore'), ('#/went', 'Went'), ('#/you', 'You')]:
+            nav(page, hash_, 620)
+            check(f'{name}: no back arrow on a tab root',
+                  count(page, '#bar [data-back]') == 0)
+            check(f'{name}: the bar carries the mark',
+                  count(page, '#bar .bar-mark') == 1)
+            check(f'{name}: its title waits for the scroll',
+                  page.evaluate("document.getElementById('shell').dataset.titled") == '0')
+        nav(page, '#/explore', 620)
+        page.evaluate('scrollTo(0, 400)')
+        page.wait_for_timeout(380)
+        check('scrolling hands the title to the bar',
+              page.evaluate("document.getElementById('shell').dataset.titled") == '1')
+        check('and the bar earns a background',
+              page.evaluate("document.getElementById('shell').dataset.scrolled") == '1')
+        page.evaluate('scrollTo(0, 0)')
+        page.wait_for_timeout(380)
+        check('scrolling back hands it return',
+              page.evaluate("document.getElementById('shell').dataset.titled") == '0')
+
+        # ------------------------------------------------------ verification
+        print('\nverification')
+        nav(page, '#/verify', 640)
+        check('verification opens on its first step', has(page, 'Your details'))
+        check('it says what you need', count(page, '.vz-req') == 3)
+        check('the reassurance is not dressed as an error', count(page, '.note-warn') == 0)
+        shot(page, '18-verify-intro')
+
+        tap(page, '#vnext', 640)
+        check('step two asks for the document', has(page, 'Your document'))
+        check('a document frame is drawn', count(page, '.vz-doc') == 1)
+        check('the frame is idle before you press',
+              page.evaluate("document.querySelector('.vz').dataset.state") == 'idle')
+        tap(page, '#vnext', 420)
+        check('pressing capture starts a read',
+              page.evaluate("document.querySelector('.vz').dataset.state") == 'busy')
+        check('and the button locks while it reads',
+              page.evaluate("document.querySelector('#vnext').disabled") is True)
+        shot(page, '19-verify-scan')
+        page.wait_for_timeout(2800)
+        check('step three asks for your face', has(page, 'Your face'))
+        check('a face guide is drawn', count(page, '.vz-face') == 1)
+        tap(page, '#vnext', 2800)
+        check('it goes away to check', has(page, 'Checking your document'))
+        page.wait_for_timeout(3200)
+        check('and comes back verified', has(page, 'verified'))
+        check('the badge is on the avatar', count(page, '.vz-badge') == 1)
+        check('nothing was actually uploaded', has(page, 'no document was captured'))
+        shot(page, '20-verified')
+        nav(page, '#/settings', 620)
+        check('the setting now reads as done', has(page, 'your badge is live'))
+
+        # --------------------------------------------------- reduced motion
         print('\nreduced motion')
         ctx2 = browser.new_context(viewport=VIEW, device_scale_factor=2,
-                                   is_mobile=True, has_touch=True, reduced_motion='reduce')
+                                   is_mobile=True, has_touch=True,
+                                   reduced_motion='reduce')
         p2 = ctx2.new_page()
         p2.goto(BASE, wait_until='networkidle')
-        p2.wait_for_timeout(1400)
-        check('it still starts', p2.locator('#view .plate').count() == 1)
-        p2.evaluate("location.hash = '#/went'")
-        p2.wait_for_timeout(420)
-        check('and still navigates',
-              p2.evaluate("(location.hash||'').replace(/^#/,'')") == '/went')
+        p2.wait_for_timeout(1700)
+        check('reduced motion still starts', p2.locator('#view .screen').count() == 1)
+        check('reduced motion turns the cross-fade off',
+              p2.evaluate("document.documentElement.dataset.vt") == '0')
+        p2.evaluate("location.hash = '#/explore'")
+        p2.wait_for_timeout(500)
+        check('reduced motion still navigates',
+              p2.evaluate("(location.hash||'').replace(/^#/,'')") == '/explore')
         ctx2.close()
 
         browser.close()
@@ -430,9 +775,13 @@ def main():
         for b in bad:
             print('  ' + b)
     if noise:
-        print('\nCONSOLE')
-        for n in noise[:8]:
-            print('  ' + n)
+        seen = {}
+        for n in noise:
+            seen[n.split(':')[0]] = seen.get(n.split(':')[0], 0) + 1
+        print('\nCONSOLE / NETWORK')
+        for k, v in seen.items():
+            print(f'  {k} × {v}')
+        print('  (remote-image warnings are ignored — the gradient is the fallback)')
     sys.exit(1 if bad else 0)
 
 

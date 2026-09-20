@@ -1,4 +1,4 @@
-import { CATS, CITY2COUNTRY, catLabel, foldCat } from './geo.js';
+import { CATS, CITY2COUNTRY, catLabel } from './geo.js';
 import { hashStr, rng, pick, money } from '../util.js';
 import { FRIENDS } from './people.js';
 
@@ -102,29 +102,13 @@ const SF = [
     tiers:[{name:'Member Seat',desc:'Welcome pour included',price:0}] },
 ];
 
-/* Home groups by day and Went derives past from this, so the day a thing
-   happens on is a NUMBER on the event, not a word parsed out of a label at
-   render time. 0 is tonight. */
-const DAY_ORDER = ['Tonight','Tomorrow','Fri','Sat','Sun','Mon','Tue','Wed','Thu'];
-const DAY_NAME  = {Fri:'Friday',Sat:'Saturday',Sun:'Sunday',Mon:'Monday',
-                   Tue:'Tuesday',Wed:'Wednesday',Thu:'Thursday'};
-
 function finish(e, city) {
   e.city = city;
   e.country = CITY2COUNTRY[city] || '';
   const prices = e.tiers.map(t => t.price);
   e.minPrice = Math.min(...prices);
   e.priceLabel = money(e.minPrice);
-  /* Fifteen categories fold to seven, here, once — not behind a fallback at
-     every call site. */
-  e.cat = foldCat(e.cat);
   e.catLabel = catLabel(e.cat);
-  const word = String(e.when || '').split(' ')[0];
-  const i = DAY_ORDER.indexOf(word);
-  e.dayOffset = i < 0 ? 7 : i;
-  e.dayLabel = word === 'Tonight' ? 'Tonight'
-             : word === 'Tomorrow' ? 'Tomorrow'
-             : (DAY_NAME[word] || 'Later this week');
   BY_ID[e.id] = e;
   return e;
 }

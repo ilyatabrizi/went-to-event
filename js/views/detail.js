@@ -1,183 +1,206 @@
-/* EVENT — the one screen whose job is to convert.
- *
- * Three deciding facts inside the first screen: when, where, what it costs.
- * The two exit ramps that used to sit here ("More from the host", "Similar
- * events") are gone, along with the 470px hero that carried the title and a
- * category word the user already knew, and the 150px invented street grid that
- * sat under an address line already giving the address and the distance.
- *
- * A COMMIT NEVER YANKS YOU TO A NEW SCREEN. RSVP flips the dock to "View
- * ticket" in place; paying does the same after the sheet dismisses. One rule,
- * no branching, and one fewer surface. */
+/* One event, in full. The cover runs under the bar; everything below it answers
+   a question somebody actually asks before deciding to go. */
 
-import { state, save, isSaved, toggleSave, followsHost, toggleHost, holds } from "../store.js";
-import { byId } from "../data/events.js";
-import { esc, money, compact } from "../util.js";
-import { icon } from "../icons.js";
+import { state, save, isSaved, toggleSave, followsHost, toggleHost, isMember } from "../store.js";
+import { byId, eventsForCity } from "../data/events.js";
+import { USERS } from "../data/people.js";
+import { esc, money, compact, plural } from "../util.js";
+import { icon, iconFill } from "../icons.js";
+import { cityName } from "../place.js";
 import {
-  plate, head, row, rowTick, mark, entry, btn, barBack, tagLive, tag,
+  cover, avatar, sectionHead, eventRow, railCard, lazyImages, userName, note,
 } from "../parts.js";
-import { sheet, closeSheet } from "../ui.js";
-import { refresh, go } from "../router.js";
-import { haptic, impact, success } from "../motion.js";
+import { sheet, closeSheet, toast } from "../ui.js";
+import { go, refresh } from "../router.js";
+import { haptic, commit } from "../motion.js";
 
-/* Selecting a tier only matters when there is more than one. */
-const tierOf = (ev) => ev.tiers[Math.min(state.tierIdx, ev.tiers.length - 1)];
-const needsSheet = (ev) => ev.tiers.length > 1 || ev.minPrice > 0;
+/* A schematic, not a map. An invented street grid that claims to be real is
+   worse than an honest abstraction — this one says "roughly here" and stops. */
+function miniMap(ev) {
+  const seed = ev.id;
+  const lines = [];
+  for (let i = 1; i < 7; i++) {
+    lines.push(`<path d="M0 ${i * 26 + (seed % 9)} H320" stroke="rgba(138,132,143,.14)" stroke-width="1"/>`);
+    lines.push(`<path d="M${i * 46 + (seed % 13)} 0 V172" stroke="rgba(138,132,143,.14)" stroke-width="1"/>`);
+  }
+  return `<div class="map">
+    <svg viewBox="0 0 320 172" preserveAspectRatio="none">
+      ${lines.join("")}
+      <path d="M0 96 C 80 86, 150 120, 320 78" stroke="rgba(138,132,143,.22)" stroke-width="7" fill="none"/>
+    </svg>
+    <span style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:grid;place-items:center">
+      <span style="position:absolute;width:70px;height:70px;border-radius:50%;
+        background:radial-gradient(circle,rgba(244,241,236,.18),transparent 70%)"></span>
+      <span style="width:14px;height:14px;border-radius:50%;background:var(--act);
+        box-shadow:0 0 0 4px rgba(244,241,236,.16),0 4px 14px rgba(0,0,0,.6)"></span>
+    </span>
+  </div>`;
+}
 
 export default function detail({ id }) {
   const ev = byId(+id);
   state.eventId = ev.id;
-  const going = holds(ev.id);
-  const saved = isSaved(ev.id);
-
-  const facts = `
-    <div class="t-4 w-600">${esc(ev.dateLong)} · ${esc(ev.timeRange)}</div>
-    <a class="t-5 c-ash s1" href="https://maps.apple.com/?q=${encodeURIComponent(ev.address)}"
-       target="_blank" rel="noopener">${esc(ev.venue)} · ${esc(ev.address)} · ${ev.dist} km</a>
-    <div class="s1" id="facts-money">
-      <span class="t-4 w-600">${ev.minPrice === 0 ? "Free" : `from ${money(ev.minPrice)}`}</span><span
-        class="t-5 c-ash"> · ${compact(ev.going)} going</span>${
-        going ? ` <span class="t-5 c-ash">· </span>${tag("Going")}` : ""}
-    </div>`;
+  const friends = (ev.friends || []).filter((k) => USERS[k] && !state.blocked[k]);
+  const others = Math.max(0, ev.going - friends.length);
+  const all = eventsForCity(cityName());
+  const fromHost = all.filter((e) => e.host === ev.host && e.id !== ev.id).slice(0, 4);
+  const similar = all.filter((e) => e.cat === ev.cat && e.id !== ev.id).slice(0, 4);
+  const locked = ev.member && !state.member;
 
   const html = `
-  <div class="wrap">${plate(ev)}</div>
+  <div class="hero" style="min-height:clamp(360px,58svh,470px)">
+    <span class="cover">${cover(ev, { tall: true })}</span>
+    <span class="hero-body">
+      <span class="hero-meta">
+        ${ev.soon ? `<span class="live"><i class="dot"></i>Tonight</span>` : ""}
+        <span class="badge">${esc(ev.catLabel || ev.cat)}</span>
+        ${locked ? `<span class="badge badge-solid">Members only</span>` : ""}
+      </span>
+      <span class="hero-title">${esc(ev.title)}</span>
+    </span>
+  </div>
 
-  <div class="wrap s4">
-    <h1 class="t-1 clip-2">${esc(ev.title)}</h1>
-    <div class="tag-row s2">
-      ${ev.dayOffset === 0 ? tagLive("Tonight") : ""}
-      ${tag(ev.catLabel)}
+  <div class="wrap" style="padding-top:20px">
+    <!-- when + where -->
+    <div class="card card-pad stack" style="gap:14px">
+      <div class="row">
+        <span class="ico">${icon("cal")}</span>
+        <span class="row-copy">
+          <span class="row-t">${esc(ev.dateLong)}</span>
+          <span class="row-s">${esc(ev.timeRange)}</span>
+        </span>
+      </div>
+      <div class="row">
+        <span class="ico">${icon("pin")}</span>
+        <span class="row-copy">
+          <span class="row-t">${esc(ev.venue)}</span>
+          <span class="row-s">${esc(ev.address)} · ${ev.dist} km away</span>
+        </span>
+      </div>
+      ${miniMap(ev)}
     </div>
-    <div class="s4">${facts}</div>
 
-    <div class="s6">${head("About", { open: true })}</div>
-    <p class="t-4 prose clip-6" id="about">${esc(ev.about)}</p>
-    ${btn("More", { kind: "text", id: "more" })}
+    <!-- host -->
+    <section class="section">
+      ${sectionHead("Hosted by")}
+      <div class="card card-pad row">
+        <span class="ico ico-lg">${icon("users")}</span>
+        <span class="row-copy">
+          <span class="row-t">${esc(ev.host)}</span>
+          <span class="row-s">${ev.hostEvents} events hosted</span>
+        </span>
+        <button class="btn ${followsHost(ev.host) ? "btn-soft" : "btn-primary"} btn-sm"
+          type="button" id="followHost" aria-pressed="${followsHost(ev.host)}">
+          ${followsHost(ev.host) ? "Following" : "Follow"}</button>
+      </div>
+    </section>
 
-    <div class="s6">${head("Host", { open: true })}</div>
-    ${row({
-      lead: mark(ev.host, 2),
-      title: esc(ev.host),
-      sub: `${ev.hostEvents} events hosted`,
-      trail: `<span class="btn btn--quiet btn--sm t-5 w-600" id="follow">${
-        followsHost(ev.host) ? "Following" : "Follow"}</span>`,
-      cls: "row--mark",
-      href: `#/u/${encodeURIComponent(ev.host)}`,
-    })}
+    <!-- who is going -->
+    <section class="section">
+      ${sectionHead("Who is going")}
+      ${friends.length ? `
+        <div class="rail" style="padding-inline:0;margin-inline:0">
+          ${friends.map((k) => `
+            <a href="#/u/${k}" style="width:66px;text-align:center;flex:none">
+              ${avatar(k, 54)}
+              <span class="row-s clip" style="display:block;margin-top:7px;font-size:11.5px">
+                ${esc(USERS[k].name.split(" ")[0])}</span>
+            </a>`).join("")}
+          <span style="width:66px;text-align:center;flex:none">
+            <span class="av" style="width:54px;height:54px;background:var(--wash);color:var(--mute);font-size:13px">
+              +${compact(others)}</span>
+            <span class="row-s" style="display:block;margin-top:7px;font-size:11.5px">others</span>
+          </span>
+        </div>`
+      : `<p class="lede">${compact(ev.going)} ${plural(ev.going, "person is", "people are")} going.
+           None of your friends yet — you would be the first.</p>`}
+    </section>
 
-    <div class="s6">${head(ev.minPrice === 0 ? "Entry" : "Tickets", { open: true })}</div>
-    ${ev.tiers.map((t) => row({
-      title: esc(t.name), sub: esc(t.desc),
-      trail: `<span class="t-4 w-600">${money(t.price)}</span>`,
-      href: null,
-    })).join("")}
-    <div class="s8"></div>
+    <!-- about -->
+    <section class="section">
+      ${sectionHead("About")}
+      <p class="lede">${esc(ev.about)}</p>
+    </section>
+
+    <!-- tiers -->
+    <section class="section">
+      ${sectionHead(ev.minPrice === 0 ? "Entry" : "Tickets")}
+      <div class="rows">
+        ${ev.tiers.map((t) => `
+          <div class="row-btn">
+            <span class="row-copy">
+              <span class="row-t">${esc(t.name)}</span>
+              <span class="row-s">${esc(t.desc)}</span>
+            </span>
+            <span class="strong money">${money(t.price)}</span>
+          </div>`).join("")}
+      </div>
+      ${locked ? note("This one is members only. Membership also drops the booking fee on everything else.") : ""}
+    </section>
+
+    ${fromHost.length ? `
+      <section class="section">
+        ${sectionHead(`More from ${ev.host}`)}
+        <div class="rows">${fromHost.map((e) => eventRow(e)).join("")}</div>
+      </section>` : ""}
+
+    ${similar.length ? `
+      <section class="section">
+        ${sectionHead("Similar events")}
+      </section>` : ""}
+  </div>
+  ${similar.length ? `<div class="rail">${similar.map(railCard).join("")}</div>` : ""}
+
+  <div class="wrap" style="padding-top:30px">
+    <button class="btn btn-quiet" type="button" id="report">${icon("flag", 16)} Report this event</button>
   </div>`;
 
-  const dockLabel = going ? "View ticket"
-    : ev.minPrice === 0 ? "RSVP · Free"
-    : `Get tickets · from ${money(ev.minPrice)}`;
+  const dock = locked
+    ? `<button class="btn btn-primary" type="button" data-go="#/membership">
+         ${icon("diamond", 18)} Unlock with membership</button>`
+    : `<div class="dock-row">
+         <button class="btn btn-soft" type="button" id="save" style="flex:none;width:56px"
+           aria-pressed="${isSaved(ev.id)}" aria-label="Save event">${iconFill("bookmark", 19)}</button>
+         <button class="btn btn-primary" type="button" data-go="#/book/${ev.id}" style="flex:1">
+           ${ev.minPrice === 0 ? "RSVP · Free" : `Get tickets · from ${money(ev.minPrice)}`}</button>
+       </div>`;
 
   return {
-    html, tabs: false,
-    bar: {
-      /* No title in the bar: the page's own title is directly beneath it at
-         40px, and printing the same words twice 60px apart is the thing this
-         system set out to stop. */
-      kind: "back", title: "",
-      right: `<button class="bar-act" type="button" id="save" aria-pressed="${saved}"
-        aria-label="Save event">${icon("bookmark", 24)}</button>`,
-    },
-    dock: btn(dockLabel, { kind: "primary", block: true, id: "go" }),
+    html, dock, tabs: false, bar: { back: true, title: ev.title },
     mount(el) {
-      /* The bookmark fills. There is no toast: the control that caused the
-         action changes instead. */
-      document.querySelector("#save")?.addEventListener("click", (e) => {
-        const on = toggleSave(ev.id);
-        haptic(6);
+      document.getElementById("shell").dataset.hero = "1";
+      lazyImages(el);
+
+      el.querySelector("#followHost")?.addEventListener("click", (e) => {
+        const on = toggleHost(ev.host);
+        haptic(8);
+        e.currentTarget.textContent = on ? "Following" : "Follow";
+        e.currentTarget.className = `btn ${on ? "btn-soft" : "btn-primary"} btn-sm`;
         e.currentTarget.setAttribute("aria-pressed", on);
+        toast(on ? `Following ${ev.host}` : `Unfollowed ${ev.host}`, on ? "check" : "close");
       });
 
-      el.querySelector("#follow")?.parentElement?.parentElement
-        ?.addEventListener("click", (e) => {
-          if (!e.target.closest("#follow")) return;
-          e.preventDefault(); e.stopPropagation();
-          const on = toggleHost(ev.host);
-          haptic(6);
-          e.target.textContent = on ? "Following" : "Follow";
+      el.querySelector("#report")?.addEventListener("click", () => {
+        sheet(`
+          <div class="sheet-t">Report this event</div>
+          <div class="stack" style="gap:8px">
+            ${["Misleading information", "It is not happening", "Inappropriate content",
+               "Spam or a scam", "Something else"].map((r) => `
+              <button class="row-btn" type="button" data-r style="background:var(--wash)">
+                <span class="row-copy"><span class="row-t" style="font-size:14.5px">${r}</span></span>
+                <span class="row-go">${icon("fwd")}</span></button>`).join("")}
+          </div>
+          <p class="tiny" style="padding-top:16px">Reporting is stubbed in this preview —
+            nothing is sent anywhere.</p>`, {
+          label: "Report",
+          mount(s) {
+            s.addEventListener("click", (e) => {
+              if (!e.target.closest("[data-r]")) return;
+              closeSheet(); commit(); toast("Thanks — we will take a look", "shield");
+            });
+          },
         });
-
-      el.querySelector("#more")?.addEventListener("click", (e) => {
-        el.querySelector("#about").classList.remove("clip-6");
-        e.currentTarget.remove();
-      });
-
-      document.querySelector("#go")?.addEventListener("click", () => {
-        if (holds(ev.id)) { go(`#/pass/${state.myTickets.findIndex((t) => t.eventId === ev.id)}`); return; }
-        if (needsSheet(ev)) { openTickets(ev); return; }
-        commit(ev, 1);
       });
     },
   };
-}
-
-/* A commit writes the stub, flips the dock and adds a Going tag. No route
-   change, no toast, no confirmation screen. */
-function commit(ev, qty) {
-  state.myTickets.unshift({
-    eventId: ev.id, tier: state.tierIdx, qty, dayOffset: ev.dayOffset,
-  });
-  save(); success();
-  refresh();
-}
-
-/* ------------------------------------------------------- the Tickets sheet */
-export function openTickets(ev) {
-  let qty = 1;
-  const total = () => tierOf(ev).price * qty;
-
-  const body = () => `
-    <div class="sheet-t t-2">Tickets</div>
-    ${ev.tiers.map((t, i) => row({
-      title: esc(t.name), sub: esc(t.desc),
-      trail: `<span class="t-4 w-600">${money(t.price)}</span>${rowTick()}`,
-      attrs: `data-tier="${i}" aria-checked="${i === state.tierIdx}"`,
-    })).join("")}
-
-    <div class="s5">${row({
-      title: "Tickets", kind: "destination",
-      trail: `<span class="stepper">
-        <button type="button" data-q="-1" aria-label="One fewer"${qty <= 1 ? " disabled" : ""}>−</button>
-        <span>${qty}</span>
-        <button type="button" data-q="1" aria-label="One more"${qty >= 10 ? " disabled" : ""}>+</button>
-      </span>`,
-    })}</div>
-
-    <div class="s5">${row({
-      title: `${esc(tierOf(ev).name)} × ${qty}`, kind: "destination",
-      trail: `<span class="t-4 w-600">${money(total())}</span>`,
-    })}</div>
-    <div class="row" aria-hidden="true"></div>
-    ${row({
-      title: `<span class="t-3 w-600">Total</span>`, kind: "destination",
-      trail: `<span class="t-3 w-600">${money(total())}</span>`,
-    })}
-
-    <div class="s5">${btn(`Pay ${money(total())}`, { kind: "primary", block: true, id: "pay" })}</div>`;
-
-  sheet(body, {
-    label: "Tickets",
-    mount(el) {
-      const repaint = () => { el.innerHTML = `<div class="grab"></div>${body()}`; };
-      el.addEventListener("click", (e) => {
-        const t = e.target.closest("[data-tier]");
-        if (t) { haptic(6); state.tierIdx = +t.dataset.tier; save(); repaint(); return; }
-        const q = e.target.closest("[data-q]");
-        if (q) { haptic(6); qty = Math.max(1, Math.min(10, qty + +q.dataset.q)); repaint(); return; }
-        if (e.target.closest("#pay")) { impact(); closeSheet(); commit(ev, qty); }
-      });
-    },
-  });
 }

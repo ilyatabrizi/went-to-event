@@ -1,113 +1,237 @@
-/* Wiring. Eight routes, three sheets, three tabs.
- *
- * The shell paints what the view declares and nothing else: there is no
- * TAB_FOR map, because every pushed view returns tabs:false and the back
- * chevron is the only way out — the one live case that map used to serve
- * produced a screen with a back arrow AND a lit tab that went to the same
- * place as the arrow. */
+/* Wiring. Routes, the two bars, the dock, and the handful of things that have
+   to stay in step with state no matter which view is on screen. */
 
 import { $ } from "./util.js";
 import { icon } from "./icons.js";
-import { route, startRouter, go, render, refresh } from "./router.js";
-import { state, save, subscribe } from "./store.js";
-import { barCity, barTitle, barBack } from "./parts.js";
+import { route, startRouter, go, render } from "./router.js";
+import { state, save, subscribe, unreadNotifs, toggleSave } from "./store.js";
+import { barPlace, barBack, barRoot, lazyImages } from "./parts.js";
+import { paintTabs, paintBadges, setVisible as setTabsVisible, TAB_FOR } from "./tabbar.js";
 import { GRAIN_DEFS } from "./artwork.js";
 import { cityName } from "./place.js";
-import { select } from "./motion.js";
+import { toast } from "./ui.js";
+import { haptic } from "./motion.js";
 import { openCityPicker } from "./views/pickers.js";
 
 import home from "./views/home.js";
+import explore from "./views/explore.js";
+import chat, { thread, notifications } from "./views/chat.js";
 import went, { pass } from "./views/went.js";
-import profile, { saved, host } from "./views/profile.js";
+import profile, { userProfile, membership } from "./views/profile.js";
 import detail from "./views/detail.js";
-import create, { blankDraft } from "./views/create.js";
+import booking, { checkout, confirm } from "./views/booking.js";
+import create, { published, blankDraft } from "./views/create.js";
+import settings from "./views/settings.js";
+import verify from "./views/verify.js";
 
 /* ----------------------------------------------------------------- routes */
-route("/",            home);
-route("/event/:id",   detail);
-route("/pass/:idx",   pass);
-route("/went",        went);
-route("/you",         profile);
-route("/saved",       saved);
-route("/u/:key",      host);
-route("/publish",     create);
+route("/",                home);
+route("/explore",         explore);
+route("/chat",            chat);
+route("/went",            went);
+route("/you",             profile);
 
+route("/event/:id",       detail);
+route("/book/:id",        booking);
+route("/checkout/:id",    checkout);
+route("/confirm/:id",     confirm);
+route("/pass/:idx",       pass);
+route("/thread/:key",     thread);
+route("/u/:key",          userProfile);
+route("/notifications",   notifications);
+route("/membership",      membership);
+route("/publish",         create);
+route("/published",       published);
+route("/verify",          verify);
+route("/settings",        () => settings({ key: "root" }));
+route("/settings/:key",   settings);
+
+/* ------------------------------------------------------------------- tabs */
+/* The tab bar owns itself — its lens, its folding, its drag and its badges all
+   live in tabbar.js. The shell only tells it which route is showing and whether
+   it should be on screen at all. */
 const shell = $("#shell");
 const bar = $("#bar");
 const dock = $("#dock");
-const tabbar = $("#tabbar");
-const tabs = [...tabbar.querySelectorAll(".tab")];
+const view = $("#view");
 
-/* The glyph never changes and is never filled — colour alone is the state. */
-tabs.forEach((t) => {
-  t.querySelector(".tab-ico").innerHTML =
-    icon({ home: "home", went: "ticket", you: "user" }[t.dataset.tab], 24);
-});
+const ROOT_TITLE = { "/explore": "Explore", "/chat": "Chat", "/went": "Went", "/you": "You" };
+
+subscribe(paintBadges);
 
 /* ------------------------------------------------------------------- bars */
+/* The view says what its bar and dock are; the shell just paints them. */
 document.addEventListener("view:chrome", (e) => {
   const { bar: b, dock: d, tabs: showTabs } = e.detail;
+  /* The router keys its scroll memory by the raw hash, so that is what it
+     sends. Every map in here is keyed by the route, so strip the "#" once,
+     here, rather than in five different lookups. */
   const path = e.detail.path.replace(/^#/, "") || "/";
 
-  bar.innerHTML =
-    b?.kind === "back"  ? barBack(b.title, b.right || "")
-  : b?.kind === "title" ? barTitle(b.title, b.right || "")
-  : barCity(cityName());
+  /* Three bars, and which one you get is not a style choice:
+     · a pushed screen gets back + its title, always visible;
+     · Home gets the place header, because where you are IS the screen;
+     · every other tab root gets the mark plus its own title, which arrives
+       only once the large heading has scrolled out from under it. */
+  const isRoot = !!TAB_FOR[path];
+  bar.innerHTML = b?.back || b?.close
+    ? barBack(b.title, b.right || "")
+    : isRoot && path !== "/"
+      ? barRoot(b?.title || ROOT_TITLE[path] || "", b?.right || "")
+      : !isRoot && b?.title
+        ? barBack(b.title, b.right || "")
+        : barPlace(cityName(), { bell: unreadNotifs() });
+  if (b?.close) bar.querySelector("[data-back]").innerHTML = icon("close");
 
   dock.innerHTML = d || "";
   dock.hidden = !d;
   shell.dataset.dock = d ? "1" : "0";
   shell.dataset.tabs = showTabs ? "1" : "0";
-  tabbar.hidden = !showTabs;
+  setTabsVisible(showTabs);
 
-  /* A tab is lit only on its own root. Pushed screens return tabs:false, so
-     nothing is lit and nothing needs a map. */
-  tabs.forEach((t) => t.setAttribute("aria-current",
-    t.getAttribute("href") === `#${path}` ? "page" : "false"));
+  paintTabs(path);
+  paintBadges();
+  lazyImages(bar);
+  /* After the swap, so the new screen's height is what gets measured. */
+  requestAnimationFrame(paintBarState);
 });
 
+/* --------------------------------------------------------------- the bar */
+/* The bar earns its background from the scroll position — but the scroll
+   position changes on NAVIGATION too, and silently: arriving at a short screen
+   from a scrolled one fires no scroll event, so the bar used to keep the
+   background it earned on the previous page. On Went, which is exactly one
+   viewport, that looked like a solid bar appearing over a page sitting at the
+   top. So this is a function, and both the scroll listener and every render
+   call it. */
+function paintBarState() {
+  /* A short screen is only scrollable by the few pixels a phone's URL bar adds
+     and removes. Reacting to that flicks the background on and off while the
+     page sits still. Require something genuinely scrollable first. */
+  const scrollable = document.documentElement.scrollHeight - innerHeight;
+  const canScroll = scrollable > 40;
+  shell.dataset.scrolled = canScroll && scrollY > 12 ? "1" : "0";
+
+  /* Hand the page's heading over to the bar at the moment it leaves, so only
+     one of the two is ever legible. */
+  const h = view.querySelector(".title");
+  if (h && canScroll) {
+    /* Measure the bar, do not parse --bar-h: a custom property comes back as
+       its raw token ("calc(0px + 58px)"), parseFloat gives NaN, and every
+       comparison against it is quietly false forever. */
+    const gone = h.getBoundingClientRect().bottom < bar.offsetHeight + 4;
+    shell.dataset.titled = gone ? "1" : "0";
+    h.style.opacity = gone ? "0" : "1";
+  } else {
+    shell.dataset.titled = "0";
+    if (h) h.style.opacity = "1";       // never strand a heading mid-fade
+  }
+}
+
+let ticking = false;
+addEventListener("scroll", () => {
+  if (ticking) return;
+  ticking = true;
+  requestAnimationFrame(() => { paintBarState(); ticking = false; });
+}, { passive: true });
+
 /* -------------------------------------------------------- global actions */
+/* Three things any view can ask for without importing the shell: go
+   somewhere, go back, or save an event. Everything else is the view's own. */
 document.addEventListener("click", (e) => {
-  if (e.target.closest("[data-back]")) {
-    select();
+  const back = e.target.closest("[data-back]");
+  if (back) {
+    haptic(6);
     history.length > 1 ? history.back() : go("#/");
     return;
   }
-  if (e.target.closest("[data-city]")) { select(); openCityPicker(); return; }
+  const nav = e.target.closest("[data-go]");
+  if (nav) { haptic(6); go(nav.dataset.go); return; }
 
-  /* Tapping the tab you are already on returns to the top. */
-  const tab = e.target.closest(".tab");
-  if (tab && tab.getAttribute("aria-current") === "page") {
-    e.preventDefault();
-    select();
-    scrollTo({ top: 0, behavior: "smooth" });
+  /* The search button in the bar went to Explore but left the field cold, so
+     it saved nobody a tap. It arms the focus the view already knew how to use. */
+  if (e.target.closest("[data-search]")) { state.focusSearch = true; return; }
+
+  /* Tapping a lit tab is the tab bar's own business — see tabbar.js. */
+
+  const sv = e.target.closest("[data-save]");
+  if (sv) {
+    e.preventDefault(); e.stopPropagation();
+    const id = +sv.dataset.save;
+    const on = toggleSave(id);
+    haptic(8);
+    sv.setAttribute("aria-pressed", on);
+    toast(on ? "Saved" : "Removed from saved", on ? "bookmark" : "close");
+    return;
+  }
+
+  const city = e.target.closest(".bar-brand");
+  if (city) { e.preventDefault(); haptic(6); openCityPicker(); return; }
+
+  const pay = e.target.closest("[data-pay]");
+  if (pay) {
+    const id = +pay.dataset.pay;
+    state.myTickets.unshift({ eventId: id, tier: state.tierIdx, qty: state.qty, past: false });
+    save();
+    go(`#/confirm/${id}`);
+    return;
+  }
+
+  const like = e.target.closest("[data-like]");
+  if (like) {
+    const on = like.getAttribute("aria-pressed") !== "true";
+    like.setAttribute("aria-pressed", on);
+    const n = like.querySelector("span");
+    n.textContent = +n.textContent + (on ? 1 : -1);
+    haptic(6);
   }
 });
 
-/* A fresh draft each time publishing is entered from a CTA, but not when the
-   step buttons re-render the same flow. */
+/* Segmented controls are the same everywhere, so they are handled once. */
+document.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-segkey]");
+  if (!b) return;
+  const seg = b.closest("[data-seg]");
+  const id = seg.dataset.seg, key = b.dataset.segkey;
+  haptic(6);
+  if (id === "homefeed") state.homeFeed = key;
+  if (id === "wenttab") state.wentTab = key;
+  if (id === "profiletab") state.profileTab = key;
+  save();
+  render();
+});
+
+/* Publishing needs a fresh draft each time it is entered from a CTA, but not
+   when the step buttons re-render the same flow. */
 addEventListener("hashchange", () => {
   if (location.hash === "#/publish" && !state.create) state.create = blankDraft();
 });
 
 /* --------------------------------------------------------------- startup */
-/* PWA shortcuts arrive as ?go=<tab>. A shortcut that quietly opens Home is
-   worse than no shortcut, so it is honoured — then the query is scrubbed. */
+/* PWA shortcuts arrive as ?go=<tab|publish>. A shortcut that quietly opens
+   Home is worse than no shortcut, so it is honoured — then the query is
+   scrubbed, so a reload or a shared link does not re-fire it. */
 function shortcutHash() {
   let want;
   try { want = new URLSearchParams(location.search).get("go"); } catch { return null; }
   if (!want) return null;
   try { history.replaceState(null, "", location.pathname); } catch {}
-  return { home: "#/", went: "#/went", you: "#/you", publish: "#/publish" }[want] || null;
+  return { explore: "#/explore", went: "#/went", you: "#/you",
+           chat: "#/chat", home: "#/", create: "#/publish", publish: "#/publish" }[want] || null;
 }
+
 const jump = shortcutHash();
 if (jump) location.hash = jump;
 
-document.body.insertAdjacentHTML("afterbegin", GRAIN_DEFS);
 startRouter();
 
+/* The artwork's grain filters live once, at the top of the body, so every
+   generated cover can reference them instead of carrying its own copy. */
+document.body.insertAdjacentHTML("afterbegin", GRAIN_DEFS);
+
 /* Not on localhost: a service worker in front of the dev server turns every
-   edit into a cache-busting expedition. */
+   edit into a cache-busting expedition. It earns its place on the deployed
+   site, not here. */
 const LOCAL = ["localhost", "127.0.0.1", "::1"].includes(location.hostname);
 if ("serviceWorker" in navigator && !LOCAL && location.protocol === "https:") {
   addEventListener("load", () =>

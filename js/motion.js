@@ -12,9 +12,6 @@ export function haptic(ms = 8) {
   if (!state.haptics || reduced()) return;
   try { navigator.vibrate?.(ms); } catch {}
 }
-/* Four patterns, and no warning pattern — there is no destructive confirmation
-   left in the app. */
-export const select  = () => haptic(6);          /* tab, chip, tier, stepper, back */
-export const impact  = () => haptic(10);         /* a primary action committed */
-export const success = () => haptic([10, 60, 20]); /* the RSVP lands */
+export const tap     = () => haptic(6);
+export const commit  = () => haptic([9, 40, 14]);
 export const warn    = () => haptic([14, 60, 14]);
