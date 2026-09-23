@@ -24,6 +24,12 @@ Check it with:
 curl http://127.0.0.1:3000/health
 ```
 
+List the temporary event catalogue with:
+
+```bash
+curl http://127.0.0.1:3000/events
+```
+
 Expected response:
 
 ```json
@@ -38,3 +44,6 @@ npm run build
 ```
 
 The port and host can be changed with `PORT` and `HOST` environment variables.
+
+The event data is currently in memory at `src/data/events.ts`. It is temporary
+seed data and will be replaced by Supabase-backed queries later.

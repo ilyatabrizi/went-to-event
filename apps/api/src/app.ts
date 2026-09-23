@@ -1,4 +1,5 @@
 import Fastify from 'fastify'
+import { eventsRoutes } from './routes/events.js'
 
 export function buildApp() {
   const app = Fastify({
@@ -9,6 +10,8 @@ export function buildApp() {
     status: 'ok',
     service: 'went-to-event-api',
   }))
+
+  app.register(eventsRoutes)
 
   return app
 }
