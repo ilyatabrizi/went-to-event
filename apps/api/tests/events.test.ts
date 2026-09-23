@@ -27,4 +27,23 @@ describe('GET /events', () => {
     })
     expect(body.data[0].ticketTiers[0].priceCents).toBe(2500)
   })
+
+  it('returns one event by id', async () => {
+    const response = await app.inject({ method: 'GET', url: '/events/event-2' })
+
+    expect(response.statusCode).toBe(200)
+    expect(response.json()).toEqual({
+      data: expect.objectContaining({
+        id: 'event-2',
+        title: 'Sunrise Rooftop Yoga',
+      }),
+    })
+  })
+
+  it('returns 404 for an unknown event', async () => {
+    const response = await app.inject({ method: 'GET', url: '/events/does-not-exist' })
+
+    expect(response.statusCode).toBe(404)
+    expect(response.json()).toEqual({ error: 'Event not found' })
+  })
 })

@@ -6,4 +6,16 @@ export async function eventsRoutes(app: FastifyInstance) {
     data: events,
     total: events.length,
   }))
+
+  app.get<{ Params: { id: string } }>('/events/:id', async (request, reply) => {
+    const event = events.find((candidate) => candidate.id === request.params.id)
+
+    if (!event) {
+      return reply.code(404).send({
+        error: 'Event not found',
+      })
+    }
+
+    return { data: event }
+  })
 }

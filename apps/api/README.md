@@ -30,6 +30,12 @@ List the temporary event catalogue with:
 curl http://127.0.0.1:3000/events
 ```
 
+Fetch one event by ID with:
+
+```bash
+curl http://127.0.0.1:3000/events/event-1
+```
+
 Expected response:
 
 ```json
