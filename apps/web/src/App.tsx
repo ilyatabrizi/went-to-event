@@ -16,6 +16,15 @@ function priceLabel(event: Event) {
   return lowest === 0 ? 'Free' : `From $${(lowest / 100).toFixed(0)}`
 }
 
+function Cover({ event }: { event: Event }) {
+  return (
+    <div className="cover-art" data-category={event.category} aria-hidden="true">
+      <span className="cover-glow" />
+      <span className="cover-grid" />
+    </div>
+  )
+}
+
 export function App() {
   const [events, setEvents] = useState<Event[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -45,10 +54,15 @@ export function App() {
     return (
       <main className="shell">
         <button className="back" onClick={() => setSelectedId(null)}>
-          ← Back to events
+          <span aria-hidden="true">←</span> Back to events
         </button>
-        <p className="eyebrow">{selected.category}</p>
-        <h1>{selected.title}</h1>
+        <div className="detail-hero">
+          <Cover event={selected} />
+          <div className="detail-hero-copy">
+            <p className="eyebrow">{selected.category}</p>
+            <h1>{selected.title}</h1>
+          </div>
+        </div>
         <p className="lede">{selected.description}</p>
         <section className="detail-card">
           <div>
@@ -65,7 +79,10 @@ export function App() {
             <strong>{selected.host.name}</strong>
           </div>
         </section>
-        <h2>Tickets</h2>
+        <div className="section-heading">
+          <h2>Tickets</h2>
+          <span>{selected.goingCount} going</span>
+        </div>
         <div className="tiers">
           {selected.ticketTiers.map((tier) => (
             <div className="tier" key={tier.id}>
@@ -95,10 +112,16 @@ export function App() {
         <section className="events" aria-label="Events">
           {events.map((event) => (
             <button className="event-card" key={event.id} onClick={() => setSelectedId(event.id)}>
-              <span className="category">{event.category}</span>
-              <h2>{event.title}</h2>
-              <span>{formatDate(event.startsAt)} · {event.venue.name}</span>
-              <strong>{priceLabel(event)}</strong>
+              <Cover event={event} />
+              <span className="card-copy">
+                <span className="category">{event.category}</span>
+                <h2>{event.title}</h2>
+                <span className="meta">{formatDate(event.startsAt)} · {event.venue.name}</span>
+                <span className="card-footer">
+                  <strong>{priceLabel(event)}</strong>
+                  <span>{event.goingCount} going <span aria-hidden="true">→</span></span>
+                </span>
+              </span>
             </button>
           ))}
         </section>
