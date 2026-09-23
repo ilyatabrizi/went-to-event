@@ -13,3 +13,5 @@ vite.config.d.ts
 .pytest_cache/
 .coverage
 coverage.xml
+test-results/
+playwright-report/

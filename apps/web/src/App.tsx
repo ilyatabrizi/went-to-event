@@ -53,14 +53,14 @@ export function App() {
   if (selected) {
     return (
       <main className="shell">
-        <button className="back" onClick={() => setSelectedId(null)}>
+        <button className="back" data-testid="back-to-events" onClick={() => setSelectedId(null)}>
           <span aria-hidden="true">←</span> Back to events
         </button>
         <div className="detail-hero">
           <Cover event={selected} />
           <div className="detail-hero-copy">
             <p className="eyebrow">{selected.category}</p>
-            <h1>{selected.title}</h1>
+            <h1 data-testid="event-detail-title">{selected.title}</h1>
           </div>
         </div>
         <p className="lede">{selected.description}</p>
@@ -113,7 +113,7 @@ export function App() {
           {events.map((event) => (
             <button className="event-card" key={event.id} onClick={() => setSelectedId(event.id)}>
               <Cover event={event} />
-              <span className="card-copy">
+              <span className="card-copy" data-testid="event-card">
                 <span className="category">{event.category}</span>
                 <h2>{event.title}</h2>
                 <span className="meta">{formatDate(event.startsAt)} · {event.venue.name}</span>

@@ -27,3 +27,16 @@ Open the URL printed by Vite, usually `http://localhost:5173`.
 
 The Vite development server proxies `/api` to the local API at
 `http://127.0.0.1:3000`.
+
+Run the browser smoke test with:
+
+```bash
+npm run test:e2e
+```
+
+The test starts the API and Vite automatically. Install the Playwright browser
+once if needed:
+
+```bash
+npx playwright install chromium
+```
