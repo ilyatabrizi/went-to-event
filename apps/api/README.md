@@ -64,5 +64,6 @@ infra/supabase/seed.sql
 ```
 
 Copy `.env.example` to `.env`, fill in the Supabase project URL and server-only
-service-role key, then restart the API. The API will use Supabase automatically.
+service-role key, then restart the API. The development server loads this file
+automatically. The API will use Supabase automatically.
 Never expose `SUPABASE_SERVICE_ROLE_KEY` to the web app or iOS app.
