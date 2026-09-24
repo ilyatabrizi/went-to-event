@@ -36,6 +36,13 @@ Fetch one event by ID with:
 curl http://127.0.0.1:3000/events/event-1
 ```
 
+The authenticated user endpoint is:
+
+```text
+GET /me
+Authorization: Bearer <supabase-access-token>
+```
+
 Expected response:
 
 ```json

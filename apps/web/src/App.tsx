@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { getEvent, getEvents, type Event } from './api'
+import { AuthPanel } from './AuthPanel'
 
 function formatDate(value: string) {
   return new Intl.DateTimeFormat('en-US', {
@@ -105,6 +106,7 @@ export function App() {
         <h1>What’s happening?</h1>
         <p className="lede">Find something worth going to.</p>
       </header>
+      <AuthPanel />
       {error && <p className="error">{error}</p>}
       {loading ? (
         <p>Loading events…</p>

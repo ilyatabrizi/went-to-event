@@ -28,6 +28,10 @@ Open the URL printed by Vite, usually `http://localhost:5173`.
 The Vite development server proxies `/api` to the local API at
 `http://127.0.0.1:3000`.
 
+To enable web authentication, copy `.env.example` to `.env` and add the
+Supabase project's public URL and anon key. Never put the API service-role key
+in the web app.
+
 Run the browser smoke test with:
 
 ```bash

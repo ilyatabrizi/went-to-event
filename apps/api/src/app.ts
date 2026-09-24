@@ -1,9 +1,15 @@
 import Fastify from 'fastify'
 import type { EventRepository } from '../../../packages/shared/src/events.js'
+import type { AuthService } from './auth/service.js'
+import { createAuthService } from './auth/service.js'
 import { createEventRepository } from './repositories/factory.js'
+import { meRoutes } from './routes/me.js'
 import { eventsRoutes } from './routes/events.js'
 
-export function buildApp(repository: EventRepository = createEventRepository()) {
+export function buildApp(
+  repository: EventRepository = createEventRepository(),
+  authService: AuthService | null = createAuthService(),
+) {
   const app = Fastify({
     logger: process.env.NODE_ENV !== 'test',
   })
@@ -14,6 +20,7 @@ export function buildApp(repository: EventRepository = createEventRepository()) 
   }))
 
   app.register(eventsRoutes, { repository })
+  app.register(meRoutes, { authService })
 
   return app
 }
