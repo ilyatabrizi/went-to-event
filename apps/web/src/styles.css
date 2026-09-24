@@ -150,6 +150,21 @@ h2 { margin: 7px 0; font-size: 1.15rem; letter-spacing: -.025em; }
   border-radius: 18px;
   background: var(--card);
 }
+.tier-option { width: 100%; color: inherit; text-align: left; cursor: pointer; }
+.tier-option:hover, .tier-selected { border-color: rgba(244, 241, 236, .55); }
+.tier-option:focus-visible { outline: 2px solid var(--ember); outline-offset: 2px; }
+.booking-panel, .booking-confirmation { display: grid; gap: 16px; margin-top: 18px; padding: 18px; border: 1px solid var(--line); border-radius: 20px; background: rgba(22, 20, 24, .72); }
+.booking-confirmation { border-color: rgba(244, 241, 236, .3); }
+.booking-confirmation h2 { margin: 0; font-size: 1.7rem; }
+.booking-confirmation p { margin: 0; color: var(--muted); font-size: .8rem; }
+.booking-confirmation > span:last-child { color: var(--muted); }
+.booking-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.booking-row > div:first-child { display: grid; gap: 4px; }
+.quantity-stepper { display: flex; align-items: center; gap: 12px; }
+.quantity-stepper button { width: 30px; height: 30px; border: 1px solid var(--line); border-radius: 50%; background: transparent; color: var(--ink); cursor: pointer; }
+.quantity-stepper button:disabled { opacity: .3; cursor: not-allowed; }
+.booking-button { width: 100%; padding: 13px; }
+.booking-hint { margin: 0; color: var(--muted); font-size: .84rem; }
 .tier div { display: grid; gap: 4px; }
 .error { padding: 14px; border: 1px solid var(--ember); border-radius: 12px; color: #ffb6a8; }
 .auth-panel { display: grid; gap: 12px; margin: 24px 0 30px; padding: 16px; border: 1px solid var(--line); border-radius: 18px; background: rgba(22, 20, 24, .72); }
