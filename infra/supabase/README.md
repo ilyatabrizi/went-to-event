@@ -8,3 +8,9 @@ Do not commit project secrets. Local and hosted credentials belong in ignored
 The first migration creates `venues`, `events`, and `ticket_tiers`. Apply the
 migration and seed data through the Supabase dashboard or CLI before enabling
 the Supabase repository in the API.
+
+From the repository root, apply the remote migration and seed with:
+
+```bash
+npx supabase db push --workdir infra --project-ref YOUR_PROJECT_REF --include-seed
+```

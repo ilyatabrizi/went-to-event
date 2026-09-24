@@ -10,7 +10,7 @@ type EventRow = {
   ends_at: string
   host_name: string
   going_count: number
-  venue: Array<{ name: string; address: string }>
+  venue: { name: string; address: string } | Array<{ name: string; address: string }>
   ticketTiers: Array<{
     id: string
     name: string
@@ -20,7 +20,7 @@ type EventRow = {
 }
 
 function toEvent(row: EventRow): Event {
-  const venue = row.venue[0]
+  const venue = Array.isArray(row.venue) ? row.venue[0] : row.venue
 
   if (!venue) {
     throw new Error(`Event ${row.id} has no venue`)

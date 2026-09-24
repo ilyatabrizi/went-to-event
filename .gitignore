@@ -15,3 +15,5 @@ vite.config.d.ts
 coverage.xml
 test-results/
 playwright-report/
+**/supabase/.temp/
+**/supabase/.branches/
