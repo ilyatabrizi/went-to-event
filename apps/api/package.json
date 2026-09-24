@@ -13,6 +13,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.47.0",
     "fastify": "^5.0.0"
   },
   "devDependencies": {

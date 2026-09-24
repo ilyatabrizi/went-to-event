@@ -1,12 +1,13 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { FastifyInstance } from 'fastify'
 import { buildApp } from '../src/app.js'
+import { InMemoryEventRepository } from '../src/repositories/events.js'
 
 describe('GET /health', () => {
   let app: FastifyInstance
 
   beforeAll(async () => {
-    app = buildApp()
+    app = buildApp(new InMemoryEventRepository())
     await app.ready()
   })
 

@@ -52,4 +52,17 @@ npm run build
 The port and host can be changed with `PORT` and `HOST` environment variables.
 
 The event data is currently in memory at `src/data/events.ts`. It is temporary
-seed data and will be replaced by Supabase-backed queries later.
+seed data and is used automatically when Supabase credentials are absent.
+
+## Supabase
+
+The first database migration and seed data are in:
+
+```text
+infra/supabase/migrations/001_events.sql
+infra/supabase/seed.sql
+```
+
+Copy `.env.example` to `.env`, fill in the Supabase project URL and server-only
+service-role key, then restart the API. The API will use Supabase automatically.
+Never expose `SUPABASE_SERVICE_ROLE_KEY` to the web app or iOS app.
