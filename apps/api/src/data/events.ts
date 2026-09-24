@@ -1,27 +1,4 @@
-export type TicketTier = {
-  id: string
-  name: string
-  description: string
-  priceCents: number
-}
-
-export type Event = {
-  id: string
-  category: string
-  title: string
-  description: string
-  startsAt: string
-  endsAt: string
-  venue: {
-    name: string
-    address: string
-  }
-  host: {
-    name: string
-  }
-  goingCount: number
-  ticketTiers: TicketTier[]
-}
+import type { Event } from '../../../../packages/shared/src/events.js'
 
 export const events: Event[] = [
   {

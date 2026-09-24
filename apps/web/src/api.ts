@@ -1,36 +1,5 @@
-export type TicketTier = {
-  id: string
-  name: string
-  description: string
-  priceCents: number
-}
-
-export type Event = {
-  id: string
-  category: string
-  title: string
-  description: string
-  startsAt: string
-  endsAt: string
-  venue: {
-    name: string
-    address: string
-  }
-  host: {
-    name: string
-  }
-  goingCount: number
-  ticketTiers: TicketTier[]
-}
-
-type EventsResponse = {
-  data: Event[]
-  total: number
-}
-
-type EventResponse = {
-  data: Event
-}
+import type { Event, EventResponse, EventsResponse } from '../../../packages/shared/src/events'
+export type { Event } from '../../../packages/shared/src/events'
 
 async function request<T>(path: string): Promise<T> {
   const response = await fetch(`/api${path}`)
