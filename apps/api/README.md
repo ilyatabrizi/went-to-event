@@ -43,6 +43,20 @@ GET /me
 Authorization: Bearer <supabase-access-token>
 ```
 
+Booking endpoints are protected by the same token:
+
+```text
+POST /bookings
+GET  /me/bookings
+GET  /me/bookings/:id
+```
+
+Create a test booking with JSON like:
+
+```json
+{"eventId":"event-1","ticketTierId":"tier-1","quantity":1}
+```
+
 Expected response:
 
 ```json
