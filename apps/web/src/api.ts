@@ -39,3 +39,16 @@ export async function createBooking(session: Session, input: CreateBookingInput)
 
   return response.json() as Promise<{ data: Booking }>
 }
+
+export async function getBookings(session: Session) {
+  const response = await fetch('/api/me/bookings', {
+    headers: { Authorization: `Bearer ${session.access_token}` },
+  })
+
+  if (!response.ok) {
+    const body = await response.json().catch(() => null) as { error?: string } | null
+    throw new Error(body?.error ?? `Request failed: ${response.status}`)
+  }
+
+  return response.json() as Promise<{ data: Booking[] }>
+}

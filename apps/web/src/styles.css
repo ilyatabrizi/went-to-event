@@ -165,6 +165,26 @@ h2 { margin: 7px 0; font-size: 1.15rem; letter-spacing: -.025em; }
 .quantity-stepper button:disabled { opacity: .3; cursor: not-allowed; }
 .booking-button { width: 100%; padding: 13px; }
 .booking-hint { margin: 0; color: var(--muted); font-size: .84rem; }
+.bookings-link { display: flex; justify-content: space-between; width: 100%; margin: 0 0 22px; border: 1px solid var(--line); border-radius: 14px; padding: 13px 15px; background: transparent; color: var(--ink); text-align: left; cursor: pointer; }
+.bookings-link:hover { border-color: rgba(244, 241, 236, .4); }
+.booking-list { display: grid; gap: 12px; }
+.booking-list-item { display: flex; justify-content: space-between; gap: 16px; width: 100%; border: 1px solid var(--line); border-radius: 18px; padding: 17px; background: var(--card); color: var(--ink); text-align: left; cursor: pointer; }
+.booking-list-item:hover { border-color: rgba(244, 241, 236, .45); }
+.booking-list-item > span { display: grid; gap: 5px; }
+.booking-list-item > span:last-child { justify-items: end; color: var(--muted); font-size: .82rem; }
+.booking-list-item > span:last-child strong { color: var(--ink); }
+.empty-state { padding: 22px; border: 1px dashed var(--line); border-radius: 18px; color: var(--muted); }
+.empty-state h2 { color: var(--ink); }
+.empty-state p { margin-bottom: 0; line-height: 1.5; }
+.pass-card { display: grid; gap: 16px; padding: 24px; border-radius: 28px; background: #f7f2e9; color: #0b0a0c; }
+.pass-mark { font-size: 2rem; font-weight: 800; letter-spacing: -.1em; }
+.pass-card .eyebrow { color: #6f6870; }
+.pass-card h1 { max-width: 10ch; font-size: clamp(2.5rem, 11vw, 4rem); }
+.pass-details { display: grid; gap: 14px; padding: 17px 0; border-top: 1px solid rgba(11, 10, 12, .16); border-bottom: 1px solid rgba(11, 10, 12, .16); }
+.pass-details div { display: grid; gap: 4px; }
+.pass-details .label { color: #6f6870; }
+.pass-code { display: grid; place-items: center; min-height: 100px; border: 2px dashed rgba(11, 10, 12, .3); border-radius: 14px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1.25rem; font-weight: 800; letter-spacing: .18em; }
+.pass-footer { display: flex; justify-content: space-between; gap: 12px; font-size: .9rem; }
 .tier div { display: grid; gap: 4px; }
 .error { padding: 14px; border: 1px solid var(--ember); border-radius: 12px; color: #ffb6a8; }
 .auth-panel { display: grid; gap: 12px; margin: 24px 0 30px; padding: 16px; border: 1px solid var(--line); border-radius: 18px; background: rgba(22, 20, 24, .72); }

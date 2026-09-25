@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { Session } from '@supabase/supabase-js'
-import { createBooking, getEvent, getEvents, type Booking, type Event } from './api'
+import { createBooking, getBookings, getEvent, getEvents, type Booking, type Event } from './api'
 import { AuthPanel } from './AuthPanel'
 import { supabase } from './auth'
 
@@ -40,6 +40,12 @@ export function App() {
   const [booking, setBooking] = useState<Booking | null>(null)
   const [bookingBusy, setBookingBusy] = useState(false)
   const [bookingError, setBookingError] = useState<string | null>(null)
+  const [showBookings, setShowBookings] = useState(false)
+  const [bookings, setBookings] = useState<Booking[]>([])
+  const [bookingsLoading, setBookingsLoading] = useState(false)
+  const [bookingsError, setBookingsError] = useState<string | null>(null)
+  const [passBooking, setPassBooking] = useState<Booking | null>(null)
+  const [passEvent, setPassEvent] = useState<Event | null>(null)
 
   useEffect(() => {
     if (!supabase) return
@@ -75,6 +81,38 @@ export function App() {
       })
       .catch(() => setError('Could not load that event.'))
   }, [selectedId])
+
+  async function openBookings() {
+    if (!session) return
+
+    setSelectedId(null)
+    setPassBooking(null)
+    setPassEvent(null)
+    setShowBookings(true)
+    setBookingsLoading(true)
+    setBookingsError(null)
+
+    try {
+      const response = await getBookings(session)
+      setBookings(response.data)
+    } catch (bookingFailure) {
+      setBookingsError(bookingFailure instanceof Error ? bookingFailure.message : 'Could not load bookings')
+    } finally {
+      setBookingsLoading(false)
+    }
+  }
+
+  async function openPass(bookingToOpen: Booking) {
+    setPassBooking(bookingToOpen)
+    setPassEvent(null)
+
+    try {
+      const response = await getEvent(bookingToOpen.eventId)
+      setPassEvent(response.data)
+    } catch {
+      setBookingsError('Could not load the event for this booking.')
+    }
+  }
 
   async function submitBooking() {
     if (!selected || !session || !selectedTierId) return
@@ -184,6 +222,60 @@ export function App() {
     )
   }
 
+  if (showBookings) {
+    if (passBooking) {
+      return (
+        <main className="shell">
+          <button className="back" data-testid="back-to-bookings" onClick={() => setPassBooking(null)}>
+            <span aria-hidden="true">←</span> Back to bookings
+          </button>
+          <section className="pass-card" data-testid="booking-pass">
+            <div className="pass-mark">e.</div>
+            <span className="eyebrow">Confirmed pass</span>
+            <h1>{passEvent?.title ?? 'Your event pass'}</h1>
+            {passEvent && (
+              <div className="pass-details">
+                <div><span className="label">When</span><strong>{formatDate(passEvent.startsAt)}</strong></div>
+                <div><span className="label">Where</span><strong>{passEvent.venue.name}</strong></div>
+              </div>
+            )}
+            <div className="pass-code" aria-label="Booking reference">{passBooking.id.slice(0, 8).toUpperCase()}</div>
+            <div className="pass-footer">
+              <span>{passBooking.quantity} ticket{passBooking.quantity === 1 ? '' : 's'}</span>
+              <strong>${(passBooking.totalCents / 100).toFixed(2)}</strong>
+            </div>
+          </section>
+        </main>
+      )
+    }
+
+    return (
+      <main className="shell">
+        <button className="back" data-testid="back-to-events-from-bookings" onClick={() => setShowBookings(false)}>
+          <span aria-hidden="true">←</span> Back to events
+        </button>
+        <header>
+          <p className="eyebrow">Your account</p>
+          <h1>Your bookings</h1>
+          <p className="lede">Your confirmed nights, all in one place.</p>
+        </header>
+        {bookingsError && <p className="error">{bookingsError}</p>}
+        {bookingsLoading ? <p>Loading bookings…</p> : bookings.length === 0 ? (
+          <section className="empty-state"><h2>No bookings yet.</h2><p>Find an event worth going to and your pass will appear here.</p></section>
+        ) : (
+          <section className="booking-list" aria-label="Your bookings">
+            {bookings.map((booking) => (
+              <button className="booking-list-item" key={booking.id} onClick={() => openPass(booking)}>
+                <span><span className="label">Confirmed</span><strong>{booking.eventId}</strong></span>
+                <span><strong>{booking.quantity} ×</strong><span>${(booking.totalCents / 100).toFixed(2)} →</span></span>
+              </button>
+            ))}
+          </section>
+        )}
+      </main>
+    )
+  }
+
   return (
     <main className="shell">
       <header>
@@ -192,6 +284,7 @@ export function App() {
         <p className="lede">Find something worth going to.</p>
       </header>
       <AuthPanel />
+      {session && <button className="bookings-link" data-testid="open-bookings" onClick={openBookings}>Your bookings <span aria-hidden="true">→</span></button>}
       {error && <p className="error">{error}</p>}
       {loading ? (
         <p>Loading events…</p>
