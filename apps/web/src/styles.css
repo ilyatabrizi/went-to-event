@@ -191,6 +191,8 @@ h2 { margin: 7px 0; font-size: 1.15rem; letter-spacing: -.025em; }
 .tier div { display: grid; gap: 4px; }
 .error { padding: 14px; border: 1px solid var(--ember); border-radius: 12px; color: #ffb6a8; }
 .auth-panel { display: grid; gap: 12px; margin: 24px 0 30px; padding: 16px; border: 1px solid var(--line); border-radius: 18px; background: rgba(22, 20, 24, .72); }
+.auth-page-card { margin-top: 0; padding: 20px; }
+.auth-shell { max-width: 520px; }
 .auth-panel-muted { color: var(--muted); }
 .auth-panel p { margin: 0; font-size: .82rem; line-height: 1.45; }
 .auth-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; }

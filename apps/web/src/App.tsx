@@ -59,6 +59,7 @@ export function App() {
   const [bookingsError, setBookingsError] = useState<string | null>(null)
   const [passBooking, setPassBooking] = useState<Booking | null>(null)
   const [passEvent, setPassEvent] = useState<Event | null>(null)
+  const [showAuth, setShowAuth] = useState(false)
 
   useEffect(() => {
     if (!supabase) return
@@ -147,6 +148,22 @@ export function App() {
     }
   }
 
+  if (showAuth) {
+    return (
+      <main className="shell auth-shell">
+        <button className="back" data-testid="back-from-auth" onClick={() => setShowAuth(false)}>
+          <span aria-hidden="true">←</span> Back to event
+        </button>
+        <header>
+          <p className="eyebrow">One more step</p>
+          <h1>Sign in to book.</h1>
+          <p className="lede">Create an account or sign in to keep your tickets and passes together.</p>
+        </header>
+        <AuthPanel page onAuthenticated={() => setShowAuth(false)} />
+      </main>
+    )
+  }
+
   if (selected) {
     return (
       <main className="shell">
@@ -226,7 +243,9 @@ export function App() {
                 {bookingBusy ? 'Confirming…' : 'Confirm booking'}
               </button>
             ) : (
-              <p className="booking-hint">Sign in above before booking your ticket.</p>
+              <button className="primary-button booking-button" data-testid="sign-in-to-book" onClick={() => setShowAuth(true)}>
+                Sign in to book
+              </button>
             )}
             {bookingError && <p className="error">{bookingError}</p>}
           </section>
@@ -298,7 +317,6 @@ export function App() {
         <h1>What’s happening?</h1>
         <p className="lede">Find something worth going to.</p>
       </header>
-      <AuthPanel />
       {session && <button className="bookings-link" data-testid="open-bookings" onClick={openBookings}>Your bookings <span aria-hidden="true">→</span></button>}
       {error && <p className="error">{error}</p>}
       {loading ? (

@@ -30,6 +30,19 @@ test('keeps auth inputs at a mobile-safe font size', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
   await page.goto('/')
 
+  await page.getByRole('button', { name: /Warehouse Sessions Vol\. 9/ }).click()
+  await page.getByTestId('sign-in-to-book').click()
   await expect(page.getByLabel('Email')).toHaveCSS('font-size', '16px')
   await expect(page.getByLabel('Password')).toHaveCSS('font-size', '16px')
+})
+
+test('asks signed-out visitors to sign in when booking', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto('/')
+  await page.getByRole('button', { name: /Warehouse Sessions Vol\. 9/ }).click()
+
+  await page.getByTestId('sign-in-to-book').click()
+  await expect(page.getByRole('heading', { name: 'Sign in to book.' })).toBeVisible()
+  await expect(page.getByLabel('Email')).toBeVisible()
+  await expect(page.getByLabel('Password')).toBeVisible()
 })

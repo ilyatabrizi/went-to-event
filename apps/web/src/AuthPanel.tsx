@@ -4,7 +4,7 @@ import { getApiUser, supabase, type ApiUser } from './auth'
 
 type Mode = 'sign-in' | 'sign-up'
 
-export function AuthPanel() {
+export function AuthPanel({ onAuthenticated, page = false }: { onAuthenticated?: () => void; page?: boolean }) {
   const [session, setSession] = useState<Session | null>(null)
   const [apiUser, setApiUser] = useState<ApiUser | null>(null)
   const [mode, setMode] = useState<Mode>('sign-in')
@@ -35,9 +35,13 @@ export function AuthPanel() {
       .catch(() => setMessage('Signed in, but the API could not verify the session.'))
   }, [session])
 
+  useEffect(() => {
+    if (session && onAuthenticated) onAuthenticated()
+  }, [onAuthenticated, session])
+
   if (!supabase) {
     return (
-      <aside className="auth-panel auth-panel-muted">
+      <aside className={`auth-panel auth-panel-muted ${page ? 'auth-page-card' : ''}`}>
         <span className="label">Account</span>
         <p>Add `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` to `apps/web/.env` to enable sign in.</p>
       </aside>
@@ -73,7 +77,7 @@ export function AuthPanel() {
 
   if (session) {
     return (
-      <aside className="auth-panel">
+      <aside className={`auth-panel ${page ? 'auth-page-card' : ''}`}>
         <div>
           <span className="label">Signed in</span>
           <strong>{apiUser?.email ?? session.user.email}</strong>
@@ -85,7 +89,7 @@ export function AuthPanel() {
   }
 
   return (
-    <aside className="auth-panel">
+    <aside className={`auth-panel ${page ? 'auth-page-card' : ''}`}>
       <div className="auth-heading">
         <div>
           <span className="label">Your account</span>
