@@ -17,3 +17,7 @@ test-results/
 playwright-report/
 **/supabase/.temp/
 **/supabase/.branches/
+**/xcuserdata/
+DerivedData/
+*.xcuserstate
+.swiftpm/
