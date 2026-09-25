@@ -28,6 +28,19 @@ function Cover({ event }: { event: Event }) {
   )
 }
 
+function Navigation({ onBookings, onHome }: { onBookings: () => void; onHome: () => void }) {
+  return (
+    <nav className="app-nav" aria-label="Main navigation">
+      <button className="nav-item nav-active" onClick={onHome}>
+        <span aria-hidden="true">⌂</span><span>Home</span>
+      </button>
+      <button className="nav-item" onClick={onBookings}>
+        <span aria-hidden="true">▣</span><span>Bookings</span>
+      </button>
+    </nav>
+  )
+}
+
 export function App() {
   const [events, setEvents] = useState<Event[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -251,6 +264,7 @@ export function App() {
 
     return (
       <main className="shell">
+        <Navigation onHome={() => setShowBookings(false)} onBookings={openBookings} />
         <button className="back" data-testid="back-to-events-from-bookings" onClick={() => setShowBookings(false)}>
           <span aria-hidden="true">←</span> Back to events
         </button>
@@ -278,6 +292,7 @@ export function App() {
 
   return (
     <main className="shell">
+      <Navigation onHome={() => setShowBookings(false)} onBookings={openBookings} />
       <header>
         <p className="eyebrow">San Francisco</p>
         <h1>What’s happening?</h1>
