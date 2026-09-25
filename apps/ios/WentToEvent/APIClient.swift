@@ -13,9 +13,9 @@ enum APIError: LocalizedError {
 }
 
 struct APIClient {
-    // Simulator: 127.0.0.1 reaches the Mac running the API.
-    // Physical iPhone: change this to http://YOUR-MAC-IP:3000.
-    var baseURL = URL(string: "http://127.0.0.1:3000")!
+    // This Mac is currently sharing its connection over an iPhone hotspot.
+    // Keep the API running with HOST=0.0.0.0 when testing on a physical iPhone.
+    var baseURL = URL(string: "http://172.20.10.3:3000")!
 
     private var decoder: JSONDecoder {
         let decoder = JSONDecoder()
