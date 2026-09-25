@@ -25,3 +25,11 @@ test('renders the event grid on desktop', async ({ page }) => {
   await expect(page.getByTestId('event-card')).toHaveCount(3)
   await expect(page.locator('.events')).toHaveCSS('grid-template-columns', /289\.5px 289\.5px 289\.5px 289\.5px/)
 })
+
+test('keeps auth inputs at a mobile-safe font size', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto('/')
+
+  await expect(page.getByLabel('Email')).toHaveCSS('font-size', '16px')
+  await expect(page.getByLabel('Password')).toHaveCSS('font-size', '16px')
+})
