@@ -22,7 +22,7 @@ struct SupabaseAuthClient {
     }
 
     func signIn(email: String, password: String) async throws -> NativeSession {
-        try await authenticate(path: "/auth/v1/token?grant_type=password", body: [
+        try await authenticate(grantType: "password", body: [
             "email": email,
             "password": password,
         ])
@@ -48,13 +48,18 @@ struct SupabaseAuthClient {
     }
 
     func refresh(_ session: NativeSession) async throws -> NativeSession {
-        try await authenticate(path: "/auth/v1/token?grant_type=refresh_token", body: [
+        try await authenticate(grantType: "refresh_token", body: [
             "refresh_token": session.refreshToken,
         ])
     }
 
-    private func authenticate(path: String, body: [String: String]) async throws -> NativeSession {
-        let response: AuthResponse = try await request(path: path, method: "POST", body: body)
+    private func authenticate(grantType: String, body: [String: String]) async throws -> NativeSession {
+        let response: AuthResponse = try await request(
+            path: "/auth/v1/token",
+            method: "POST",
+            queryItems: [URLQueryItem(name: "grant_type", value: grantType)],
+            body: body,
+        )
         guard let accessToken = response.accessToken,
               let refreshToken = response.refreshToken else {
             throw AuthError.invalidResponse
@@ -73,8 +78,20 @@ struct SupabaseAuthClient {
         return Date().addingTimeInterval(TimeInterval(seconds))
     }
 
-    private func request<T: Decodable>(path: String, method: String, body: [String: String]) async throws -> T {
-        var request = URLRequest(url: baseURL.appending(path: path))
+    private func request<T: Decodable>(
+        path: String,
+        method: String,
+        queryItems: [URLQueryItem] = [],
+        body: [String: String],
+    ) async throws -> T {
+        var components = URLComponents(
+            url: baseURL.appendingPathComponent(path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))),
+            resolvingAgainstBaseURL: false,
+        )
+        components?.queryItems = queryItems.isEmpty ? nil : queryItems
+        guard let url = components?.url else { throw AuthError.invalidResponse }
+
+        var request = URLRequest(url: url)
         request.httpMethod = method
         request.setValue(anonKey, forHTTPHeaderField: "apikey")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -86,7 +103,8 @@ struct SupabaseAuthClient {
         }
         guard 200..<300 ~= httpResponse.statusCode else {
             let apiError = try? JSONDecoder().decode(AuthErrorResponse.self, from: data)
-            throw AuthError.message(apiError?.msg ?? apiError?.errorDescription ?? "Authentication failed.")
+            let message = apiError?.msg ?? apiError?.errorDescription ?? "Authentication failed (HTTP \(httpResponse.statusCode))."
+            throw AuthError.message(message)
         }
 
         do {
