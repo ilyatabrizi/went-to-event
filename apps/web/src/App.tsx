@@ -28,7 +28,7 @@ function Cover({ event }: { event: Event }) {
   )
 }
 
-function Navigation({ onBookings, onHome }: { onBookings: () => void; onHome: () => void }) {
+function Navigation({ onBookings, onHome, onProfile }: { onBookings: () => void; onHome: () => void; onProfile: () => void }) {
   return (
     <nav className="app-nav" aria-label="Main navigation">
       <button className="nav-item nav-active" onClick={onHome}>
@@ -36,6 +36,9 @@ function Navigation({ onBookings, onHome }: { onBookings: () => void; onHome: ()
       </button>
       <button className="nav-item" onClick={onBookings}>
         <span aria-hidden="true">▣</span><span>Bookings</span>
+      </button>
+      <button className="nav-item" onClick={onProfile}>
+        <span aria-hidden="true">●</span><span>Profile</span>
       </button>
     </nav>
   )
@@ -60,6 +63,7 @@ export function App() {
   const [passBooking, setPassBooking] = useState<Booking | null>(null)
   const [passEvent, setPassEvent] = useState<Event | null>(null)
   const [showAuth, setShowAuth] = useState(false)
+  const [showProfile, setShowProfile] = useState(false)
 
   useEffect(() => {
     if (!supabase) return
@@ -116,6 +120,21 @@ export function App() {
     }
   }
 
+  function openProfile() {
+    setSelectedId(null)
+    setShowBookings(false)
+    setShowProfile(true)
+    setPassBooking(null)
+    setPassEvent(null)
+  }
+
+  async function logout() {
+    if (supabase) await supabase.auth.signOut()
+    setShowProfile(false)
+    setShowBookings(false)
+    setSelectedId(null)
+  }
+
   async function openPass(bookingToOpen: Booking) {
     setPassBooking(bookingToOpen)
     setPassEvent(null)
@@ -160,6 +179,45 @@ export function App() {
           <p className="lede">Create an account or sign in to keep your tickets and passes together.</p>
         </header>
         <AuthPanel page onAuthenticated={() => setShowAuth(false)} />
+      </main>
+    )
+  }
+
+  if (showProfile) {
+    if (!session) {
+      return (
+        <main className="shell auth-shell">
+          <button className="back" data-testid="back-from-profile" onClick={() => setShowProfile(false)}>
+            <span aria-hidden="true">←</span> Back to events
+          </button>
+          <header>
+            <p className="eyebrow">Your account</p>
+            <h1>Sign in to see your profile.</h1>
+            <p className="lede">Your profile and bookings live here once you have an account.</p>
+          </header>
+          <button className="primary-button booking-button" data-testid="profile-sign-in" onClick={() => { setShowProfile(false); setShowAuth(true) }}>
+            Sign in or create account
+          </button>
+        </main>
+      )
+    }
+
+    return (
+      <main className="shell profile-shell">
+        <Navigation onHome={() => setShowProfile(false)} onBookings={openBookings} onProfile={openProfile} />
+        <header>
+          <p className="eyebrow">Your account</p>
+          <h1>Your profile</h1>
+          <p className="lede">Manage your account and the events you’re going to.</p>
+        </header>
+        <section className="profile-card" data-testid="profile-card">
+          <div className="profile-avatar" aria-hidden="true">{(session.user.email ?? 'U').slice(0, 1).toUpperCase()}</div>
+          <div className="profile-identity">
+            <span className="label">Signed in as</span>
+            <strong>{session.user.email}</strong>
+          </div>
+          <button className="logout-button" data-testid="logout" onClick={logout}>Log out</button>
+        </section>
       </main>
     )
   }
@@ -283,7 +341,7 @@ export function App() {
 
     return (
       <main className="shell">
-        <Navigation onHome={() => setShowBookings(false)} onBookings={openBookings} />
+        <Navigation onHome={() => setShowBookings(false)} onBookings={openBookings} onProfile={openProfile} />
         <button className="back" data-testid="back-to-events-from-bookings" onClick={() => setShowBookings(false)}>
           <span aria-hidden="true">←</span> Back to events
         </button>
@@ -311,7 +369,7 @@ export function App() {
 
   return (
     <main className="shell">
-      <Navigation onHome={() => setShowBookings(false)} onBookings={openBookings} />
+      <Navigation onHome={() => setShowBookings(false)} onBookings={openBookings} onProfile={openProfile} />
       <header>
         <p className="eyebrow">San Francisco</p>
         <h1>What’s happening?</h1>

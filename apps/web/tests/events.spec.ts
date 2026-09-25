@@ -46,3 +46,12 @@ test('asks signed-out visitors to sign in when booking', async ({ page }) => {
   await expect(page.getByLabel('Email')).toBeVisible()
   await expect(page.getByLabel('Password')).toBeVisible()
 })
+
+test('shows a signed-out profile entry point', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto('/')
+
+  await page.getByRole('button', { name: 'Profile' }).click()
+  await expect(page.getByRole('heading', { name: 'Sign in to see your profile.' })).toBeVisible()
+  await expect(page.getByTestId('profile-sign-in')).toBeVisible()
+})
