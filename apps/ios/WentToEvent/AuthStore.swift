@@ -15,14 +15,10 @@ final class AuthStore: ObservableObject {
 
     var isSignedIn: Bool { session != nil }
 
-    init(
-        client: SupabaseAuthClient = SupabaseAuthClient(),
-        keychain: KeychainStore = KeychainStore(),
-        apiClient: APIClient = APIClient(),
-    ) {
-        self.client = client
-        self.keychain = keychain
-        self.apiClient = apiClient
+    init() {
+        client = SupabaseAuthClient()
+        keychain = KeychainStore()
+        apiClient = APIClient()
 
         if let stored = try? keychain.load(NativeSession.self) {
             session = stored

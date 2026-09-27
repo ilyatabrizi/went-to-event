@@ -9,8 +9,8 @@ final class EventStore: ObservableObject {
 
     private let client: APIClient
 
-    init(client: APIClient = APIClient()) {
-        self.client = client
+    init() {
+        client = APIClient()
     }
 
     func load() async {

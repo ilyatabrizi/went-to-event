@@ -9,6 +9,12 @@ struct ContentView: View {
     @State private var showProfile = false
     @State private var showBookings = false
 
+    init() {
+        _store = StateObject(wrappedValue: EventStore())
+        _auth = StateObject(wrappedValue: AuthStore())
+        _saved = StateObject(wrappedValue: SavedEventsStore())
+    }
+
     var body: some View {
         NavigationStack {
             Group {
