@@ -1,0 +1,5 @@
+// Local development configuration.
+// Simulator requests stay on the Mac; physical-device requests use the Mac's
+// current hotspot/LAN address. Update only this line when the network changes.
+WTE_API_BASE_URL = http:/$()/127.0.0.1:3000
+WTE_API_BASE_URL[sdk=iphoneos*] = http:/$()/172.20.10.2:3000
