@@ -74,17 +74,27 @@ struct APIClient {
         }
 
         let (data, response) = try await URLSession.shared.data(for: request)
-        guard let httpResponse = response as? HTTPURLResponse,
-              200..<300 ~= httpResponse.statusCode else {
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+        guard 200..<300 ~= httpResponse.statusCode else {
             if let apiError = try? JSONDecoder().decode(APIMessageResponse.self, from: data) {
                 throw APIError.message(apiError.error)
             }
-            throw APIError.invalidResponse
+            let body = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
+            if let body, !body.isEmpty {
+                throw APIError.message("Request failed (HTTP \(httpResponse.statusCode)): \(body)")
+            }
+            throw APIError.message("Request failed (HTTP \(httpResponse.statusCode)).")
         }
 
         do {
             return try decoder.decode(type, from: data)
         } catch {
+            let body = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
+            if let body, !body.isEmpty {
+                throw APIError.message("Could not read the server response: \(body)")
+            }
             throw APIError.invalidResponse
         }
     }

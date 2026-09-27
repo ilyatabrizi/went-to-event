@@ -13,7 +13,9 @@ struct Booking: Codable, Identifiable, Hashable {
     let quantity: Int
     let status: String
     let totalCents: Int
-    let createdAt: Date
+    // The API contract represents timestamps as ISO strings. Keep this as a
+    // string because JavaScript's toISOString() includes fractional seconds.
+    let createdAt: String
 }
 
 struct BookingResponse: Decodable {
