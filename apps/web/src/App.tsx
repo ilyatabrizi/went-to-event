@@ -28,16 +28,19 @@ function Cover({ event }: { event: Event }) {
   )
 }
 
-function Navigation({ onBookings, onHome, onProfile }: { onBookings: () => void; onHome: () => void; onProfile: () => void }) {
+function Navigation({ onBookings, onHome, onExplore, onProfile, active = 'home' }: { onBookings: () => void; onHome: () => void; onExplore: () => void; onProfile: () => void; active?: string }) {
   return (
     <nav className="app-nav" aria-label="Main navigation">
-      <button className="nav-item nav-active" onClick={onHome}>
+      <button className={`nav-item ${active === 'home' ? 'nav-active' : ''}`} onClick={onHome}>
         <span aria-hidden="true">⌂</span><span>Home</span>
       </button>
-      <button className="nav-item" onClick={onBookings}>
+      <button className={`nav-item ${active === 'explore' ? 'nav-active' : ''}`} onClick={onExplore}>
+        <span aria-hidden="true">⌕</span><span>Explore</span>
+      </button>
+      <button className={`nav-item ${active === 'bookings' ? 'nav-active' : ''}`} onClick={onBookings}>
         <span aria-hidden="true">▣</span><span>Bookings</span>
       </button>
-      <button className="nav-item" onClick={onProfile}>
+      <button className={`nav-item ${active === 'profile' ? 'nav-active' : ''}`} onClick={onProfile}>
         <span aria-hidden="true">●</span><span>Profile</span>
       </button>
     </nav>
@@ -57,6 +60,12 @@ export function App() {
   const [bookingBusy, setBookingBusy] = useState(false)
   const [bookingError, setBookingError] = useState<string | null>(null)
   const [showBookings, setShowBookings] = useState(false)
+  const [showExplore, setShowExplore] = useState(false)
+  const [query, setQuery] = useState('')
+  const [category, setCategory] = useState('All categories')
+  const [dateFilter, setDateFilter] = useState('Any date')
+  const [priceFilter, setPriceFilter] = useState('Any price')
+  const [sort, setSort] = useState('Recommended')
   const [bookings, setBookings] = useState<Booking[]>([])
   const [bookingsLoading, setBookingsLoading] = useState(false)
   const [bookingsError, setBookingsError] = useState<string | null>(null)
@@ -123,7 +132,17 @@ export function App() {
   function openProfile() {
     setSelectedId(null)
     setShowBookings(false)
+    setShowExplore(false)
     setShowProfile(true)
+    setPassBooking(null)
+    setPassEvent(null)
+  }
+
+  function openExplore() {
+    setSelectedId(null)
+    setShowBookings(false)
+    setShowProfile(false)
+    setShowExplore(true)
     setPassBooking(null)
     setPassEvent(null)
   }
@@ -132,6 +151,7 @@ export function App() {
     if (supabase) await supabase.auth.signOut()
     setShowProfile(false)
     setShowBookings(false)
+    setShowExplore(false)
     setSelectedId(null)
   }
 
@@ -204,7 +224,7 @@ export function App() {
 
     return (
       <main className="shell profile-shell">
-        <Navigation onHome={() => setShowProfile(false)} onBookings={openBookings} onProfile={openProfile} />
+        <Navigation onHome={() => setShowProfile(false)} onBookings={openBookings} onExplore={openExplore} onProfile={openProfile} active="profile" />
         <header>
           <p className="eyebrow">Your account</p>
           <h1>Your profile</h1>
@@ -218,6 +238,91 @@ export function App() {
           </div>
           <button className="logout-button" data-testid="logout" onClick={logout}>Log out</button>
         </section>
+      </main>
+    )
+  }
+
+  if (showExplore) {
+    const normalizedQuery = query.trim().toLowerCase()
+    const filteredEvents = events
+      .filter((event) => {
+        const searchable = `${event.title} ${event.category} ${event.host.name} ${event.venue.name} ${event.description}`.toLowerCase()
+        const lowestPrice = Math.min(...event.ticketTiers.map((tier) => tier.priceCents))
+        const eventDate = new Date(event.startsAt)
+        const today = new Date()
+        const sameDay = eventDate.toDateString() === today.toDateString()
+        const withinWeek = eventDate.getTime() >= today.getTime() && eventDate.getTime() <= today.getTime() + 7 * 24 * 60 * 60 * 1000
+
+        return (!normalizedQuery || searchable.includes(normalizedQuery))
+          && (category === 'All categories' || event.category === category)
+          && (dateFilter === 'Any date' || (dateFilter === 'Today' ? sameDay : withinWeek))
+          && (priceFilter === 'Any price'
+            || (priceFilter === 'Free' && lowestPrice === 0)
+            || (priceFilter === 'Under $25' && lowestPrice < 2500)
+            || (priceFilter === 'Under $50' && lowestPrice < 5000))
+      })
+      .sort((a, b) => {
+        if (sort === 'Soonest') return new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime()
+        if (sort === 'Most going') return b.goingCount - a.goingCount
+        if (sort === 'Price: low to high') return Math.min(...a.ticketTiers.map((tier) => tier.priceCents)) - Math.min(...b.ticketTiers.map((tier) => tier.priceCents))
+        return 0
+      })
+
+    return (
+      <main className="shell">
+        <Navigation onHome={() => setShowExplore(false)} onBookings={openBookings} onExplore={openExplore} onProfile={openProfile} active="explore" />
+        <header>
+          <p className="eyebrow">Discover</p>
+          <h1>Explore events.</h1>
+          <p className="lede">Search for something worth going to.</p>
+        </header>
+        <section className="explore-controls" aria-label="Event filters">
+          <input
+            aria-label="Search events"
+            className="explore-search"
+            placeholder="Search events, hosts, venues"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+          <div className="filter-grid">
+            <label>Category<select aria-label="Category" value={category} onChange={(event) => setCategory(event.target.value)}>
+              <option>All categories</option>
+              {[...new Set(events.map((event) => event.category))].map((value) => <option key={value}>{value}</option>)}
+            </select></label>
+            <label>Date<select aria-label="Date" value={dateFilter} onChange={(event) => setDateFilter(event.target.value)}>
+              <option>Any date</option><option>Today</option><option>This week</option>
+            </select></label>
+            <label>Price<select aria-label="Price" value={priceFilter} onChange={(event) => setPriceFilter(event.target.value)}>
+              <option>Any price</option><option>Free</option><option>Under $25</option><option>Under $50</option>
+            </select></label>
+            <label>Sort<select aria-label="Sort" value={sort} onChange={(event) => setSort(event.target.value)}>
+              <option>Recommended</option><option>Soonest</option><option>Most going</option><option>Price: low to high</option>
+            </select></label>
+          </div>
+        </section>
+        <div className="explore-results-heading">
+          <h2>{filteredEvents.length} {filteredEvents.length === 1 ? 'event' : 'events'}</h2>
+          {(query || category !== 'All categories' || dateFilter !== 'Any date' || priceFilter !== 'Any price' || sort !== 'Recommended') && (
+            <button className="quiet-button" onClick={() => { setQuery(''); setCategory('All categories'); setDateFilter('Any date'); setPriceFilter('Any price'); setSort('Recommended') }}>Clear filters</button>
+          )}
+        </div>
+        {filteredEvents.length ? (
+          <section className="events" aria-label="Explore results">
+            {filteredEvents.map((event) => (
+              <button className="event-card" key={event.id} onClick={() => { setShowExplore(false); setSelectedId(event.id) }}>
+                <Cover event={event} />
+                <span className="card-copy" data-testid="event-card">
+                  <span className="category">{event.category}</span>
+                  <h2>{event.title}</h2>
+                  <span className="meta">{formatDate(event.startsAt)} · {event.venue.name}</span>
+                  <span className="card-footer"><strong>{priceLabel(event)}</strong><span>{event.goingCount} going →</span></span>
+                </span>
+              </button>
+            ))}
+          </section>
+        ) : (
+          <section className="empty-state" data-testid="explore-empty"><h2>No events match.</h2><p>Try a different search or clear one of the filters.</p></section>
+        )}
       </main>
     )
   }
@@ -341,7 +446,7 @@ export function App() {
 
     return (
       <main className="shell">
-        <Navigation onHome={() => setShowBookings(false)} onBookings={openBookings} onProfile={openProfile} />
+        <Navigation onHome={() => setShowBookings(false)} onBookings={openBookings} onExplore={openExplore} onProfile={openProfile} active="bookings" />
         <button className="back" data-testid="back-to-events-from-bookings" onClick={() => setShowBookings(false)}>
           <span aria-hidden="true">←</span> Back to events
         </button>
@@ -369,7 +474,7 @@ export function App() {
 
   return (
     <main className="shell">
-      <Navigation onHome={() => setShowBookings(false)} onBookings={openBookings} onProfile={openProfile} />
+      <Navigation onHome={() => { setShowExplore(false); setShowBookings(false) }} onBookings={openBookings} onExplore={openExplore} onProfile={openProfile} />
       <header>
         <p className="eyebrow">San Francisco</p>
         <h1>What’s happening?</h1>

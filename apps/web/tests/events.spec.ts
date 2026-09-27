@@ -55,3 +55,21 @@ test('shows a signed-out profile entry point', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Sign in to see your profile.' })).toBeVisible()
   await expect(page.getByTestId('profile-sign-in')).toBeVisible()
 })
+
+test('searches and filters events from the explore screen', async ({ page }) => {
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Explore' }).click()
+
+  await expect(page.getByRole('heading', { name: 'Explore events.' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '3 events' })).toBeVisible()
+
+  await page.getByLabel('Search events').fill('yoga')
+  await expect(page.getByRole('heading', { name: '1 event' })).toBeVisible()
+  await expect(page.getByText('Sunrise Rooftop Yoga')).toBeVisible()
+  await expect(page.getByText('Warehouse Sessions Vol. 9')).not.toBeVisible()
+
+  await page.getByLabel('Search events').fill('')
+  await page.getByLabel('Price').selectOption({ label: 'Free' })
+  await expect(page.getByRole('heading', { name: '1 event' })).toBeVisible()
+  await expect(page.getByText('Sunrise Rooftop Yoga')).toBeVisible()
+})
