@@ -310,6 +310,8 @@ private struct BookingsView: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject var auth: AuthStore
     @State private var bookings: [Booking] = []
+    @State private var events: [String: Event] = [:]
+    @State private var selectedBooking: Booking?
     @State private var isLoading = true
     @State private var errorMessage: String?
 
@@ -323,27 +325,158 @@ private struct BookingsView: View {
                     ContentUnavailableView("No bookings yet", systemImage: "ticket", description: Text("Book an event and your pass will appear here."))
                 } else {
                     List(bookings) { booking in
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text(booking.eventId).font(.headline)
-                            Text("\(booking.quantity) ticket\(booking.quantity == 1 ? "" : "s") · $\(Double(booking.totalCents) / 100, specifier: "%.2f")")
-                                .foregroundStyle(.secondary)
-                            Text(booking.status.capitalized).font(.caption.weight(.semibold)).foregroundStyle(.green)
+                        Button {
+                            selectedBooking = booking
+                        } label: {
+                            BookingRow(booking: booking, event: events[booking.eventId])
                         }
-                        .padding(.vertical, 5)
+                        .buttonStyle(.plain)
                     }
                 }
             }
             .navigationTitle("Your bookings")
             .toolbar { ToolbarItem(placement: .topBarLeading) { Button("Close") { dismiss() } } }
             .task { await loadBookings() }
+            .sheet(item: $selectedBooking) { booking in
+                BookingPassView(booking: booking, event: events[booking.eventId])
+            }
         }
     }
 
     private func loadBookings() async {
         guard let accessToken = auth.session?.accessToken else { isLoading = false; return }
-        do { bookings = try await APIClient().getBookings(accessToken: accessToken) }
-        catch { errorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription }
+        do {
+            bookings = try await APIClient().getBookings(accessToken: accessToken)
+            let eventIDs = Set(bookings.map(\.eventId))
+            for eventID in eventIDs {
+                if let event = try? await APIClient().getEvent(id: eventID) {
+                    events[eventID] = event
+                }
+            }
+        } catch {
+            errorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+        }
         isLoading = false
+    }
+}
+
+private struct BookingRow: View {
+    let booking: Booking
+    let event: Event?
+
+    var body: some View {
+        HStack(spacing: 14) {
+            Artwork(category: event?.category ?? "")
+                .frame(width: 72, height: 72)
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+
+            VStack(alignment: .leading, spacing: 5) {
+                Text(event?.title ?? "Event booking")
+                    .font(.headline)
+                    .foregroundStyle(.primary)
+                    .lineLimit(2)
+                if let event {
+                    Text(event.startsAt.formatted(date: .abbreviated, time: .shortened))
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                Text("\(booking.quantity) ticket\(booking.quantity == 1 ? "" : "s") · $\(Double(booking.totalCents) / 100, specifier: "%.2f")")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+            Image(systemName: "chevron.right")
+                .font(.caption.weight(.bold))
+                .foregroundStyle(.tertiary)
+        }
+        .padding(.vertical, 6)
+    }
+}
+
+private struct BookingPassView: View {
+    @Environment(\.dismiss) private var dismiss
+    let booking: Booking
+    let event: Event?
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: 0) {
+                    Artwork(category: event?.category ?? "")
+                        .frame(height: 190)
+                        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+
+                    VStack(alignment: .leading, spacing: 18) {
+                        HStack {
+                            Label("Confirmed pass", systemImage: "checkmark.seal.fill")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(.green)
+                            Spacer()
+                            Text(booking.status.capitalized)
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                        }
+
+                        Text(event?.title ?? "Your event pass")
+                            .font(.largeTitle.bold())
+
+                        if let event {
+                            VStack(alignment: .leading, spacing: 12) {
+                                DetailRow(label: "When", value: event.startsAt.formatted(date: .complete, time: .shortened))
+                                DetailRow(label: "Where", value: "\(event.venue.name)\n\(event.venue.address)")
+                                DetailRow(label: "Hosted by", value: event.host.name)
+                            }
+                        }
+
+                        Divider()
+
+                        HStack {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(ticketName.uppercased())
+                                    .font(.caption.weight(.bold))
+                                    .tracking(1)
+                                    .foregroundStyle(.secondary)
+                                Text("\(booking.quantity) ticket\(booking.quantity == 1 ? "" : "s")")
+                                    .font(.headline)
+                            }
+                            Spacer()
+                            Text("$\(Double(booking.totalCents) / 100, specifier: "%.2f")")
+                                .font(.title3.bold())
+                        }
+
+                        VStack(spacing: 8) {
+                            Text("BOOKING REFERENCE")
+                                .font(.caption2.weight(.bold))
+                                .tracking(1.5)
+                                .foregroundStyle(.secondary)
+                            Text(String(booking.id.prefix(8)).uppercased())
+                                .font(.system(size: 30, weight: .bold, design: .monospaced))
+                                .tracking(4)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 20)
+                        .background(Color(uiColor: .secondarySystemBackground))
+                        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    }
+                    .padding(22)
+                }
+                .background(Color(uiColor: .systemBackground))
+                .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
+                .padding()
+            }
+            .navigationTitle("Your pass")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Close") { dismiss() }
+                }
+            }
+        }
+    }
+
+    private var ticketName: String {
+        event?.ticketTiers.first(where: { $0.id == booking.ticketTierId })?.name ?? "Ticket"
     }
 }
 
