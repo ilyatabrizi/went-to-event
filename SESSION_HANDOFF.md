@@ -1,12 +1,59 @@
 # Went To Event — Session Handoff
 
-**Updated:** September 25, 2026
+**Updated:** September 27, 2026
 
 **Branch:** `develop`
 
-**Latest code commit:** `8702a35 Fix native Supabase login request`
+**Latest code commit:** `6f44001 Improve event ticket pass details`
 
 This document explains the active architecture, local setup, application flows, API contracts, testing process, known limitations, and recommended next steps.
+
+## Current status at a glance
+
+The first production-shaped vertical slice is working on both the web/PWA client
+and the native iOS client:
+
+```text
+Browse public events
+→ search, filter, and sort events
+→ open event details
+→ save/bookmark events locally
+→ authenticate only when booking or opening account features
+→ create a confirmed test booking
+→ view upcoming and past booking history
+→ open a detailed event ticket pass
+```
+
+The current Phase 2 roadmap is **Better event ownership and history**:
+
+1. Upcoming bookings — complete.
+2. Past bookings — complete.
+3. Better ticket pass — complete.
+4. Event reminders — next.
+5. Save/bookmark synchronization.
+6. Improved profile page.
+
+Payment is intentionally not part of the current test flow. ZarinPal remains
+deferred until the non-payment product experience is stable.
+
+### Completed milestone commits
+
+These are the important recent local commits, in chronological order:
+
+```text
+30aa3ea Add web explore search and filters
+cc03b01 Add saved events to web profile
+392daa9 Add saved events to native iOS app
+96e7f07 Add native booking pass screen
+60e891e Fix native booking response decoding
+4a04916 Add upcoming and past booking history
+e9b36b7 Clean up native Swift concurrency warnings
+c430cf3 Configure native API URL per build environment
+6f44001 Improve event ticket pass details
+```
+
+All work has been committed locally on `develop`. Nothing has been pushed to
+the remote unless explicitly requested.
 
 ## 1. Which code is active?
 
@@ -113,6 +160,15 @@ The user uses GitHub Desktop for branch changes, commits, and pushing. Do not pu
 Recent important commits:
 
 ```text
+6f44001 Improve event ticket pass details
+c430cf3 Configure native API URL per build environment
+e9b36b7 Clean up native Swift concurrency warnings
+4a04916 Add upcoming and past booking history
+392daa9 Add saved events to native iOS app
+cc03b01 Add saved events to web profile
+30aa3ea Add web explore search and filters
+96e7f07 Add native booking pass screen
+60e891e Fix native booking response decoding
 8702a35 Fix native Supabase login request
 80333ca Add native authentication and booking flow
 b96a7b5 Connect iOS development client to LAN API
@@ -151,17 +207,33 @@ VITE_SUPABASE_ANON_KEY=public-anon-key
 
 The web app uses the public anon key with `@supabase/supabase-js`. It does not use the service-role key.
 
-### iOS: `apps/ios/WentToEvent/AppConfig.swift`
+### iOS: `apps/ios/Config/` and `AppConfig.swift`
 
-This file contains the native client’s Supabase project URL, public anon key, and development API base URL.
-
-The current physical-device API URL is:
+`AppConfig.swift` contains the native Supabase project URL and public anon key.
+The API URL is no longer hardcoded in Swift. It is injected into the app bundle
+from Xcode configuration files:
 
 ```text
-http://172.20.10.2:3000
+apps/ios/Config/Debug.xcconfig
+apps/ios/Config/Release.xcconfig
+apps/ios/Config/Info.plist
 ```
 
-That is the Mac’s current hotspot/LAN address and may change. If the phone stops loading events, check the Mac’s current address and update `AppConfig.swift`.
+The current development routing is:
+
+```text
+iOS Simulator:  http://127.0.0.1:3000
+Physical iPhone: http://172.20.10.2:3000
+```
+
+If the Mac’s hotspot/LAN address changes, update only the
+`WTE_API_BASE_URL[sdk=iphoneos*]` line in `Config/Debug.xcconfig`, then rebuild.
+`Info.plist` stores the resolved value as `WTE_API_BASE_URL`, and
+`AppConfig.apiBaseURL` reads it at runtime.
+
+Release currently uses the same development addresses because a production API
+has not been deployed yet. Do not treat the current Release configuration as
+App Store-ready.
 
 For a physical iPhone, run the API on all interfaces:
 
@@ -320,7 +392,10 @@ The API verifies the token and delegates total calculation to Postgres. The brow
 
 ### Web profile and bookings
 
-The profile flow displays the current account and provides logout. Logout clears the client session and returns the user to public browsing.
+The profile flow displays the current account, saved events, and a logout action.
+Saved event IDs are stored in browser `localStorage` under
+`wte.saved-events`. This is currently device/browser-local, not server synced.
+Logout clears the client session and returns the user to public browsing.
 
 The bookings page requests:
 
@@ -328,7 +403,19 @@ The bookings page requests:
 GET /api/me/bookings
 ```
 
-Only the authenticated user’s bookings are returned. Selecting a booking loads its event again so the pass can show event information.
+Only the authenticated user’s bookings are returned. For each booking, the web
+client separately requests `GET /events/:id` and stores the result in
+`bookingEvents`, because the current booking API returns `eventId` rather than
+an embedded event object.
+
+Bookings are split using the related event’s `endsAt` timestamp:
+
+- **Upcoming:** `event.endsAt >= Date.now()`.
+- **Past:** the event has ended, or its event details could not be loaded.
+
+Opening a booking shows a detailed pass containing its status, event title,
+start/end time, venue and address, host, ticket tier, quantity, total, booking
+date, and the first eight characters of the booking ID as the entry reference.
 
 ### Web tests
 
@@ -339,7 +426,9 @@ cd apps/web
 npm run test:e2e
 ```
 
-The current tests cover event browsing/detail, desktop layout, mobile-safe auth fields, signed-out booking auth redirect, and signed-out profile access.
+The current 7 tests cover event browsing/detail, desktop layout, mobile-safe auth
+fields, signed-out booking auth redirect, signed-out profile access, explore
+search/filter behavior, and saved-event persistence after reload.
 
 ## 7. Native iOS application flow
 
@@ -399,7 +488,12 @@ On app launch, `AuthStore` loads the stored session from Keychain.
 
 ### Native profile/logout
 
-The profile sheet shows the user’s email and ID. Logout clears the in-memory session and deletes the Keychain session.
+The profile sheet shows the user’s email and ID, saved events, and a logout
+button. Native saved event IDs are stored with `UserDefaults` through
+`SavedEventsStore`; they are currently local to that device and are not yet
+synced to Supabase.
+
+Logout clears the in-memory session and deletes the Keychain session.
 
 ### Native booking and booking history
 
@@ -416,7 +510,27 @@ The native bookings sheet requests:
 GET /me/bookings
 ```
 
-The current native booking list is intentionally basic: it shows event ID, quantity, total, and status. A richer native pass-detail screen is future work.
+The native bookings sheet loads the booking list and then fetches each related
+event. It renders two sections:
+
+- **Upcoming:** related event `endsAt` is greater than or equal to the current
+  date/time.
+- **Past:** the event has ended, or its event details are unavailable.
+
+Selecting a booking opens `BookingPassView`, which now displays:
+
+- Confirmed/status label.
+- Event artwork and title.
+- Start time and end time.
+- Venue name and address.
+- Host name.
+- Ticket tier and quantity.
+- Total price.
+- Booking reference from the first eight characters of the booking ID.
+- Booking creation date.
+
+The reference is currently a display code, not a cryptographically generated
+QR/barcode and not yet connected to an entry scanner.
 
 ## 8. API routes and server responsibilities
 
@@ -564,24 +678,54 @@ Run the simulator build command from section 5, then manually test on a physical
 9. Log out and confirm signed-out state.
 10. Sign in again.
 11. Create a test booking.
-12. Open bookings and confirm it appears.
-13. Kill and relaunch the app to test Keychain session restoration.
+12. Open bookings and confirm it appears under Upcoming or Past.
+13. Open the booking pass and verify event time, end time, venue address, host,
+    ticket tier, quantity, total, booking reference, and booking date.
+14. Kill and relaunch the app to test Keychain session restoration.
 
 ## 12. Known limitations
 
-### iOS warnings
+### iOS build messages
 
-The iOS target builds successfully, but Xcode reports non-blocking actor-isolation warnings around SwiftUI `@StateObject` initialization in `EventStore` and `AuthStore`. They are warnings, not failures. Clean them up in a focused Swift concurrency pass.
+The actor-isolation warnings around `AuthStore` and `EventStore` were removed in
+commit `e9b36b7`. The remaining AppIntents metadata message is harmless because
+the app does not declare any AppIntents:
 
-### Development IP
+```text
+Metadata extraction skipped, no AppIntents.framework dependency found
+```
 
-The iOS API URL is currently hardcoded to the Mac’s current hotspot address. This is acceptable for the current local session, not for staging or production.
+### Development IP configuration
 
-The next configuration improvement should introduce separate Debug Simulator, Debug Device, Staging, and Production API URLs using `.xcconfig` files or an equivalent build configuration.
+The API URL is no longer hardcoded in Swift. Simulator and physical-device
+values are resolved through `apps/ios/Config/Debug.xcconfig` and embedded in
+`Config/Info.plist`. Update the `iphoneos` value when the Mac’s hotspot/LAN IP
+changes.
 
-### Native booking pass
+Release currently points to the same development addresses because no hosted
+production API exists yet.
 
-The native booking list is currently basic and shows IDs instead of full event details. Add a native pass screen after the core auth/booking flow is stable.
+### Ticket pass limitations
+
+The improved pass is informational. Its booking reference is the first eight
+characters of the booking ID; it is not yet a cryptographic QR/barcode and is
+not connected to an entry scanner. A real check-in system should be designed
+before App Store launch.
+
+### Saved-event synchronization
+
+Saved events currently persist locally:
+
+- Web: browser `localStorage`.
+- iOS: `UserDefaults`.
+
+They are not synchronized between devices or persisted in Supabase yet.
+
+### Event reminders
+
+Reminders are not implemented yet. The next feature should add a reminder
+action to upcoming bookings, then schedule local iOS notifications and a
+browser/PWA equivalent where supported.
 
 ### Profile editing
 
@@ -616,7 +760,8 @@ Check:
 1. API is running.
 2. Physical-device API uses `HOST=0.0.0.0`.
 3. iPhone Safari can open `http://172.20.10.2:3000/events`.
-4. `AppConfig.apiBaseURL` matches the Mac’s current address.
+4. `apps/ios/Config/Debug.xcconfig` has the Mac’s current address on its
+   `iphoneos` line.
 5. macOS firewall/network sharing is not blocking port 3000.
 
 ### Native login fails
@@ -636,15 +781,25 @@ This is usually stale SourceKit/index state after the target or synchronized fil
 
 ## 14. Recommended next order of work
 
-1. Manually verify native sign-in, sign-up, logout, session restoration, and booking.
-2. Remove the remaining Swift actor-isolation warnings.
-3. Move native API URLs into environment-specific Xcode configurations.
-4. Add password reset and email-confirmation support.
-5. Improve the native booking/pass screen.
-6. Add editable profile fields.
-7. Implement ZarinPal through the API with pending/confirmed payment states.
-8. Add admin/event publishing and moderation.
-9. Add staging/production deployment and TestFlight release configuration.
+Phase 2 — Better event ownership and history:
+
+1. Upcoming bookings — complete in `4a04916`.
+2. Past bookings — complete in `4a04916`.
+3. Better ticket pass — complete in `6f44001`.
+4. Event reminders — next feature. Start with a local reminder action for an
+   upcoming booking; do not add payment or server scheduling yet.
+5. Save/bookmark synchronization — move from client-only storage toward a
+   protected API and Supabase table, while preserving the current local UX.
+6. Improved profile page — add editable profile fields and make saved,
+   upcoming, and past activity easy to reach.
+
+After Phase 2:
+
+7. Add password reset, resend-confirmation, and email deep-link handling.
+8. Implement ZarinPal through the API with pending/confirmed payment states.
+9. Add event publishing, moderation, capacity, and admin workflows.
+10. Create real staging/production environments and TestFlight/App Store
+    release configuration.
 
 ## 15. End-to-end product summary
 
@@ -658,7 +813,8 @@ Browse events without an account
 → view profile and logout
 → select ticket tier and quantity
 → create a protected booking
-→ view booking history
+→ view upcoming and past booking history
+→ open a detailed ticket pass
 ```
 
 The web and iOS clients use the same API contracts. Supabase is the source of truth for authentication and persisted data. Fastify is the source of truth for protected server behavior and booking rules. ZarinPal is planned but not yet connected.
