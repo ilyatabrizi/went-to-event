@@ -158,7 +158,7 @@ This file contains the native client’s Supabase project URL, public anon key, 
 The current physical-device API URL is:
 
 ```text
-http://172.20.10.3:3000
+http://172.20.10.2:3000
 ```
 
 That is the Mac’s current hotspot/LAN address and may change. If the phone stops loading events, check the Mac’s current address and update `AppConfig.swift`.
@@ -200,7 +200,7 @@ HOST=0.0.0.0 npm run dev
 Before opening the iOS app, visit this from iPhone Safari:
 
 ```text
-http://172.20.10.3:3000/events
+http://172.20.10.2:3000/events
 ```
 
 If Safari cannot display JSON, fix the network/API binding first. The iOS code cannot work until the phone can reach the API.
@@ -615,7 +615,7 @@ Check:
 
 1. API is running.
 2. Physical-device API uses `HOST=0.0.0.0`.
-3. iPhone Safari can open `http://172.20.10.3:3000/events`.
+3. iPhone Safari can open `http://172.20.10.2:3000/events`.
 4. `AppConfig.apiBaseURL` matches the Mac’s current address.
 5. macOS firewall/network sharing is not blocking port 3000.
 
