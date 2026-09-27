@@ -14,6 +14,13 @@ function formatDate(value: string) {
   }).format(new Date(value))
 }
 
+function formatBookingDate(value: string) {
+  return new Intl.DateTimeFormat('en-US', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(new Date(value))
+}
+
 function priceLabel(event: Event) {
   const lowest = Math.min(...event.ticketTiers.map((tier) => tier.priceCents))
   return lowest === 0 ? 'Free' : `From $${(lowest / 100).toFixed(0)}`
@@ -496,19 +503,30 @@ export function App() {
             <span aria-hidden="true">←</span> Back to bookings
           </button>
           <section className="pass-card" data-testid="booking-pass">
-            <div className="pass-mark">e.</div>
-            <span className="eyebrow">Confirmed pass</span>
+            <div className="pass-topline"><div className="pass-mark">e.</div><span className="pass-status">{passBooking.status}</span></div>
+            <span className="eyebrow">Your event pass</span>
             <h1>{passEvent?.title ?? 'Your event pass'}</h1>
             {passEvent && (
               <div className="pass-details">
-                <div><span className="label">When</span><strong>{formatDate(passEvent.startsAt)}</strong></div>
-                <div><span className="label">Where</span><strong>{passEvent.venue.name}</strong></div>
+                <div><span className="label">When</span><strong>{formatDate(passEvent.startsAt)}</strong><small>Until {formatDate(passEvent.endsAt)}</small></div>
+                <div><span className="label">Where</span><strong>{passEvent.venue.name}</strong><small>{passEvent.venue.address}</small></div>
+                <div><span className="label">Hosted by</span><strong>{passEvent.host.name}</strong></div>
               </div>
             )}
-            <div className="pass-code" aria-label="Booking reference">{passBooking.id.slice(0, 8).toUpperCase()}</div>
+            <div className="pass-code-wrap">
+              <span className="label">Booking reference</span>
+              <div className="pass-code" aria-label="Booking reference" data-testid="booking-reference">{passBooking.id.slice(0, 8).toUpperCase()}</div>
+              <small>Show this reference at the door.</small>
+            </div>
+            <div className="pass-summary">
+              <div><span className="label">Ticket</span><strong>{passEvent?.ticketTiers.find((tier) => tier.id === passBooking.ticketTierId)?.name ?? 'Ticket'}</strong></div>
+              <div><span className="label">Quantity</span><strong>{passBooking.quantity} ticket{passBooking.quantity === 1 ? '' : 's'}</strong></div>
+              <div><span className="label">Total</span><strong>${(passBooking.totalCents / 100).toFixed(2)}</strong></div>
+              <div><span className="label">Booked</span><strong>{formatBookingDate(passBooking.createdAt)}</strong></div>
+            </div>
             <div className="pass-footer">
-              <span>{passBooking.quantity} ticket{passBooking.quantity === 1 ? '' : 's'}</span>
-              <strong>${(passBooking.totalCents / 100).toFixed(2)}</strong>
+              <span>Keep this pass ready for entry.</span>
+              <span aria-hidden="true">✦</span>
             </div>
           </section>
         </main>

@@ -180,13 +180,21 @@ h2 { margin: 7px 0; font-size: 1.15rem; letter-spacing: -.025em; }
 .empty-state h2 { color: var(--ink); }
 .empty-state p { margin-bottom: 0; line-height: 1.5; }
 .pass-card { display: grid; gap: 16px; padding: 24px; border-radius: 28px; background: #f7f2e9; color: #0b0a0c; }
+.pass-topline { display: flex; align-items: center; justify-content: space-between; }
 .pass-mark { font-size: 2rem; font-weight: 800; letter-spacing: -.1em; }
+.pass-status { border: 1px solid rgba(11, 10, 12, .2); border-radius: 999px; padding: 6px 10px; font-size: .72rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
 .pass-card .eyebrow { color: #6f6870; }
 .pass-card h1 { max-width: 10ch; font-size: clamp(2.5rem, 11vw, 4rem); }
 .pass-details { display: grid; gap: 14px; padding: 17px 0; border-top: 1px solid rgba(11, 10, 12, .16); border-bottom: 1px solid rgba(11, 10, 12, .16); }
 .pass-details div { display: grid; gap: 4px; }
 .pass-details .label { color: #6f6870; }
-.pass-code { display: grid; place-items: center; min-height: 100px; border: 2px dashed rgba(11, 10, 12, .3); border-radius: 14px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1.25rem; font-weight: 800; letter-spacing: .18em; }
+.pass-details small, .pass-code-wrap small { color: #6f6870; font-size: .78rem; }
+.pass-code-wrap { display: grid; gap: 8px; }
+.pass-code { display: grid; place-items: center; min-height: 100px; border: 2px dashed rgba(11, 10, 12, .3); border-radius: 14px; background: rgba(11, 10, 12, .04); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1.5rem; font-weight: 800; letter-spacing: .2em; }
+.pass-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; padding: 16px 0; border-bottom: 1px solid rgba(11, 10, 12, .16); }
+.pass-summary div { display: grid; gap: 4px; }
+.pass-summary .label { color: #6f6870; }
+.pass-summary strong { overflow-wrap: anywhere; }
 .pass-footer { display: flex; justify-content: space-between; gap: 12px; font-size: .9rem; }
 .tier div { display: grid; gap: 4px; }
 .error { padding: 14px; border: 1px solid var(--ember); border-radius: 12px; color: #ffb6a8; }

@@ -478,6 +478,7 @@ private struct BookingPassView: View {
                         if let event {
                             VStack(alignment: .leading, spacing: 12) {
                                 DetailRow(label: "When", value: event.startsAt.formatted(date: .complete, time: .shortened))
+                                DetailRow(label: "Until", value: event.endsAt.formatted(date: .complete, time: .shortened))
                                 DetailRow(label: "Where", value: "\(event.venue.name)\n\(event.venue.address)")
                                 DetailRow(label: "Hosted by", value: event.host.name)
                             }
@@ -507,11 +508,21 @@ private struct BookingPassView: View {
                             Text(String(booking.id.prefix(8)).uppercased())
                                 .font(.system(size: 30, weight: .bold, design: .monospaced))
                                 .tracking(4)
+                            Text("Show this reference at the door")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 20)
                         .background(Color(uiColor: .secondarySystemBackground))
                         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+
+                        VStack(alignment: .leading, spacing: 12) {
+                            DetailRow(label: "Ticket", value: ticketName)
+                            DetailRow(label: "Quantity", value: "\(booking.quantity) ticket\(booking.quantity == 1 ? "" : "s")")
+                            DetailRow(label: "Total", value: formattedTotal)
+                            DetailRow(label: "Booked", value: formattedBookingDate)
+                        }
                     }
                     .padding(22)
                 }
@@ -531,6 +542,19 @@ private struct BookingPassView: View {
 
     private var ticketName: String {
         event?.ticketTiers.first(where: { $0.id == booking.ticketTierId })?.name ?? "Ticket"
+    }
+
+    private var formattedBookingDate: String {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        guard let date = formatter.date(from: booking.createdAt) ?? ISO8601DateFormatter().date(from: booking.createdAt) else {
+            return booking.createdAt
+        }
+        return date.formatted(date: .abbreviated, time: .shortened)
+    }
+
+    private var formattedTotal: String {
+        String(format: "$%.2f", Double(booking.totalCents) / 100)
     }
 }
 
