@@ -19,6 +19,10 @@ function priceLabel(event: Event) {
   return lowest === 0 ? 'Free' : `From $${(lowest / 100).toFixed(0)}`
 }
 
+function isUpcoming(event: Event | undefined) {
+  return event ? new Date(event.endsAt).getTime() >= Date.now() : false
+}
+
 function Cover({ event }: { event: Event }) {
   return (
     <div className="cover-art" data-category={event.category} aria-hidden="true">
@@ -67,6 +71,7 @@ export function App() {
   const [priceFilter, setPriceFilter] = useState('Any price')
   const [sort, setSort] = useState('Recommended')
   const [bookings, setBookings] = useState<Booking[]>([])
+  const [bookingEvents, setBookingEvents] = useState<Record<string, Event>>({})
   const [bookingsLoading, setBookingsLoading] = useState(false)
   const [bookingsError, setBookingsError] = useState<string | null>(null)
   const [passBooking, setPassBooking] = useState<Booking | null>(null)
@@ -132,6 +137,15 @@ export function App() {
     try {
       const response = await getBookings(session)
       setBookings(response.data)
+      const eventEntries = await Promise.all(response.data.map(async (booking) => {
+        try {
+          const event = await getEvent(booking.eventId)
+          return [booking.eventId, event.data] as const
+        } catch {
+          return null
+        }
+      }))
+      setBookingEvents(Object.fromEntries(eventEntries.filter((entry): entry is readonly [string, Event] => entry !== null)))
     } catch (bookingFailure) {
       setBookingsError(bookingFailure instanceof Error ? bookingFailure.message : 'Could not load bookings')
     } finally {
@@ -501,6 +515,17 @@ export function App() {
       )
     }
 
+    const bookingSections: Array<{ title: string; items: Booking[] }> = [
+      {
+        title: 'Upcoming',
+        items: bookings.filter((booking) => isUpcoming(bookingEvents[booking.eventId])),
+      },
+      {
+        title: 'Past',
+        items: bookings.filter((booking) => !isUpcoming(bookingEvents[booking.eventId])),
+      },
+    ]
+
     return (
       <main className="shell">
         <Navigation onHome={() => setShowBookings(false)} onBookings={openBookings} onExplore={openExplore} onProfile={openProfile} active="bookings" />
@@ -516,14 +541,30 @@ export function App() {
         {bookingsLoading ? <p>Loading bookings…</p> : bookings.length === 0 ? (
           <section className="empty-state"><h2>No bookings yet.</h2><p>Find an event worth going to and your pass will appear here.</p></section>
         ) : (
-          <section className="booking-list" aria-label="Your bookings">
-            {bookings.map((booking) => (
-              <button className="booking-list-item" key={booking.id} onClick={() => openPass(booking)}>
-                <span><span className="label">Confirmed</span><strong>{booking.eventId}</strong></span>
-                <span><strong>{booking.quantity} ×</strong><span>${(booking.totalCents / 100).toFixed(2)} →</span></span>
-              </button>
+          <div className="booking-sections">
+            {bookingSections.map(({ title, items }) => (
+              items.length > 0 && (
+                <section className="booking-section" aria-label={`${title} bookings`} key={title}>
+                  <div className="section-heading"><h2>{title}</h2><span>{items.length}</span></div>
+                  <div className="booking-list">
+                    {items.map((booking) => {
+                      const event = bookingEvents[booking.eventId]
+                      return (
+                        <button className="booking-list-item" key={booking.id} onClick={() => openPass(booking)}>
+                          <span>
+                            <span className="label">{booking.status === 'confirmed' ? 'Confirmed' : booking.status}</span>
+                            <strong>{event?.title ?? booking.eventId}</strong>
+                            {event && <small>{formatDate(event.startsAt)} · {event.venue.name}</small>}
+                          </span>
+                          <span><strong>{booking.quantity} ×</strong><span>${(booking.totalCents / 100).toFixed(2)} →</span></span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </section>
+              )
             ))}
-          </section>
+          </div>
         )}
       </main>
     )

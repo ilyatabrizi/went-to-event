@@ -355,13 +355,9 @@ private struct BookingsView: View {
                 } else if bookings.isEmpty {
                     ContentUnavailableView("No bookings yet", systemImage: "ticket", description: Text("Book an event and your pass will appear here."))
                 } else {
-                    List(bookings) { booking in
-                        Button {
-                            selectedBooking = booking
-                        } label: {
-                            BookingRow(booking: booking, event: events[booking.eventId])
-                        }
-                        .buttonStyle(.plain)
+                    List {
+                        bookingSection(title: "Upcoming", bookings: bookings.filter(isUpcoming))
+                        bookingSection(title: "Past", bookings: bookings.filter { !isUpcoming($0) })
                     }
                 }
             }
@@ -372,6 +368,27 @@ private struct BookingsView: View {
                 BookingPassView(booking: booking, event: events[booking.eventId])
             }
         }
+    }
+
+    @ViewBuilder
+    private func bookingSection(title: String, bookings: [Booking]) -> some View {
+        if !bookings.isEmpty {
+            Section(title) {
+                ForEach(bookings) { booking in
+                    Button {
+                        selectedBooking = booking
+                    } label: {
+                        BookingRow(booking: booking, event: events[booking.eventId])
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    private func isUpcoming(_ booking: Booking) -> Bool {
+        guard let event = events[booking.eventId] else { return false }
+        return event.endsAt >= Date()
     }
 
     private func loadBookings() async {

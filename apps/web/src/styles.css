@@ -258,3 +258,7 @@ h2 { margin: 7px 0; font-size: 1.15rem; letter-spacing: -.025em; }
 .saved-event-main small { overflow: hidden; color: var(--muted); text-overflow: ellipsis; white-space: nowrap; }
 .saved-remove { align-self: stretch; width: 44px; border: 0; border-left: 1px solid var(--line); background: transparent; color: var(--muted); font-size: 1.25rem; cursor: pointer; }
 .saved-remove:hover { color: var(--ink); background: rgba(244, 241, 236, .06); }
+
+.booking-sections { display: grid; gap: 28px; }
+.booking-section .section-heading { margin-bottom: 10px; }
+.booking-list-item > span:first-child small { color: var(--muted); font-size: .78rem; }
