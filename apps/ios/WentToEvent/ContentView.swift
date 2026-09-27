@@ -4,6 +4,7 @@ import SwiftUI
 struct ContentView: View {
     @StateObject private var store = EventStore()
     @StateObject private var auth = AuthStore()
+    @StateObject private var saved = SavedEventsStore()
     @State private var showAuth = false
     @State private var showProfile = false
     @State private var showBookings = false
@@ -49,7 +50,7 @@ struct ContentView: View {
         .tint(Color(red: 0.95, green: 0.93, blue: 0.88))
         .sheet(isPresented: $showAuth) { AuthView(auth: auth) }
         .sheet(isPresented: $showProfile) {
-            ProfileView(auth: auth) {
+            ProfileView(auth: auth, saved: saved, events: store.events) {
                 showProfile = false
                 showAuth = true
             }
@@ -76,7 +77,7 @@ struct ContentView: View {
             .padding(.vertical)
         }
         .navigationDestination(for: Event.self) { event in
-            EventDetailView(event: event, auth: auth) { showAuth = true }
+            EventDetailView(event: event, auth: auth, saved: saved) { showAuth = true }
         }
     }
 }
@@ -118,15 +119,17 @@ struct EventDetailView: View {
     let event: Event
     @ObservedObject var auth: AuthStore
     let onRequireAuth: () -> Void
+    @ObservedObject var saved: SavedEventsStore
     @State private var selectedTierID: String?
     @State private var quantity = 1
     @State private var booking: Booking?
     @State private var isBooking = false
     @State private var errorMessage: String?
 
-    init(event: Event, auth: AuthStore, onRequireAuth: @escaping () -> Void) {
+    init(event: Event, auth: AuthStore, saved: SavedEventsStore, onRequireAuth: @escaping () -> Void) {
         self.event = event
         self.auth = auth
+        self.saved = saved
         self.onRequireAuth = onRequireAuth
         _selectedTierID = State(initialValue: event.ticketTiers.first?.id)
     }
@@ -143,6 +146,12 @@ struct EventDetailView: View {
                     Text(event.title).font(.largeTitle.bold())
                     Text(event.description).foregroundStyle(.secondary)
                 }
+                Button {
+                    saved.toggle(event.id)
+                } label: {
+                    Label(saved.contains(event.id) ? "Saved event" : "Save event", systemImage: saved.contains(event.id) ? "bookmark.fill" : "bookmark")
+                }
+                .buttonStyle(.bordered)
                 VStack(alignment: .leading, spacing: 16) {
                     DetailRow(label: "When", value: event.startsAt.formatted(date: .complete, time: .shortened))
                     DetailRow(label: "Where", value: "\(event.venue.name)\n\(event.venue.address)")
@@ -274,6 +283,8 @@ private struct AuthView: View {
 private struct ProfileView: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject var auth: AuthStore
+    @ObservedObject var saved: SavedEventsStore
+    let events: [Event]
     let onSignIn: () -> Void
 
     var body: some View {
@@ -284,6 +295,26 @@ private struct ProfileView: View {
                         Section("Account") {
                             LabeledContent("Email", value: user.email ?? "No email")
                             LabeledContent("User ID", value: user.id)
+                        }
+                        Section("Saved events") {
+                            let savedEvents = events.filter { saved.contains($0.id) }
+                            if savedEvents.isEmpty {
+                                Text("No saved events yet.")
+                                    .foregroundStyle(.secondary)
+                            } else {
+                                ForEach(savedEvents) { event in
+                                    NavigationLink {
+                                        EventDetailView(event: event, auth: auth, saved: saved) { onSignIn() }
+                                    } label: {
+                                        VStack(alignment: .leading, spacing: 4) {
+                                            Text(event.title)
+                                            Text(event.startsAt.formatted(date: .abbreviated, time: .shortened))
+                                                .font(.caption)
+                                                .foregroundStyle(.secondary)
+                                        }
+                                    }
+                                }
+                            }
                         }
                         Section {
                             Button("Sign out", role: .destructive) { auth.signOut(); dismiss() }
