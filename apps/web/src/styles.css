@@ -245,3 +245,16 @@ h2 { margin: 7px 0; font-size: 1.15rem; letter-spacing: -.025em; }
 @media (min-width: 700px) {
   .filter-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
+
+.save-event-button { margin: 18px 0 2px; border: 1px solid var(--line); border-radius: 999px; padding: 10px 14px; background: transparent; color: var(--ink); cursor: pointer; }
+.save-event-button:hover, .save-event-button[aria-pressed="true"] { border-color: rgba(244, 241, 236, .55); background: rgba(244, 241, 236, .08); }
+.saved-section { margin-top: 30px; }
+.saved-list { display: grid; gap: 10px; }
+.saved-event { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px; border: 1px solid var(--line); border-radius: 18px; background: var(--card); overflow: hidden; }
+.saved-event-main { display: grid; grid-template-columns: 70px 1fr; align-items: center; gap: 12px; min-width: 0; padding: 0; border: 0; background: transparent; color: var(--ink); text-align: left; cursor: pointer; }
+.saved-event-main .cover-art { height: 70px; }
+.saved-event-main > span { display: grid; gap: 5px; min-width: 0; padding-right: 5px; }
+.saved-event-main strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.saved-event-main small { overflow: hidden; color: var(--muted); text-overflow: ellipsis; white-space: nowrap; }
+.saved-remove { align-self: stretch; width: 44px; border: 0; border-left: 1px solid var(--line); background: transparent; color: var(--muted); font-size: 1.25rem; cursor: pointer; }
+.saved-remove:hover { color: var(--ink); background: rgba(244, 241, 236, .06); }

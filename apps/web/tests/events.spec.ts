@@ -73,3 +73,17 @@ test('searches and filters events from the explore screen', async ({ page }) => 
   await expect(page.getByRole('heading', { name: '1 event' })).toBeVisible()
   await expect(page.getByText('Sunrise Rooftop Yoga')).toBeVisible()
 })
+
+test('saves an event and restores the saved state after reload', async ({ page }) => {
+  await page.goto('/')
+  await page.getByRole('button', { name: /Warehouse Sessions Vol\. 9/ }).click()
+
+  const saveButton = page.getByRole('button', { name: /Save event/ })
+  await expect(saveButton).toHaveAttribute('aria-pressed', 'false')
+  await saveButton.click()
+  await expect(page.getByRole('button', { name: /Saved event/ })).toHaveAttribute('aria-pressed', 'true')
+
+  await page.reload()
+  await page.getByRole('button', { name: /Warehouse Sessions Vol\. 9/ }).click()
+  await expect(page.getByRole('button', { name: /Saved event/ })).toHaveAttribute('aria-pressed', 'true')
+})

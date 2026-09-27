@@ -73,6 +73,16 @@ export function App() {
   const [passEvent, setPassEvent] = useState<Event | null>(null)
   const [showAuth, setShowAuth] = useState(false)
   const [showProfile, setShowProfile] = useState(false)
+  const [savedIds, setSavedIds] = useState<string[]>([])
+
+  useEffect(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem('wte.saved-events') ?? '[]')
+      if (Array.isArray(stored)) setSavedIds(stored.filter((id): id is string => typeof id === 'string'))
+    } catch {
+      setSavedIds([])
+    }
+  }, [])
 
   useEffect(() => {
     if (!supabase) return
@@ -145,6 +155,21 @@ export function App() {
     setShowExplore(true)
     setPassBooking(null)
     setPassEvent(null)
+  }
+
+  function toggleSaved(eventId: string) {
+    setSavedIds((current) => {
+      const next = current.includes(eventId)
+        ? current.filter((id) => id !== eventId)
+        : [eventId, ...current]
+      localStorage.setItem('wte.saved-events', JSON.stringify(next))
+      return next
+    })
+  }
+
+  function openSavedEvent(eventId: string) {
+    setShowProfile(false)
+    setSelectedId(eventId)
   }
 
   async function logout() {
@@ -237,6 +262,31 @@ export function App() {
             <strong>{session.user.email}</strong>
           </div>
           <button className="logout-button" data-testid="logout" onClick={logout}>Log out</button>
+        </section>
+        <section className="saved-section" aria-label="Saved events">
+          <div className="section-heading">
+            <h2>Saved events</h2>
+            <span>{savedIds.length}</span>
+          </div>
+          {savedIds.length === 0 ? (
+            <div className="empty-state"><h2>No saved events yet.</h2><p>Save an event from its detail page and it will appear here.</p></div>
+          ) : (
+            <div className="saved-list">
+              {savedIds.map((eventId) => {
+                const event = events.find((candidate) => candidate.id === eventId)
+                if (!event) return null
+                return (
+                  <div className="saved-event" key={event.id}>
+                    <button className="saved-event-main" onClick={() => openSavedEvent(event.id)}>
+                      <Cover event={event} />
+                      <span><strong>{event.title}</strong><small>{formatDate(event.startsAt)} · {event.venue.name}</small></span>
+                    </button>
+                    <button className="saved-remove" aria-label={`Remove ${event.title} from saved events`} onClick={() => toggleSaved(event.id)}>×</button>
+                  </div>
+                )
+              })}
+            </div>
+          )}
         </section>
       </main>
     )
@@ -341,6 +391,13 @@ export function App() {
           </div>
         </div>
         <p className="lede">{selected.description}</p>
+        <button
+          className="save-event-button"
+          aria-pressed={savedIds.includes(selected.id)}
+          onClick={() => toggleSaved(selected.id)}
+        >
+          {savedIds.includes(selected.id) ? '★ Saved event' : '☆ Save event'}
+        </button>
         <section className="detail-card">
           <div>
             <span className="label">When</span>
