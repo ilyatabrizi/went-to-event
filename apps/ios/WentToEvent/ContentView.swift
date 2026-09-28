@@ -59,6 +59,9 @@ struct ContentView: View {
             ProfileView(auth: auth, saved: saved, events: store.events) {
                 showProfile = false
                 showAuth = true
+            } onOpenBookings: {
+                showProfile = false
+                showBookings = true
             }
         }
         .sheet(isPresented: $showBookings) { BookingsView(auth: auth) }
@@ -292,15 +295,42 @@ private struct ProfileView: View {
     @ObservedObject var saved: SavedEventsStore
     let events: [Event]
     let onSignIn: () -> Void
+    let onOpenBookings: () -> Void
+    @StateObject private var reminders = ReminderStore()
 
     var body: some View {
         NavigationStack {
             Group {
                 if let user = auth.user {
                     Form {
-                        Section("Account") {
-                            LabeledContent("Email", value: user.email ?? "No email")
-                            LabeledContent("User ID", value: user.id)
+                        Section {
+                            HStack(spacing: 14) {
+                                Text((user.email ?? "U").prefix(1).uppercased())
+                                    .font(.title2.bold())
+                                    .frame(width: 48, height: 48)
+                                    .background(Color.primary)
+                                    .foregroundStyle(Color(uiColor: .systemBackground))
+                                    .clipShape(Circle())
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("Your account").font(.headline)
+                                    Text(user.email ?? "No email").font(.subheadline).foregroundStyle(.secondary)
+                                }
+                            }
+                            .padding(.vertical, 6)
+                        }
+                        Section("Your activity") {
+                            LabeledContent("Saved events", value: "\(saved.eventIDs.count)")
+                            LabeledContent("Reminders", value: "\(reminders.reminderBookingIDs.count)")
+                        }
+                        Section {
+                            Button {
+                                onOpenBookings()
+                            } label: {
+                                Label("Your bookings", systemImage: "ticket")
+                            }
+                            Text("View your upcoming and past passes.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
                         }
                         Section("Saved events") {
                             let savedEvents = events.filter { saved.contains($0.id) }
@@ -321,6 +351,12 @@ private struct ProfileView: View {
                                     }
                                 }
                             }
+                        }
+                        Section("Account") {
+                            LabeledContent("User ID", value: user.id)
+                            Text("Profile editing and password recovery are coming next.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
                         }
                         Section {
                             Button("Sign out", role: .destructive) { auth.signOut(); dismiss() }

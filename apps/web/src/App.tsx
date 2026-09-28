@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { createBooking, getBookings, getEvent, getEvents, type Booking, type Event } from './api'
 import { AuthPanel } from './AuthPanel'
@@ -29,6 +29,14 @@ function priceLabel(event: Event) {
 function isUpcoming(event: Event | undefined) {
   return event ? new Date(event.endsAt).getTime() >= Date.now() : false
 }
+
+type BrowserReminder = {
+  notifyAt: number
+  title: string
+  venue: string
+}
+
+const reminderStorageKey = 'wte.event-reminders'
 
 function Cover({ event }: { event: Event }) {
   return (
@@ -86,6 +94,9 @@ export function App() {
   const [showAuth, setShowAuth] = useState(false)
   const [showProfile, setShowProfile] = useState(false)
   const [savedIds, setSavedIds] = useState<string[]>([])
+  const [reminders, setReminders] = useState<Record<string, BrowserReminder>>({})
+  const [reminderError, setReminderError] = useState<string | null>(null)
+  const reminderTimers = useRef<Record<string, number>>({})
 
   useEffect(() => {
     try {
@@ -95,6 +106,41 @@ export function App() {
       setSavedIds([])
     }
   }, [])
+
+  useEffect(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem(reminderStorageKey) ?? '{}')
+      if (stored && typeof stored === 'object') setReminders(stored)
+    } catch {
+      setReminders({})
+    }
+  }, [])
+
+  useEffect(() => {
+    Object.entries(reminders).forEach(([bookingId, reminder]) => {
+      if (reminderTimers.current[bookingId]) window.clearTimeout(reminderTimers.current[bookingId])
+      const delay = reminder.notifyAt - Date.now()
+      if (delay <= 0) return
+
+      reminderTimers.current[bookingId] = window.setTimeout(() => {
+        if ('Notification' in window && Notification.permission === 'granted') {
+          new Notification('Your event is coming up', {
+            body: `${reminder.title} starts in about one hour at ${reminder.venue}.`,
+          })
+        }
+        setReminders((current) => {
+          const next = { ...current }
+          delete next[bookingId]
+          localStorage.setItem(reminderStorageKey, JSON.stringify(next))
+          return next
+        })
+      }, delay)
+    })
+
+    return () => {
+      Object.values(reminderTimers.current).forEach((timer) => window.clearTimeout(timer))
+    }
+  }, [reminders])
 
   useEffect(() => {
     if (!supabase) return
@@ -188,6 +234,44 @@ export function App() {
     })
   }
 
+  async function toggleReminder(bookingToRemind: Booking, event: Event) {
+    setReminderError(null)
+    if (reminders[bookingToRemind.id]) {
+      setReminders((current) => {
+        const next = { ...current }
+        delete next[bookingToRemind.id]
+        localStorage.setItem(reminderStorageKey, JSON.stringify(next))
+        return next
+      })
+      return
+    }
+
+    const notifyAt = new Date(event.startsAt).getTime() - 60 * 60 * 1000
+    if (notifyAt <= Date.now() + 5000) {
+      setReminderError('This event starts in less than one hour, so a reminder cannot be scheduled.')
+      return
+    }
+    if (!('Notification' in window)) {
+      setReminderError('This browser does not support notifications. Try the iOS app for event reminders.')
+      return
+    }
+
+    const permission = Notification.permission === 'default'
+      ? await Notification.requestPermission()
+      : Notification.permission
+    if (permission !== 'granted') {
+      setReminderError('Notifications are disabled. Enable them in your browser settings to use reminders.')
+      return
+    }
+
+    const next = {
+      ...reminders,
+      [bookingToRemind.id]: { notifyAt, title: event.title, venue: event.venue.name },
+    }
+    setReminders(next)
+    localStorage.setItem(reminderStorageKey, JSON.stringify(next))
+  }
+
   function openSavedEvent(eventId: string) {
     setShowProfile(false)
     setSelectedId(eventId)
@@ -273,8 +357,8 @@ export function App() {
         <Navigation onHome={() => setShowProfile(false)} onBookings={openBookings} onExplore={openExplore} onProfile={openProfile} active="profile" />
         <header>
           <p className="eyebrow">Your account</p>
-          <h1>Your profile</h1>
-          <p className="lede">Manage your account and the events you’re going to.</p>
+          <h1>Your profile.</h1>
+          <p className="lede">Your saved events, tickets, and reminders in one place.</p>
         </header>
         <section className="profile-card" data-testid="profile-card">
           <div className="profile-avatar" aria-hidden="true">{(session.user.email ?? 'U').slice(0, 1).toUpperCase()}</div>
@@ -283,6 +367,15 @@ export function App() {
             <strong>{session.user.email}</strong>
           </div>
           <button className="logout-button" data-testid="logout" onClick={logout}>Log out</button>
+        </section>
+        <section className="profile-stats" aria-label="Your activity">
+          <div><strong>{savedIds.length}</strong><span>Saved</span></div>
+          <div><strong>{bookings.filter((item) => isUpcoming(bookingEvents[item.eventId])).length}</strong><span>Upcoming</span></div>
+          <div><strong>{Object.keys(reminders).length}</strong><span>Reminders</span></div>
+        </section>
+        <section className="profile-actions" aria-label="Profile shortcuts">
+          <button onClick={openBookings}><span><strong>Your bookings</strong><small>View upcoming and past passes</small></span><span aria-hidden="true">→</span></button>
+          <button onClick={openExplore}><span><strong>Explore events</strong><small>Find something worth going to</small></span><span aria-hidden="true">→</span></button>
         </section>
         <section className="saved-section" aria-label="Saved events">
           <div className="section-heading">
@@ -308,6 +401,10 @@ export function App() {
               })}
             </div>
           )}
+        </section>
+        <section className="account-note" aria-label="Account settings">
+          <div><span className="label">Account</span><strong>Your account is secured by Supabase.</strong></div>
+          <small>Profile editing and password recovery are coming next.</small>
         </section>
       </main>
     )
@@ -524,6 +621,18 @@ export function App() {
               <div><span className="label">Total</span><strong>${(passBooking.totalCents / 100).toFixed(2)}</strong></div>
               <div><span className="label">Booked</span><strong>{formatBookingDate(passBooking.createdAt)}</strong></div>
             </div>
+            {passEvent && isUpcoming(passEvent) && (
+              <div className="pass-reminder">
+                <div>
+                  <strong>{reminders[passBooking.id] ? 'Event reminder set' : 'Event reminder'}</strong>
+                  <span>{reminders[passBooking.id] ? 'You’ll get a browser notification one hour before the event.' : 'Get a browser notification one hour before the event starts.'}</span>
+                </div>
+                <button className="secondary-button" onClick={() => { void toggleReminder(passBooking, passEvent) }}>
+                  {reminders[passBooking.id] ? 'Cancel reminder' : 'Remind me'}
+                </button>
+                {reminderError && <small className="reminder-error">{reminderError}</small>}
+              </div>
+            )}
             <div className="pass-footer">
               <span>Keep this pass ready for entry.</span>
               <span aria-hidden="true">✦</span>

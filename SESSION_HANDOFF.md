@@ -4,7 +4,7 @@
 
 **Branch:** `develop`
 
-**Latest code commit:** `55a8049 Add local iOS event reminders`
+**Latest code commit:** `Improve profile hub on web and iOS` (see `git log -1` for the current local hash)
 
 This document explains the active architecture, local setup, application flows, API contracts, testing process, known limitations, and recommended next steps.
 
@@ -397,6 +397,11 @@ Saved event IDs are stored in browser `localStorage` under
 `wte.saved-events`. This is currently device/browser-local, not server synced.
 Logout clears the client session and returns the user to public browsing.
 
+The profile hub also shows saved-event, upcoming-booking, and active-reminder
+counts, with quick actions for opening bookings and returning to Explore. The
+upcoming count reflects bookings already loaded in the current browser session;
+opening bookings loads the authoritative list from the API.
+
 The bookings page requests:
 
 ```text
@@ -416,6 +421,15 @@ Bookings are split using the related event’s `endsAt` timestamp:
 Opening a booking shows a detailed pass containing its status, event title,
 start/end time, venue and address, host, ticket tier, quantity, total, booking
 date, and the first eight characters of the booking ID as the entry reference.
+
+The web pass also includes an upcoming-event reminder action. Reminder records
+are stored in `localStorage` under `wte.event-reminders`, and the browser asks
+for notification permission when the user taps `Remind me`. The reminder is
+scheduled for one hour before the event, and the action changes to `Cancel
+reminder` after it is saved. This first implementation uses an in-page timer,
+so the site must remain open for the browser notification to fire. Reliable
+background web reminders will require service-worker/push infrastructure later.
+Web and iOS reminder choices are device-local and are not synchronized.
 
 ### Web tests
 
@@ -492,6 +506,10 @@ The profile sheet shows the user’s email and ID, saved events, and a logout
 button. Native saved event IDs are stored with `UserDefaults` through
 `SavedEventsStore`; they are currently local to that device and are not yet
 synced to Supabase.
+
+The profile sheet also has an account header, saved-event and local-reminder
+counts, a direct bookings shortcut, and a note that profile editing and
+password recovery are still pending.
 
 Logout clears the in-memory session and deletes the Keychain session.
 
@@ -744,14 +762,17 @@ They are not synchronized between devices or persisted in Supabase yet.
 
 ### Event reminders
 
-iOS local reminders are implemented in the current working tree. The remaining
-work is to validate permission and delivery on a physical iPhone, then decide
-whether the web/PWA should use browser notifications or remain a calendar-based
-user action. Reminder choices are still device-local and are not synchronized.
+iOS local reminders and the first web reminder action are implemented. iOS uses
+`UNUserNotificationCenter`; web uses the browser Notification API and an
+in-page timer. Both are device-local and are not synchronized. The remaining
+work is physical-iPhone notification validation and, later, reliable background
+web delivery through service-worker/push infrastructure.
 
 ### Profile editing
 
-The database supports profiles, but editable display name/avatar settings are not implemented yet.
+The profile hub has been improved on web and iOS, but editable display
+name/avatar settings are not implemented yet. The database supports profiles;
+the next profile increment can add editable fields and persistence.
 
 ### Password recovery
 
@@ -808,14 +829,13 @@ Phase 2 — Better event ownership and history:
 1. Upcoming bookings — complete in `4a04916`.
 2. Past bookings — complete in `4a04916`.
 3. Better ticket pass — complete in `6f44001`.
-4. Event reminders — iOS local notification increment is implemented in
-   `ReminderStore.swift` and `BookingPassView`; validate it on a physical phone
-   before adding web notifications or server scheduling. Do not add payment or
-   remote push infrastructure yet.
+4. Event reminders — iOS local notifications and the first web reminder action
+   are implemented; validate both clients before considering service-worker or
+   remote push delivery. Do not add payment or remote push infrastructure yet.
 5. Save/bookmark synchronization — move from client-only storage toward a
    protected API and Supabase table, while preserving the current local UX.
-6. Improved profile page — add editable profile fields and make saved,
-   upcoming, and past activity easy to reach.
+6. Improved profile page — the first profile hub increment is implemented on
+   web and iOS; editable profile fields remain.
 
 After Phase 2:
 
