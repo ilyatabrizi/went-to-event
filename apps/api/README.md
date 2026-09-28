@@ -16,7 +16,9 @@ npm install
 npm run dev
 ```
 
-The API runs at `http://127.0.0.1:3000`.
+The API runs at `http://127.0.0.1:3000` on the Mac. For physical iPhone
+testing, keep `HOST=0.0.0.0` and use the Mac's current LAN address, currently
+`http://192.168.100.57:3000`.
 
 Check it with:
 

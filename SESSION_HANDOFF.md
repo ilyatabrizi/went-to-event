@@ -223,7 +223,7 @@ The current development routing is:
 
 ```text
 iOS Simulator:  http://127.0.0.1:3000
-Physical iPhone: http://172.20.10.2:3000
+Physical iPhone: http://192.168.100.57:3000
 ```
 
 If the Mac’s hotspot/LAN address changes, update only the
@@ -272,7 +272,7 @@ HOST=0.0.0.0 npm run dev
 Before opening the iOS app, visit this from iPhone Safari:
 
 ```text
-http://172.20.10.2:3000/events
+http://192.168.100.57:3000/events
 ```
 
 If Safari cannot display JSON, fix the network/API binding first. The iOS code cannot work until the phone can reach the API.
@@ -781,7 +781,7 @@ Check:
 
 1. API is running.
 2. Physical-device API uses `HOST=0.0.0.0`.
-3. iPhone Safari can open `http://172.20.10.2:3000/events`.
+3. iPhone Safari can open `http://192.168.100.57:3000/events`.
 4. `apps/ios/Config/Debug.xcconfig` has the Mac’s current address on its
    `iphoneos` line.
 5. macOS firewall/network sharing is not blocking port 3000.
