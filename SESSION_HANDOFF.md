@@ -1,10 +1,10 @@
 # Went To Event — Session Handoff
 
-**Updated:** September 27, 2026
+**Updated:** September 28, 2026
 
 **Branch:** `develop`
 
-**Latest code commit:** `6f44001 Improve event ticket pass details`
+**Latest code commit:** `55a8049 Add local iOS event reminders`
 
 This document explains the active architecture, local setup, application flows, API contracts, testing process, known limitations, and recommended next steps.
 
@@ -29,7 +29,7 @@ The current Phase 2 roadmap is **Better event ownership and history**:
 1. Upcoming bookings — complete.
 2. Past bookings — complete.
 3. Better ticket pass — complete.
-4. Event reminders — next.
+4. Event reminders — iOS local reminders implemented; physical-device notification test remains.
 5. Save/bookmark synchronization.
 6. Improved profile page.
 
@@ -532,6 +532,27 @@ Selecting a booking opens `BookingPassView`, which now displays:
 The reference is currently a display code, not a cryptographically generated
 QR/barcode and not yet connected to an entry scanner.
 
+### Native iOS event reminders
+
+The first reminder increment is local to the iOS device and does not require a
+new API route or database table. `ReminderStore.swift` uses
+`UNUserNotificationCenter` and `UserDefaults`:
+
+- Each booking can have one reminder identified by its booking ID.
+- Tapping `Remind me` requests notification permission the first time.
+- The notification is scheduled for one hour before the event start time.
+- The reminder state survives app restarts on the same device.
+- Tapping `Cancel reminder` removes the pending notification and local state.
+- Events starting in less than one hour cannot receive this reminder and show a
+  clear explanation.
+- If the user previously denied notifications, the app explains that they must
+  enable notifications in iOS Settings.
+
+The action is shown only for upcoming events inside `BookingPassView`. This is
+intentionally a local notification feature for development; it is not a remote
+push notification system and it does not synchronize reminder choices between
+the web app and iOS yet.
+
 ## 8. API routes and server responsibilities
 
 The Fastify app is assembled in `apps/api/src/app.ts`.
@@ -723,9 +744,10 @@ They are not synchronized between devices or persisted in Supabase yet.
 
 ### Event reminders
 
-Reminders are not implemented yet. The next feature should add a reminder
-action to upcoming bookings, then schedule local iOS notifications and a
-browser/PWA equivalent where supported.
+iOS local reminders are implemented in the current working tree. The remaining
+work is to validate permission and delivery on a physical iPhone, then decide
+whether the web/PWA should use browser notifications or remain a calendar-based
+user action. Reminder choices are still device-local and are not synchronized.
 
 ### Profile editing
 
@@ -786,8 +808,10 @@ Phase 2 — Better event ownership and history:
 1. Upcoming bookings — complete in `4a04916`.
 2. Past bookings — complete in `4a04916`.
 3. Better ticket pass — complete in `6f44001`.
-4. Event reminders — next feature. Start with a local reminder action for an
-   upcoming booking; do not add payment or server scheduling yet.
+4. Event reminders — iOS local notification increment is implemented in
+   `ReminderStore.swift` and `BookingPassView`; validate it on a physical phone
+   before adding web notifications or server scheduling. Do not add payment or
+   remote push infrastructure yet.
 5. Save/bookmark synchronization — move from client-only storage toward a
    protected API and Supabase table, while preserving the current local UX.
 6. Improved profile page — add editable profile fields and make saved,

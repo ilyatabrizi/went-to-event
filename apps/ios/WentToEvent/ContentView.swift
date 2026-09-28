@@ -452,6 +452,8 @@ private struct BookingPassView: View {
     @Environment(\.dismiss) private var dismiss
     let booking: Booking
     let event: Event?
+    @StateObject private var reminders = ReminderStore()
+    @State private var reminderError: String?
 
     var body: some View {
         NavigationStack {
@@ -523,6 +525,10 @@ private struct BookingPassView: View {
                             DetailRow(label: "Total", value: formattedTotal)
                             DetailRow(label: "Booked", value: formattedBookingDate)
                         }
+
+                        if let event, event.endsAt >= Date() {
+                            reminderSection(event: event)
+                        }
                     }
                     .padding(22)
                 }
@@ -538,6 +544,51 @@ private struct BookingPassView: View {
                 }
             }
         }
+    }
+
+    @ViewBuilder
+    private func reminderSection(event: Event) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label("Event reminder", systemImage: reminders.isReminderSet(for: booking) ? "bell.fill" : "bell")
+                .font(.headline)
+
+            Text(reminders.isReminderSet(for: booking)
+                ? "We’ll remind you one hour before the event."
+                : "Get a notification one hour before the event starts.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+
+            if let reminderError {
+                Text(reminderError)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
+
+            Button {
+                Task {
+                    reminderError = nil
+                    do {
+                        if reminders.isReminderSet(for: booking) {
+                            await reminders.cancelReminder(for: booking)
+                        } else {
+                            try await reminders.setReminder(for: booking, event: event)
+                        }
+                    } catch {
+                        reminderError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+                    }
+                }
+            } label: {
+                Label(
+                    reminders.isReminderSet(for: booking) ? "Cancel reminder" : "Remind me",
+                    systemImage: reminders.isReminderSet(for: booking) ? "bell.slash" : "bell.badge",
+                )
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+        }
+        .padding(16)
+        .background(Color(uiColor: .secondarySystemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
 
     private var ticketName: String {
