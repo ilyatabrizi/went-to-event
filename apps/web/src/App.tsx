@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Session } from '@supabase/supabase-js'
-import { createBooking, getBookings, getEvent, getEvents, getProfile, updateAccount, updateProfile, type Booking, type Event, type UserProfile } from './api'
+import { createBooking, getBookings, getEvent, getEvents, getProfile, updateAccount, updateProfile, uploadProfilePicture, type Booking, type Event, type UserProfile } from './api'
 import { AuthPanel } from './AuthPanel'
 import { supabase } from './auth'
 
@@ -37,6 +37,28 @@ type BrowserReminder = {
 }
 
 const reminderStorageKey = 'wte.event-reminders'
+
+async function cropProfilePicture(file: File) {
+  const source = URL.createObjectURL(file)
+  try {
+    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const loaded = new Image()
+      loaded.onload = () => resolve(loaded)
+      loaded.onerror = () => reject(new Error('Could not read that image'))
+      loaded.src = source
+    })
+    const side = Math.min(image.naturalWidth, image.naturalHeight)
+    const canvas = document.createElement('canvas')
+    canvas.width = 512
+    canvas.height = 512
+    const context = canvas.getContext('2d')
+    if (!context) throw new Error('Your browser cannot process images')
+    context.drawImage(image, (image.naturalWidth - side) / 2, (image.naturalHeight - side) / 2, side, side, 0, 0, 512, 512)
+    return canvas.toDataURL('image/jpeg', .86).split(',')[1]
+  } finally {
+    URL.revokeObjectURL(source)
+  }
+}
 
 function Cover({ event }: { event: Event }) {
   return (
@@ -97,6 +119,7 @@ export function App() {
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [profileLoading, setProfileLoading] = useState(false)
   const [profileBusy, setProfileBusy] = useState(false)
+  const [pictureUploading, setPictureUploading] = useState(false)
   const [profileError, setProfileError] = useState<string | null>(null)
   const [profileNotice, setProfileNotice] = useState<string | null>(null)
   const [profileForm, setProfileForm] = useState({ username: '', displayName: '', avatarUrl: '' })
@@ -269,6 +292,30 @@ export function App() {
     }
   }
 
+  async function handlePictureUpload(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file || !session) return
+    if (!file.type.startsWith('image/')) {
+      setProfileError('Choose an image file.')
+      return
+    }
+    setPictureUploading(true)
+    setProfileError(null)
+    setProfileNotice(null)
+    try {
+      const data = await cropProfilePicture(file)
+      const response = await uploadProfilePicture(session, data, 'image/jpeg')
+      setProfile(response.profile)
+      setProfileForm((current) => ({ ...current, avatarUrl: response.profile.avatarUrl ?? '' }))
+      setProfileNotice('Profile picture updated.')
+    } catch (failure) {
+      setProfileError(failure instanceof Error ? failure.message : 'Could not upload profile picture')
+    } finally {
+      setPictureUploading(false)
+    }
+  }
+
   function openExplore() {
     setSelectedId(null)
     setShowBookings(false)
@@ -429,6 +476,7 @@ export function App() {
             <label>Display name<input value={profileForm.displayName} onChange={(event) => setProfileForm({ ...profileForm, displayName: event.target.value })} placeholder="Your name" maxLength={80} /></label>
             <label>Username<input value={profileForm.username} onChange={(event) => setProfileForm({ ...profileForm, username: event.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '') })} placeholder="your_username" maxLength={24} /></label>
             <label>Profile picture URL<input type="url" value={profileForm.avatarUrl} onChange={(event) => setProfileForm({ ...profileForm, avatarUrl: event.target.value })} placeholder="https://…" /></label>
+            <label className="picture-upload">Choose a picture<input type="file" accept="image/png,image/jpeg,image/webp" onChange={handlePictureUpload} disabled={pictureUploading} /><small>{pictureUploading ? 'Cropping and uploading…' : 'We crop it to a square and save it to profile storage.'}</small></label>
             <button className="primary-button" disabled={profileBusy}>{profileBusy ? 'Saving…' : 'Save profile'}</button>
           </form>
         </section>

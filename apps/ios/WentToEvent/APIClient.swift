@@ -49,6 +49,10 @@ struct APIClient {
         try await request(path: "/me/account", method: "PATCH", accessToken: accessToken, body: input, as: APIUserResponse.self).user
     }
 
+    func uploadProfilePicture(accessToken: String, input: ProfilePictureUploadInput) async throws -> UserProfile {
+        try await request(path: "/me/profile-picture", method: "POST", accessToken: accessToken, body: input, as: UserProfileResponse.self).profile
+    }
+
     func createBooking(accessToken: String, input: CreateBookingInput) async throws -> Booking {
         try await request(
             path: "/bookings",

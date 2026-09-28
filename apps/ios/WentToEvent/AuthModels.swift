@@ -27,6 +27,11 @@ struct AccountUpdateInput: Encodable {
     let password: String?
 }
 
+struct ProfilePictureUploadInput: Encodable {
+    let data: String
+    let contentType: String
+}
+
 struct NativeSession: Codable {
     let accessToken: String
     let refreshToken: String

@@ -284,6 +284,8 @@ h2 { margin: 7px 0; font-size: 1.15rem; letter-spacing: -.025em; }
 .profile-form label { display: grid; gap: 6px; color: var(--muted); font-size: .78rem; }
 .profile-form input { width: 100%; border: 1px solid var(--line); border-radius: 12px; padding: 12px; background: #0f0e11; color: var(--ink); font-size: 16px; }
 .profile-form input:focus { border-color: var(--ink); outline: 0; }
+.profile-form .picture-upload input[type="file"] { padding: 9px; }
+.picture-upload small { color: var(--muted); line-height: 1.4; }
 .profile-form .primary-button { justify-self: start; margin-top: 4px; }
 .settings-submit { justify-self: start; padding: 10px 0; color: var(--ink); font-size: .86rem; }
 .settings-submit:disabled { opacity: .45; cursor: not-allowed; }

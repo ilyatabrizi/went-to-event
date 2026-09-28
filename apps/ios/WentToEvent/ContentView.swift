@@ -1,4 +1,6 @@
 import SwiftUI
+import PhotosUI
+import UIKit
 
 @MainActor
 struct ContentView: View {
@@ -306,6 +308,8 @@ private struct ProfileView: View {
     @State private var isSaving = false
     @State private var profileError: String?
     @State private var profileNotice: String?
+    @State private var selectedPhoto: PhotosPickerItem?
+    @State private var isUploadingPhoto = false
 
     var body: some View {
         NavigationStack {
@@ -381,6 +385,10 @@ private struct ProfileView: View {
                                 .keyboardType(.URL)
                                 .textInputAutocapitalization(.never)
                                 .autocorrectionDisabled()
+                            PhotosPicker(selection: $selectedPhoto, matching: .images) {
+                                Label(isUploadingPhoto ? "Uploading…" : "Choose profile picture", systemImage: "photo")
+                            }
+                            .disabled(isUploadingPhoto)
                             Button(isSaving ? "Saving…" : "Save profile") {
                                 Task { await saveProfile() }
                             }
@@ -406,6 +414,10 @@ private struct ProfileView: View {
                         }
                     }
                     .task { await loadProfile() }
+                    .onChange(of: selectedPhoto) { _, item in
+                        guard let item else { return }
+                        Task { await uploadPhoto(item) }
+                    }
                 } else {
                     ContentUnavailableView {
                         Label("Sign in to see your profile", systemImage: "person.crop.circle")
@@ -478,6 +490,46 @@ private struct ProfileView: View {
             profileError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
         }
         isSaving = false
+    }
+
+    private func uploadPhoto(_ item: PhotosPickerItem) async {
+        guard let token = auth.session?.accessToken else { return }
+        isUploadingPhoto = true
+        profileError = nil
+        profileNotice = nil
+        defer {
+            isUploadingPhoto = false
+            selectedPhoto = nil
+        }
+
+        do {
+            guard let data = try await item.loadTransferable(type: Data.self),
+                  let image = UIImage(data: data),
+                  let cropped = cropSquare(image),
+                  let jpeg = cropped.jpegData(compressionQuality: 0.86)
+            else {
+                throw APIError.message("Could not read that image.")
+            }
+
+            profile = try await APIClient().uploadProfilePicture(
+                accessToken: token,
+                input: ProfilePictureUploadInput(data: jpeg.base64EncodedString(), contentType: "image/jpeg"),
+            )
+            avatarUrl = profile?.avatarUrl ?? ""
+            profileNotice = "Profile picture updated."
+        } catch {
+            profileError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+        }
+    }
+
+    private func cropSquare(_ image: UIImage) -> UIImage? {
+        let side = min(image.size.width, image.size.height)
+        let origin = CGPoint(x: (image.size.width - side) / 2, y: (image.size.height - side) / 2)
+        let cropRect = CGRect(origin: origin, size: CGSize(width: side, height: side))
+        guard let cgImage = image.cgImage?.cropping(to: cropRect) else { return nil }
+        let cropped = UIImage(cgImage: cgImage, scale: image.scale, orientation: image.imageOrientation)
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: 512, height: 512))
+        return renderer.image { _ in cropped.draw(in: CGRect(x: 0, y: 0, width: 512, height: 512)) }
     }
 }
 

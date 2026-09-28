@@ -1,11 +1,12 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
-import type { AccountUpdate, CurrentUser, ProfileUpdate, UserProfile } from '../../../../packages/shared/src/auth.js'
+import type { AccountUpdate, CurrentUser, ProfilePictureUpload, ProfileUpdate, UserProfile } from '../../../../packages/shared/src/auth.js'
 
 export interface AuthService {
   getUser(accessToken: string): Promise<CurrentUser | null>
   getProfile?(userId: string): Promise<UserProfile>
   updateProfile?(userId: string, input: ProfileUpdate): Promise<UserProfile>
   updateAccount?(userId: string, input: AccountUpdate): Promise<CurrentUser>
+  uploadProfilePicture?(userId: string, input: ProfilePictureUpload): Promise<UserProfile>
 }
 
 export class SupabaseAuthService implements AuthService {
@@ -68,6 +69,20 @@ export class SupabaseAuthService implements AuthService {
 
     if (error || !data.user) throw error ?? new Error('Could not update account')
     return { id: data.user.id, email: data.user.email ?? null }
+  }
+
+  async uploadProfilePicture(userId: string, input: ProfilePictureUpload): Promise<UserProfile> {
+    const extension = input.contentType.split('/')[1]
+    const path = `${userId}/${crypto.randomUUID()}.${extension}`
+    const { error } = await this.client.storage.from('profile-pictures').upload(
+      path,
+      Buffer.from(input.data, 'base64'),
+      { contentType: input.contentType, upsert: false },
+    )
+    if (error) throw error
+
+    const { data } = this.client.storage.from('profile-pictures').getPublicUrl(path)
+    return this.updateProfile(userId, { avatarUrl: data.publicUrl })
   }
 }
 

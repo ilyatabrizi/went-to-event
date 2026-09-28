@@ -12,6 +12,11 @@ export type UserProfile = {
 
 export type ProfileUpdate = Partial<Pick<UserProfile, 'username' | 'displayName' | 'avatarUrl'>>
 
+export type ProfilePictureUpload = {
+  data: string
+  contentType: 'image/jpeg' | 'image/png' | 'image/webp'
+}
+
 export type AccountUpdate = {
   email?: string
   password?: string

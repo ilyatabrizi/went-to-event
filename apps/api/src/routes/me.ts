@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
-import type { AccountUpdate, ProfileUpdate } from '../../../../packages/shared/src/auth.js'
+import type { AccountUpdate, ProfilePictureUpload, ProfileUpdate } from '../../../../packages/shared/src/auth.js'
 import type { AuthService } from '../auth/service.js'
 
 function bearerToken(value: string | undefined) {
@@ -89,6 +89,28 @@ export async function meRoutes(
       return { user: await options.authService.updateAccount(user.id, { ...(email ? { email } : {}), ...(password ? { password } : {}) }) }
     } catch {
       return reply.code(400).send({ error: 'Could not update account. Check the values and try again.' })
+    }
+  })
+
+  app.post('/me/profile-picture', async (request, reply) => {
+    const user = await authenticatedUser(request, reply, options.authService)
+    if (!user) return
+    if (!options.authService?.uploadProfilePicture) return reply.code(503).send({ error: 'Profile picture service is not configured' })
+
+    const body = (request.body ?? {}) as Partial<ProfilePictureUpload>
+    const contentType = body.contentType
+    const data = typeof body.data === 'string' ? body.data.replace(/^data:[^;]+;base64,/, '') : ''
+    if (!data || !contentType || !['image/jpeg', 'image/png', 'image/webp'].includes(contentType)) {
+      return reply.code(400).send({ error: 'Upload a JPEG, PNG, or WebP image.' })
+    }
+    if (data.length > 1_500_000) {
+      return reply.code(413).send({ error: 'Profile picture must be smaller than 1 MB.' })
+    }
+
+    try {
+      return { profile: await options.authService.uploadProfilePicture(user.id, { data, contentType }) }
+    } catch {
+      return reply.code(500).send({ error: 'Could not upload profile picture' })
     }
   })
 }

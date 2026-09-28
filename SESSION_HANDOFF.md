@@ -4,7 +4,7 @@
 
 **Branch:** `develop`
 
-**Latest code commit:** `Add profile identity and account settings` (see `git log -1` for the current local hash)
+**Latest code commit:** profile identity, account settings, and profile-picture upload work is currently uncommitted pending final validation
 
 This document explains the active architecture, local setup, application flows, API contracts, testing process, known limitations, and recommended next steps.
 
@@ -519,7 +519,8 @@ On app launch, `AuthStore` loads the stored session from Keychain.
 The profile sheet shows the user’s email and ID, saved events, and a logout
 button. Native saved event IDs are stored with `UserDefaults` through
 `SavedEventsStore`; they are currently local to that device and are not yet
-synced to Supabase.
+synced to Supabase. It also has editable identity/security fields and a Photos
+picker that center-crops and uploads a profile picture through the API.
 
 The profile sheet also has an account header, saved-event and local-reminder
 counts, a direct bookings shortcut, and a note that profile editing and
@@ -611,6 +612,7 @@ GET /me/bookings/:id
 GET /me/profile
 PATCH /me/profile
 PATCH /me/account
+POST /me/profile-picture
 ```
 
 `PATCH /me/profile` validates and persists `username`, `displayName`, and
@@ -620,10 +622,16 @@ must be 3–24 characters using lowercase letters, numbers, or underscores.
 through the Supabase Admin Auth client after verifying the caller’s access
 token. The service-role key remains server-only.
 
+`POST /me/profile-picture` accepts a base64 JPEG, PNG, or WebP image payload,
+limits it to approximately 1 MB, uploads it to Supabase Storage under the
+authenticated user’s folder, and updates `profiles.avatar_url` with the public
+asset URL.
+
 Apply `infra/supabase/migrations/004_profile_identity.sql` to the Supabase
-project before using usernames. It adds the nullable username column, format
-constraint, and case-insensitive unique index. Existing accounts continue to
-work with a blank username until the user fills one in.
+project before using usernames or profile-picture uploads. It adds the nullable
+username column, format constraint, case-insensitive unique index, public
+`profile-pictures` storage bucket, and user-folder storage policies. Existing
+accounts continue to work with a blank username until the user fills one in.
 
 Protected routes require:
 
@@ -803,10 +811,10 @@ web delivery through service-worker/push infrastructure.
 
 ### Profile editing
 
-The profile hub and editable identity/security fields are implemented on web
-and iOS. Profile pictures currently use a validated image URL rather than a
-binary upload. A future increment should add Supabase Storage upload, image
-cropping, and password-recovery/re-authentication UX.
+The profile hub, editable identity/security fields, and profile-picture upload
+are implemented on web and iOS. Profile pictures are center-cropped to 512×512
+and stored in the `profile-pictures` Supabase Storage bucket. Password recovery
+and re-authentication UX remain future work.
 
 ### Password recovery
 
@@ -868,8 +876,9 @@ Phase 2 — Better event ownership and history:
    remote push delivery. Do not add payment or remote push infrastructure yet.
 5. Save/bookmark synchronization — move from client-only storage toward a
    protected API and Supabase table, while preserving the current local UX.
-6. Improved profile page — identity and account editing are implemented on web
-   and iOS; Supabase Storage image upload and password recovery remain.
+6. Improved profile page — identity, account editing, and Supabase Storage
+   profile-picture upload are implemented on web and iOS; password recovery and
+   re-authentication remain.
 
 After Phase 2:
 

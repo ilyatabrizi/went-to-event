@@ -87,3 +87,10 @@ export function updateAccount(session: Session, input: AccountUpdate) {
     body: JSON.stringify(input),
   })
 }
+
+export function uploadProfilePicture(session: Session, data: string, contentType: 'image/jpeg' | 'image/png' | 'image/webp') {
+  return authenticatedRequest<{ profile: UserProfile }>(session, '/me/profile-picture', {
+    method: 'POST',
+    body: JSON.stringify({ data, contentType }),
+  })
+}
