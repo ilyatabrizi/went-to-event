@@ -61,6 +61,24 @@ final class AuthStore: ObservableObject {
         keychain.delete()
     }
 
+    func refreshUser() async {
+        guard let session else { return }
+        do {
+            let refreshedUser = try await apiClient.getCurrentUser(accessToken: session.accessToken)
+            let updatedSession = NativeSession(
+                accessToken: session.accessToken,
+                refreshToken: session.refreshToken,
+                expiresAt: session.expiresAt,
+                user: refreshedUser,
+            )
+            try keychain.save(updatedSession)
+            self.session = updatedSession
+            user = refreshedUser
+        } catch {
+            errorMessage = message(for: error)
+        }
+    }
+
     private func authenticate(_ operation: () async throws -> NativeSession) async {
         isLoading = true
         errorMessage = nil

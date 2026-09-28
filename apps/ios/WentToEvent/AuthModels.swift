@@ -5,6 +5,28 @@ struct AuthUser: Codable, Hashable {
     let email: String?
 }
 
+struct UserProfile: Codable, Hashable {
+    let id: String
+    let username: String?
+    let displayName: String?
+    let avatarUrl: String?
+}
+
+struct UserProfileResponse: Decodable {
+    let profile: UserProfile
+}
+
+struct ProfileUpdateInput: Encodable {
+    let username: String
+    let displayName: String
+    let avatarUrl: String
+}
+
+struct AccountUpdateInput: Encodable {
+    let email: String?
+    let password: String?
+}
+
 struct NativeSession: Codable {
     let accessToken: String
     let refreshToken: String

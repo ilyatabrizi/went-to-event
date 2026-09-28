@@ -37,6 +37,18 @@ struct APIClient {
         try await request(path: "/me", accessToken: accessToken, body: Optional<String>.none, as: APIUserResponse.self).user
     }
 
+    func getProfile(accessToken: String) async throws -> UserProfile {
+        try await request(path: "/me/profile", accessToken: accessToken, body: Optional<String>.none, as: UserProfileResponse.self).profile
+    }
+
+    func updateProfile(accessToken: String, input: ProfileUpdateInput) async throws -> UserProfile {
+        try await request(path: "/me/profile", method: "PATCH", accessToken: accessToken, body: input, as: UserProfileResponse.self).profile
+    }
+
+    func updateAccount(accessToken: String, input: AccountUpdateInput) async throws -> AuthUser {
+        try await request(path: "/me/account", method: "PATCH", accessToken: accessToken, body: input, as: APIUserResponse.self).user
+    }
+
     func createBooking(accessToken: String, input: CreateBookingInput) async throws -> Booking {
         try await request(
             path: "/bookings",

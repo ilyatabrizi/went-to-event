@@ -4,7 +4,7 @@
 
 **Branch:** `develop`
 
-**Latest code commit:** `Improve profile hub on web and iOS` (see `git log -1` for the current local hash)
+**Latest code commit:** `Add profile identity and account settings` (see `git log -1` for the current local hash)
 
 This document explains the active architecture, local setup, application flows, API contracts, testing process, known limitations, and recommended next steps.
 
@@ -402,6 +402,20 @@ counts, with quick actions for opening bookings and returning to Explore. The
 upcoming count reflects bookings already loaded in the current browser session;
 opening bookings loads the authoritative list from the API.
 
+Authenticated profile settings are now connected to the API. The web profile
+has a root-prototype-inspired identity header and grouped settings cards for:
+
+- Display name.
+- Unique lowercase username.
+- Profile picture URL.
+- Email address.
+- New password.
+
+Email and password changes use the protected account endpoint. Supabase may
+require email confirmation after an email change, depending on project Auth
+settings. The current profile-picture increment stores a validated HTTPS/HTTP
+image URL; binary image upload through Supabase Storage is still a later step.
+
 The bookings page requests:
 
 ```text
@@ -511,6 +525,10 @@ The profile sheet also has an account header, saved-event and local-reminder
 counts, a direct bookings shortcut, and a note that profile editing and
 password recovery are still pending.
 
+The profile sheet now includes editable display name, username, profile-picture
+URL, email, and password fields backed by the same API endpoints as the web
+client.
+
 Logout clears the in-memory session and deletes the Keychain session.
 
 ### Native booking and booking history
@@ -590,7 +608,22 @@ GET /me
 POST /bookings
 GET /me/bookings
 GET /me/bookings/:id
+GET /me/profile
+PATCH /me/profile
+PATCH /me/account
 ```
+
+`PATCH /me/profile` validates and persists `username`, `displayName`, and
+`avatarUrl` in `public.profiles`. Usernames are normalized to lowercase and
+must be 3–24 characters using lowercase letters, numbers, or underscores.
+`PATCH /me/account` accepts an email and/or password and applies the change
+through the Supabase Admin Auth client after verifying the caller’s access
+token. The service-role key remains server-only.
+
+Apply `infra/supabase/migrations/004_profile_identity.sql` to the Supabase
+project before using usernames. It adds the nullable username column, format
+constraint, and case-insensitive unique index. Existing accounts continue to
+work with a blank username until the user fills one in.
 
 Protected routes require:
 
@@ -770,9 +803,10 @@ web delivery through service-worker/push infrastructure.
 
 ### Profile editing
 
-The profile hub has been improved on web and iOS, but editable display
-name/avatar settings are not implemented yet. The database supports profiles;
-the next profile increment can add editable fields and persistence.
+The profile hub and editable identity/security fields are implemented on web
+and iOS. Profile pictures currently use a validated image URL rather than a
+binary upload. A future increment should add Supabase Storage upload, image
+cropping, and password-recovery/re-authentication UX.
 
 ### Password recovery
 
@@ -834,8 +868,8 @@ Phase 2 — Better event ownership and history:
    remote push delivery. Do not add payment or remote push infrastructure yet.
 5. Save/bookmark synchronization — move from client-only storage toward a
    protected API and Supabase table, while preserving the current local UX.
-6. Improved profile page — the first profile hub increment is implemented on
-   web and iOS; editable profile fields remain.
+6. Improved profile page — identity and account editing are implemented on web
+   and iOS; Supabase Storage image upload and password recovery remain.
 
 After Phase 2:
 

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Session } from '@supabase/supabase-js'
-import { createBooking, getBookings, getEvent, getEvents, type Booking, type Event } from './api'
+import { createBooking, getBookings, getEvent, getEvents, getProfile, updateAccount, updateProfile, type Booking, type Event, type UserProfile } from './api'
 import { AuthPanel } from './AuthPanel'
 import { supabase } from './auth'
 
@@ -94,6 +94,13 @@ export function App() {
   const [showAuth, setShowAuth] = useState(false)
   const [showProfile, setShowProfile] = useState(false)
   const [savedIds, setSavedIds] = useState<string[]>([])
+  const [profile, setProfile] = useState<UserProfile | null>(null)
+  const [profileLoading, setProfileLoading] = useState(false)
+  const [profileBusy, setProfileBusy] = useState(false)
+  const [profileError, setProfileError] = useState<string | null>(null)
+  const [profileNotice, setProfileNotice] = useState<string | null>(null)
+  const [profileForm, setProfileForm] = useState({ username: '', displayName: '', avatarUrl: '' })
+  const [accountForm, setAccountForm] = useState({ email: '', password: '' })
   const [reminders, setReminders] = useState<Record<string, BrowserReminder>>({})
   const [reminderError, setReminderError] = useState<string | null>(null)
   const reminderTimers = useRef<Record<string, number>>({})
@@ -213,6 +220,53 @@ export function App() {
     setShowProfile(true)
     setPassBooking(null)
     setPassEvent(null)
+    setProfileError(null)
+    setProfileNotice(null)
+    if (session) {
+      setProfileLoading(true)
+      getProfile(session)
+        .then(({ profile: nextProfile }) => {
+          setProfile(nextProfile)
+          setProfileForm({ username: nextProfile.username ?? '', displayName: nextProfile.displayName ?? '', avatarUrl: nextProfile.avatarUrl ?? '' })
+        })
+        .catch((failure) => setProfileError(failure instanceof Error ? failure.message : 'Could not load your profile'))
+        .finally(() => setProfileLoading(false))
+    }
+  }
+
+  async function saveProfile(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!session) return
+    setProfileBusy(true)
+    setProfileError(null)
+    setProfileNotice(null)
+    try {
+      const response = await updateProfile(session, profileForm)
+      setProfile(response.profile)
+      setProfileForm({ username: response.profile.username ?? '', displayName: response.profile.displayName ?? '', avatarUrl: response.profile.avatarUrl ?? '' })
+      setProfileNotice('Profile updated.')
+    } catch (failure) {
+      setProfileError(failure instanceof Error ? failure.message : 'Could not update profile')
+    } finally {
+      setProfileBusy(false)
+    }
+  }
+
+  async function saveAccount(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!session || (!accountForm.email && !accountForm.password)) return
+    setProfileBusy(true)
+    setProfileError(null)
+    setProfileNotice(null)
+    try {
+      const response = await updateAccount(session, { ...(accountForm.email ? { email: accountForm.email } : {}), ...(accountForm.password ? { password: accountForm.password } : {}) })
+      setAccountForm({ email: '', password: '' })
+      setProfileNotice(response.user.email ? 'Account updated. Check your email if confirmation is required.' : 'Account updated.')
+    } catch (failure) {
+      setProfileError(failure instanceof Error ? failure.message : 'Could not update account')
+    } finally {
+      setProfileBusy(false)
+    }
   }
 
   function openExplore() {
@@ -361,13 +415,32 @@ export function App() {
           <p className="lede">Your saved events, tickets, and reminders in one place.</p>
         </header>
         <section className="profile-card" data-testid="profile-card">
-          <div className="profile-avatar" aria-hidden="true">{(session.user.email ?? 'U').slice(0, 1).toUpperCase()}</div>
+          {profile?.avatarUrl ? <img className="profile-avatar profile-avatar-image" src={profile.avatarUrl} alt="" /> : <div className="profile-avatar" aria-hidden="true">{(profile?.displayName ?? session.user.email ?? 'U').slice(0, 1).toUpperCase()}</div>}
           <div className="profile-identity">
-            <span className="label">Signed in as</span>
-            <strong>{session.user.email}</strong>
+            <strong>{profile?.displayName || 'Your name'}</strong>
+            <span>{profile?.username ? `@${profile.username}` : session.user.email}</span>
           </div>
           <button className="logout-button" data-testid="logout" onClick={logout}>Log out</button>
         </section>
+        {profileLoading && <p className="profile-loading">Loading your profile…</p>}
+        <section className="profile-settings" aria-label="Profile settings">
+          <div className="settings-heading"><span className="label">Your identity</span><span>Public profile</span></div>
+          <form className="profile-form" onSubmit={saveProfile}>
+            <label>Display name<input value={profileForm.displayName} onChange={(event) => setProfileForm({ ...profileForm, displayName: event.target.value })} placeholder="Your name" maxLength={80} /></label>
+            <label>Username<input value={profileForm.username} onChange={(event) => setProfileForm({ ...profileForm, username: event.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '') })} placeholder="your_username" maxLength={24} /></label>
+            <label>Profile picture URL<input type="url" value={profileForm.avatarUrl} onChange={(event) => setProfileForm({ ...profileForm, avatarUrl: event.target.value })} placeholder="https://…" /></label>
+            <button className="primary-button" disabled={profileBusy}>{profileBusy ? 'Saving…' : 'Save profile'}</button>
+          </form>
+        </section>
+        <section className="profile-settings" aria-label="Account security">
+          <div className="settings-heading"><span className="label">Account security</span><span>Private</span></div>
+          <form className="profile-form" onSubmit={saveAccount}>
+            <label>Email address<input type="email" value={accountForm.email} onChange={(event) => setAccountForm({ ...accountForm, email: event.target.value })} placeholder={session.user.email ?? 'you@example.com'} /></label>
+            <label>New password<input type="password" value={accountForm.password} onChange={(event) => setAccountForm({ ...accountForm, password: event.target.value })} placeholder="At least 6 characters" minLength={6} /></label>
+            <button className="quiet-button settings-submit" disabled={profileBusy || (!accountForm.email && !accountForm.password)}>Update account</button>
+          </form>
+        </section>
+        {(profileError || profileNotice) && <p className={profileError ? 'error' : 'profile-notice'}>{profileError ?? profileNotice}</p>}
         <section className="profile-stats" aria-label="Your activity">
           <div><strong>{savedIds.length}</strong><span>Saved</span></div>
           <div><strong>{bookings.filter((item) => isUpcoming(bookingEvents[item.eventId])).length}</strong><span>Upcoming</span></div>

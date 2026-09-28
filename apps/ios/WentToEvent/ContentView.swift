@@ -297,6 +297,15 @@ private struct ProfileView: View {
     let onSignIn: () -> Void
     let onOpenBookings: () -> Void
     @StateObject private var reminders = ReminderStore()
+    @State private var profile: UserProfile?
+    @State private var username = ""
+    @State private var displayName = ""
+    @State private var avatarUrl = ""
+    @State private var email = ""
+    @State private var password = ""
+    @State private var isSaving = false
+    @State private var profileError: String?
+    @State private var profileNotice: String?
 
     var body: some View {
         NavigationStack {
@@ -305,15 +314,20 @@ private struct ProfileView: View {
                     Form {
                         Section {
                             HStack(spacing: 14) {
-                                Text((user.email ?? "U").prefix(1).uppercased())
-                                    .font(.title2.bold())
+                                if let avatarUrl = profile?.avatarUrl, let url = URL(string: avatarUrl) {
+                                    AsyncImage(url: url) { image in
+                                        image.resizable().scaledToFill()
+                                    } placeholder: {
+                                        initialsAvatar(user: user)
+                                    }
                                     .frame(width: 48, height: 48)
-                                    .background(Color.primary)
-                                    .foregroundStyle(Color(uiColor: .systemBackground))
                                     .clipShape(Circle())
+                                } else {
+                                    initialsAvatar(user: user)
+                                }
                                 VStack(alignment: .leading, spacing: 4) {
-                                    Text("Your account").font(.headline)
-                                    Text(user.email ?? "No email").font(.subheadline).foregroundStyle(.secondary)
+                                    Text(profile?.displayName ?? "Your account").font(.headline)
+                                    Text(profile?.username.map { "@\($0)" } ?? user.email ?? "No email").font(.subheadline).foregroundStyle(.secondary)
                                 }
                             }
                             .padding(.vertical, 6)
@@ -358,10 +372,40 @@ private struct ProfileView: View {
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
+                        Section("Your identity") {
+                            TextField("Display name", text: $displayName)
+                            TextField("Username", text: $username)
+                                .textInputAutocapitalization(.never)
+                                .autocorrectionDisabled()
+                            TextField("Profile picture URL", text: $avatarUrl)
+                                .keyboardType(.URL)
+                                .textInputAutocapitalization(.never)
+                                .autocorrectionDisabled()
+                            Button(isSaving ? "Saving…" : "Save profile") {
+                                Task { await saveProfile() }
+                            }
+                            .disabled(isSaving)
+                        }
+                        Section("Account security") {
+                            TextField("New email", text: $email)
+                                .textContentType(.emailAddress)
+                                .keyboardType(.emailAddress)
+                                .textInputAutocapitalization(.never)
+                                .autocorrectionDisabled()
+                            SecureField("New password", text: $password)
+                                .textContentType(.newPassword)
+                            Button(isSaving ? "Updating…" : "Update account") {
+                                Task { await saveAccount() }
+                            }
+                            .disabled(isSaving || (email.isEmpty && password.isEmpty))
+                        }
+                        if let profileError { Section { Text(profileError).foregroundStyle(.red) } }
+                        if let profileNotice { Section { Text(profileNotice).foregroundStyle(.secondary) } }
                         Section {
                             Button("Sign out", role: .destructive) { auth.signOut(); dismiss() }
                         }
                     }
+                    .task { await loadProfile() }
                 } else {
                     ContentUnavailableView {
                         Label("Sign in to see your profile", systemImage: "person.crop.circle")
@@ -375,6 +419,65 @@ private struct ProfileView: View {
             .navigationTitle("Profile")
             .toolbar { ToolbarItem(placement: .topBarLeading) { Button("Close") { dismiss() } } }
         }
+    }
+
+    private func initialsAvatar(user: AuthUser) -> some View {
+        Text((displayName.isEmpty ? (user.email ?? "U") : displayName).prefix(1).uppercased())
+            .font(.title2.bold())
+            .frame(width: 48, height: 48)
+            .background(Color.primary)
+            .foregroundStyle(Color(uiColor: .systemBackground))
+            .clipShape(Circle())
+    }
+
+    private func loadProfile() async {
+        guard let token = auth.session?.accessToken else { return }
+        do {
+            let loaded = try await APIClient().getProfile(accessToken: token)
+            profile = loaded
+            username = loaded.username ?? ""
+            displayName = loaded.displayName ?? ""
+            avatarUrl = loaded.avatarUrl ?? ""
+        } catch {
+            profileError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+        }
+    }
+
+    private func saveProfile() async {
+        guard let token = auth.session?.accessToken else { return }
+        isSaving = true
+        profileError = nil
+        profileNotice = nil
+        do {
+            profile = try await APIClient().updateProfile(
+                accessToken: token,
+                input: ProfileUpdateInput(username: username, displayName: displayName, avatarUrl: avatarUrl),
+            )
+            profileNotice = "Profile updated."
+        } catch {
+            profileError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+        }
+        isSaving = false
+    }
+
+    private func saveAccount() async {
+        guard let token = auth.session?.accessToken else { return }
+        isSaving = true
+        profileError = nil
+        profileNotice = nil
+        do {
+            _ = try await APIClient().updateAccount(
+                accessToken: token,
+                input: AccountUpdateInput(email: email.isEmpty ? nil : email, password: password.isEmpty ? nil : password),
+            )
+            email = ""
+            password = ""
+            await auth.refreshUser()
+            profileNotice = "Account updated. Check your email if confirmation is required."
+        } catch {
+            profileError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+        }
+        isSaving = false
     }
 }
 
