@@ -1,5 +1,5 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
-import type { AccountUpdate, CurrentUser, ProfilePictureUpload, ProfileUpdate, UserProfile } from '../../../../packages/shared/src/auth.js'
+import type { AccountUpdate, CurrentUser, ProfilePictureUpload, ProfileUpdate, UserProfile } from '../contracts/auth.js'
 
 export interface AuthService {
   getUser(accessToken: string): Promise<CurrentUser | null>

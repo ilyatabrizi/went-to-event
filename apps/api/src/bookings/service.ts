@@ -1,5 +1,5 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
-import type { Booking, CreateBookingInput } from '../../../../packages/shared/src/bookings.js'
+import type { Booking, CreateBookingInput } from '../contracts/bookings.js'
 
 export interface BookingService {
   create(userId: string, input: CreateBookingInput): Promise<Booking>

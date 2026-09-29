@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
-import type { AccountUpdate, ProfilePictureUpload, ProfileUpdate } from '../../../../packages/shared/src/auth.js'
+import type { AccountUpdate, ProfilePictureUpload, ProfileUpdate } from '../contracts/auth.js'
 import type { AuthService } from '../auth/service.js'
 
 function bearerToken(value: string | undefined) {

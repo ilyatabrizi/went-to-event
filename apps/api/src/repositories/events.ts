@@ -1,4 +1,4 @@
-import type { Event, EventRepository } from '../../../../packages/shared/src/events.js'
+import type { Event, EventRepository } from '../contracts/events.js'
 import { events } from '../data/events.js'
 
 export class InMemoryEventRepository implements EventRepository {

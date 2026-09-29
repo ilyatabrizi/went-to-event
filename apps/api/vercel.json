@@ -1,0 +1,7 @@
+{
+  "buildCommand": "echo Vercel will bundle the API function",
+  "installCommand": "npm ci",
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/api/$1" }
+  ]
+}

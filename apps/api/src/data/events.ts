@@ -1,4 +1,4 @@
-import type { Event } from '../../../../packages/shared/src/events.js'
+import type { Event } from '../contracts/events.js'
 
 export const events: Event[] = [
   {

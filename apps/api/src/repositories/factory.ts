@@ -1,4 +1,4 @@
-import type { EventRepository } from '../../../../packages/shared/src/events.js'
+import type { EventRepository } from '../contracts/events.js'
 import { InMemoryEventRepository } from './events.js'
 import { createSupabaseEventRepository } from './supabase-events.js'
 

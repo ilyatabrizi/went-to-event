@@ -1,5 +1,5 @@
 import Fastify from 'fastify'
-import type { EventRepository } from '../../../packages/shared/src/events.js'
+import type { EventRepository } from './contracts/events.js'
 import type { AuthService } from './auth/service.js'
 import { createAuthService } from './auth/service.js'
 import type { BookingService } from './bookings/service.js'

@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify'
-import type { CreateBookingInput } from '../../../../packages/shared/src/bookings.js'
+import type { CreateBookingInput } from '../contracts/bookings.js'
 import type { AuthService } from '../auth/service.js'
 import type { BookingService } from '../bookings/service.js'
 

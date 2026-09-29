@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify'
-import type { EventRepository } from '../../../../packages/shared/src/events.js'
+import type { EventRepository } from '../contracts/events.js'
 
 export async function eventsRoutes(
   app: FastifyInstance,

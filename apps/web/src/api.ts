@@ -1,14 +1,17 @@
 import type { Session } from '@supabase/supabase-js'
-import type { AccountUpdate, ProfileUpdate, UserProfile } from '../../../packages/shared/src/auth'
-import type { Booking, CreateBookingInput } from '../../../packages/shared/src/bookings'
-import type { Event, EventResponse, EventsResponse } from '../../../packages/shared/src/events'
-export type { Event } from '../../../packages/shared/src/events'
-export type { Booking } from '../../../packages/shared/src/bookings'
+import type { AccountUpdate, ProfileUpdate, UserProfile } from './contracts/auth'
+import type { Booking, CreateBookingInput } from './contracts/bookings'
+import type { Event, EventResponse, EventsResponse } from './contracts/events'
+export type { Event } from './contracts/events'
+export type { Booking } from './contracts/bookings'
 
-export type { UserProfile } from '../../../packages/shared/src/auth'
+export type { UserProfile } from './contracts/auth'
+
+const apiBaseUrl = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '') ?? ''
+const apiPath = (path: string) => apiBaseUrl ? `${apiBaseUrl}${path}` : `/api${path}`
 
 async function request<T>(path: string): Promise<T> {
-  const response = await fetch(`/api${path}`)
+  const response = await fetch(apiPath(path))
 
   if (!response.ok) {
     throw new Error(`Request failed: ${response.status}`)
@@ -26,7 +29,7 @@ export async function getEvent(id: string) {
 }
 
 export async function createBooking(session: Session, input: CreateBookingInput) {
-  const response = await fetch('/api/bookings', {
+  const response = await fetch(apiPath('/bookings'), {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
@@ -44,7 +47,7 @@ export async function createBooking(session: Session, input: CreateBookingInput)
 }
 
 export async function getBookings(session: Session) {
-  const response = await fetch('/api/me/bookings', {
+  const response = await fetch(apiPath('/me/bookings'), {
     headers: { Authorization: `Bearer ${session.access_token}` },
   })
 
@@ -57,7 +60,7 @@ export async function getBookings(session: Session) {
 }
 
 async function authenticatedRequest<T>(session: Session, path: string, options: RequestInit = {}) {
-  const response = await fetch(`/api${path}`, {
+  const response = await fetch(apiPath(path), {
     ...options,
     headers: {
       'content-type': 'application/json',

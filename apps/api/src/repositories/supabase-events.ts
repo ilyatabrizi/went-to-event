@@ -1,5 +1,5 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
-import type { Event, EventRepository } from '../../../../packages/shared/src/events.js'
+import type { Event, EventRepository } from '../contracts/events.js'
 
 type EventRow = {
   id: string

@@ -4,7 +4,7 @@
 
 **Branch:** `develop`
 
-**Latest code commit:** profile identity, account settings, and profile-picture upload work is currently uncommitted pending final validation
+**Latest code commit:** Vercel deployment configuration is currently uncommitted pending final commit
 
 This document explains the active architecture, local setup, application flows, API contracts, testing process, known limitations, and recommended next steps.
 
@@ -294,6 +294,38 @@ For LAN/phone testing:
 ```bash
 npm run dev -- --host 0.0.0.0
 ```
+
+## 5A. Current Vercel deployment
+
+The web and API are currently deployed as separate Vercel projects:
+
+```text
+Web: https://web-sigma-roan-83.vercel.app
+API: https://api-orcin-one-49.vercel.app
+```
+
+The API health check is:
+
+```text
+https://api-orcin-one-49.vercel.app/health
+```
+
+The web project is rooted at `apps/web` and uses `apps/web/vercel.json`.
+Production variables are configured in Vercel as `VITE_API_URL`,
+`VITE_SUPABASE_URL`, and `VITE_SUPABASE_ANON_KEY`. The API project is rooted at
+`apps/api`, uses `apps/api/api/[...path].ts` as its serverless adapter, and has
+the production `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` configured only
+in Vercel’s server environment.
+
+The API and web deployments include local copies of the shared TypeScript
+contracts under `apps/api/src/contracts` and `apps/web/src/contracts`. This is
+required because each Vercel project is deployed from its app directory rather
+than the repository root.
+
+The current Vercel URLs are deployment URLs and should eventually be replaced
+with custom domains. The API still needs the Supabase production migration and
+Storage setup applied before authenticated profile and booking operations are
+considered production-ready.
 
 ### iOS
 
