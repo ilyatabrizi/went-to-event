@@ -1,4 +1,4 @@
 // Production URL is intentionally not enabled yet. Until the API is deployed,
 // Release builds use the same local development routing as Debug builds.
-WTE_API_BASE_URL = http:/$()/127.0.0.1:3000
-WTE_API_BASE_URL[sdk=iphoneos*] = http:/$()/192.168.100.57:3000
+WTE_API_BASE_URL = https:/$()/api-orcin-one-49.vercel.app
+WTE_API_BASE_URL[sdk=iphoneos*] = https:/$()/api-orcin-one-49.vercel.app

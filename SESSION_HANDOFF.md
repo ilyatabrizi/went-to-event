@@ -4,7 +4,7 @@
 
 **Branch:** `develop`
 
-**Latest code commit:** Vercel deployment configuration is currently uncommitted pending final commit
+**Latest code commit:** deployment and production iOS routing updates are currently uncommitted pending final commit
 
 This document explains the active architecture, local setup, application flows, API contracts, testing process, known limitations, and recommended next steps.
 
@@ -323,9 +323,11 @@ required because each Vercel project is deployed from its app directory rather
 than the repository root.
 
 The current Vercel URLs are deployment URLs and should eventually be replaced
-with custom domains. The API still needs the Supabase production migration and
-Storage setup applied before authenticated profile and booking operations are
-considered production-ready.
+with custom domains. Supabase project `legyknewpiwcxwdccbjd` is linked to the
+repository and migration `004_profile_identity.sql` has been applied remotely,
+including the profile username constraint and `profile-pictures` Storage
+bucket. The iOS Release configuration now points to the deployed API instead
+of a local IP address.
 
 ### iOS
 
