@@ -1,91 +1,39 @@
-import Foundation
+import ClerkKit
 import Combine
+import Foundation
 
 @MainActor
 final class AuthStore: ObservableObject {
-    @Published private(set) var session: NativeSession?
+    @Published private(set) var isSignedIn = false
     @Published private(set) var user: AuthUser?
     @Published private(set) var isLoading = false
     @Published var errorMessage: String?
     @Published var noticeMessage: String?
 
-    private let client: SupabaseAuthClient
-    private let keychain: KeychainStore
-    private let apiClient: APIClient
+    private let apiClient = APIClient()
 
-    var isSignedIn: Bool { session != nil }
-
-    init() {
-        client = SupabaseAuthClient()
-        keychain = KeychainStore()
-        apiClient = APIClient()
-
-        if let stored = try? keychain.load(NativeSession.self) {
-            session = stored
-            user = stored.user
-            Task { await restore(stored) }
+    func accessToken() async throws -> String {
+        guard let session = Clerk.shared.session,
+              let token = try await session.getToken()
+        else {
+            throw APIError.message("Please sign in again to continue.")
         }
-    }
-
-    func signIn(email: String, password: String) async {
-        await authenticate {
-            try await client.signIn(email: email, password: password)
-        }
-    }
-
-    func signUp(email: String, password: String) async {
-        isLoading = true
-        errorMessage = nil
-        noticeMessage = nil
-
-        do {
-            guard let newSession = try await client.signUp(email: email, password: password) else {
-                noticeMessage = "Account created. Check your email to confirm it, then sign in."
-                isLoading = false
-                return
-            }
-            try await accept(newSession)
-            noticeMessage = "Account created and signed in."
-        } catch {
-            errorMessage = message(for: error)
-        }
-
-        isLoading = false
-    }
-
-    func signOut() {
-        session = nil
-        user = nil
-        errorMessage = nil
-        noticeMessage = "Signed out."
-        keychain.delete()
+        return token
     }
 
     func refreshUser() async {
-        guard let session else { return }
-        do {
-            let refreshedUser = try await apiClient.getCurrentUser(accessToken: session.accessToken)
-            let updatedSession = NativeSession(
-                accessToken: session.accessToken,
-                refreshToken: session.refreshToken,
-                expiresAt: session.expiresAt,
-                user: refreshedUser,
-            )
-            try keychain.save(updatedSession)
-            self.session = updatedSession
-            user = refreshedUser
-        } catch {
-            errorMessage = message(for: error)
+        guard let clerkUser = Clerk.shared.user else {
+            clearSession()
+            return
         }
-    }
 
-    private func authenticate(_ operation: () async throws -> NativeSession) async {
+        isSignedIn = true
+        user = AuthUser(id: clerkUser.id, email: clerkUser.primaryEmailAddress?.emailAddress)
         isLoading = true
         errorMessage = nil
-        noticeMessage = nil
 
         do {
-            try await accept(try await operation())
+            user = try await apiClient.getCurrentUser(accessToken: accessToken())
         } catch {
             errorMessage = message(for: error)
         }
@@ -93,29 +41,23 @@ final class AuthStore: ObservableObject {
         isLoading = false
     }
 
-    private func restore(_ stored: NativeSession) async {
+    func signOut() async {
+        isLoading = true
+        errorMessage = nil
         do {
-            if let expiresAt = stored.expiresAt, expiresAt < Date().addingTimeInterval(30) {
-                try await accept(try await client.refresh(stored))
-            } else {
-                user = try await apiClient.getCurrentUser(accessToken: stored.accessToken)
-            }
+            try await Clerk.shared.auth.signOut()
+            clearSession()
+            noticeMessage = "Signed out."
         } catch {
-            signOut()
+            errorMessage = message(for: error)
         }
+        isLoading = false
     }
 
-    private func accept(_ newSession: NativeSession) async throws {
-        let verifiedUser = try await apiClient.getCurrentUser(accessToken: newSession.accessToken)
-        let verifiedSession = NativeSession(
-            accessToken: newSession.accessToken,
-            refreshToken: newSession.refreshToken,
-            expiresAt: newSession.expiresAt,
-            user: verifiedUser,
-        )
-        try keychain.save(verifiedSession)
-        session = verifiedSession
-        user = verifiedUser
+    func clearSession() {
+        isSignedIn = false
+        user = nil
+        errorMessage = nil
     }
 
     private func message(for error: Error) -> String {

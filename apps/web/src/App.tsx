@@ -1,11 +1,16 @@
-import { useEffect, useRef, useState } from 'react'
-import type { Session } from '@supabase/supabase-js'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { useAuth, useUser } from '@clerk/react'
 import { createBooking, getBookings, getEvent, getEvents, getProfile, updateAccount, updateProfile, uploadProfilePicture, type Booking, type Event, type UserProfile } from './api'
 import { AuthPanel } from './AuthPanel'
-import { supabase } from './auth'
+import { SocialPanel } from './SocialPanel'
+import { VerificationPanel } from './VerificationPanel'
+import { languageOptions, translate, type Language } from './i18n'
+
+type WebSession = { user: { email: string | null } }
 
 function formatDate(value: string) {
-  return new Intl.DateTimeFormat('en-US', {
+  const locale = ({ fa: 'fa-IR', tr: 'tr-TR', fr: 'fr-FR', it: 'it-IT' } as const)[document.documentElement.lang as 'fa' | 'tr' | 'fr' | 'it'] ?? 'en-US'
+  return new Intl.DateTimeFormat(locale, {
     weekday: 'short',
     month: 'short',
     day: 'numeric',
@@ -15,7 +20,8 @@ function formatDate(value: string) {
 }
 
 function formatBookingDate(value: string) {
-  return new Intl.DateTimeFormat('en-US', {
+  const locale = ({ fa: 'fa-IR', tr: 'tr-TR', fr: 'fr-FR', it: 'it-IT' } as const)[document.documentElement.lang as 'fa' | 'tr' | 'fr' | 'it'] ?? 'en-US'
+  return new Intl.DateTimeFormat(locale, {
     dateStyle: 'medium',
     timeStyle: 'short',
   }).format(new Date(value))
@@ -69,32 +75,51 @@ function Cover({ event }: { event: Event }) {
   )
 }
 
-function Navigation({ onBookings, onHome, onExplore, onProfile, active = 'home' }: { onBookings: () => void; onHome: () => void; onExplore: () => void; onProfile: () => void; active?: string }) {
+function Navigation({ onBookings, onHome, onExplore, onProfile, onChat, active = 'home', language }: { onBookings: () => void; onHome: () => void; onExplore: () => void; onProfile: () => void; onChat: () => void; active?: string; language: Language }) {
+  const t = (text: string) => translate(language, text)
   return (
-    <nav className="app-nav" aria-label="Main navigation">
+    <nav className="app-nav" aria-label={t('Main navigation')}>
       <button className={`nav-item ${active === 'home' ? 'nav-active' : ''}`} onClick={onHome}>
-        <span aria-hidden="true">⌂</span><span>Home</span>
+        <span aria-hidden="true">⌂</span><span>{t('Home')}</span>
       </button>
       <button className={`nav-item ${active === 'explore' ? 'nav-active' : ''}`} onClick={onExplore}>
-        <span aria-hidden="true">⌕</span><span>Explore</span>
+        <span aria-hidden="true">⌕</span><span>{t('Explore')}</span>
       </button>
       <button className={`nav-item ${active === 'bookings' ? 'nav-active' : ''}`} onClick={onBookings}>
-        <span aria-hidden="true">▣</span><span>Bookings</span>
+        <span aria-hidden="true">▣</span><span>{t('Bookings')}</span>
+      </button>
+      <button className={`nav-item ${active === 'chat' ? 'nav-active' : ''}`} onClick={onChat}>
+        <span aria-hidden="true">◌</span><span>{t('Chat')}</span>
       </button>
       <button className={`nav-item ${active === 'profile' ? 'nav-active' : ''}`} onClick={onProfile}>
-        <span aria-hidden="true">●</span><span>Profile</span>
+        <span aria-hidden="true">●</span><span>{t('Profile')}</span>
       </button>
     </nav>
   )
 }
 
 export function App() {
+  if (window.location.pathname === '/') {
+    return <iframe className="business-landing-frame" src="/business-join/index.html" title="Went To Event business sign-up" />
+  }
+  return <ProductApp />
+}
+
+function ProductApp() {
+  const { isLoaded: authLoaded, isSignedIn, getToken, signOut } = useAuth()
+  const { user } = useUser()
+  const session: WebSession | null = isSignedIn ? { user: { email: user?.primaryEmailAddress?.emailAddress ?? null } } : null
+  const authToken = useCallback(() => getToken(), [getToken])
+  const [language, setLanguage] = useState<Language>(() => {
+    const savedLanguage = localStorage.getItem('wte.language')
+    return languageOptions.some((option) => option.value === savedLanguage) ? savedLanguage as Language : 'en'
+  })
+  const t = (text: string) => translate(language, text)
   const [events, setEvents] = useState<Event[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [selected, setSelected] = useState<Event | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [session, setSession] = useState<Session | null>(null)
   const [selectedTierId, setSelectedTierId] = useState<string | null>(null)
   const [quantity, setQuantity] = useState(1)
   const [booking, setBooking] = useState<Booking | null>(null)
@@ -115,8 +140,11 @@ export function App() {
   const [passEvent, setPassEvent] = useState<Event | null>(null)
   const [showAuth, setShowAuth] = useState(false)
   const [showProfile, setShowProfile] = useState(false)
+  const [profileTab, setProfileTab] = useState<'saved' | 'going' | 'account'>('saved')
+  const [showSocial, setShowSocial] = useState(false)
   const [savedIds, setSavedIds] = useState<string[]>([])
   const [profile, setProfile] = useState<UserProfile | null>(null)
+  const [usernameSetupStatus, setUsernameSetupStatus] = useState<'idle' | 'checking' | 'required' | 'complete'>('idle')
   const [profileLoading, setProfileLoading] = useState(false)
   const [profileBusy, setProfileBusy] = useState(false)
   const [pictureUploading, setPictureUploading] = useState(false)
@@ -127,6 +155,12 @@ export function App() {
   const [reminders, setReminders] = useState<Record<string, BrowserReminder>>({})
   const [reminderError, setReminderError] = useState<string | null>(null)
   const reminderTimers = useRef<Record<string, number>>({})
+
+  useEffect(() => {
+    document.documentElement.lang = language
+    document.documentElement.dir = language === 'fa' ? 'rtl' : 'ltr'
+    localStorage.setItem('wte.language', language)
+  }, [language])
 
   useEffect(() => {
     try {
@@ -173,22 +207,33 @@ export function App() {
   }, [reminders])
 
   useEffect(() => {
-    if (!supabase) return
-
-    supabase.auth.getSession().then(({ data }) => setSession(data.session))
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
-      setSession(nextSession)
-    })
-
-    return () => listener.subscription.unsubscribe()
-  }, [])
-
-  useEffect(() => {
     getEvents()
       .then((response) => setEvents(response.data))
       .catch(() => setError('Could not load events. Is the API running?'))
       .finally(() => setLoading(false))
   }, [])
+
+  useEffect(() => {
+    if (!isSignedIn) {
+      setUsernameSetupStatus('idle')
+      return
+    }
+    let cancelled = false
+    setUsernameSetupStatus('checking')
+    getProfile(authToken)
+      .then(({ profile: nextProfile }) => {
+        if (cancelled) return
+        setProfile(nextProfile)
+        setProfileForm({ username: nextProfile.username ?? '', displayName: nextProfile.displayName ?? '', avatarUrl: nextProfile.avatarUrl ?? '' })
+        setUsernameSetupStatus(nextProfile.username ? 'complete' : 'required')
+      })
+      .catch((failure) => {
+        if (cancelled) return
+        setProfileError(failure instanceof Error ? failure.message : 'Could not load your profile')
+        setUsernameSetupStatus('required')
+      })
+    return () => { cancelled = true }
+  }, [authToken, isSignedIn])
 
   useEffect(() => {
     if (!selectedId) {
@@ -211,6 +256,9 @@ export function App() {
     if (!session) return
 
     setSelectedId(null)
+    setShowProfile(false)
+    setShowSocial(false)
+    setShowExplore(false)
     setPassBooking(null)
     setPassEvent(null)
     setShowBookings(true)
@@ -218,17 +266,12 @@ export function App() {
     setBookingsError(null)
 
     try {
-      const response = await getBookings(session)
+      const response = await getBookings(authToken)
       setBookings(response.data)
-      const eventEntries = await Promise.all(response.data.map(async (booking) => {
-        try {
-          const event = await getEvent(booking.eventId)
-          return [booking.eventId, event.data] as const
-        } catch {
-          return null
-        }
-      }))
-      setBookingEvents(Object.fromEntries(eventEntries.filter((entry): entry is readonly [string, Event] => entry !== null)))
+      const loadedEvents = Object.fromEntries(events.map((event) => [event.id, event]))
+      setBookingEvents(Object.fromEntries(response.data
+        .map((booking) => loadedEvents[booking.eventId] ? [booking.eventId, loadedEvents[booking.eventId]] as const : null)
+        .filter((entry): entry is readonly [string, Event] => entry !== null)))
     } catch (bookingFailure) {
       setBookingsError(bookingFailure instanceof Error ? bookingFailure.message : 'Could not load bookings')
     } finally {
@@ -240,6 +283,7 @@ export function App() {
     setSelectedId(null)
     setShowBookings(false)
     setShowExplore(false)
+    setShowSocial(false)
     setShowProfile(true)
     setPassBooking(null)
     setPassEvent(null)
@@ -247,13 +291,22 @@ export function App() {
     setProfileNotice(null)
     if (session) {
       setProfileLoading(true)
-      getProfile(session)
-        .then(({ profile: nextProfile }) => {
+      setBookingsLoading(true)
+      Promise.all([getProfile(authToken), getBookings(authToken)])
+        .then(async ([{ profile: nextProfile }, bookingResponse]) => {
           setProfile(nextProfile)
           setProfileForm({ username: nextProfile.username ?? '', displayName: nextProfile.displayName ?? '', avatarUrl: nextProfile.avatarUrl ?? '' })
+          setBookings(bookingResponse.data)
+          const loadedEvents: Record<string, Event> = Object.fromEntries(events.map((event) => [event.id, event]))
+          const missingEventIds = [...new Set(bookingResponse.data.map((booking) => booking.eventId).filter((id) => !loadedEvents[id]))]
+          const missingEvents = await Promise.all(missingEventIds.map(async (id) => {
+            try { return (await getEvent(id)).data } catch { return null }
+          }))
+          missingEvents.forEach((event) => { if (event) loadedEvents[event.id] = event })
+          setBookingEvents(loadedEvents)
         })
         .catch((failure) => setProfileError(failure instanceof Error ? failure.message : 'Could not load your profile'))
-        .finally(() => setProfileLoading(false))
+        .finally(() => { setProfileLoading(false); setBookingsLoading(false) })
     }
   }
 
@@ -264,12 +317,34 @@ export function App() {
     setProfileError(null)
     setProfileNotice(null)
     try {
-      const response = await updateProfile(session, profileForm)
+      const response = await updateProfile(authToken, profileForm)
       setProfile(response.profile)
       setProfileForm({ username: response.profile.username ?? '', displayName: response.profile.displayName ?? '', avatarUrl: response.profile.avatarUrl ?? '' })
       setProfileNotice('Profile updated.')
     } catch (failure) {
       setProfileError(failure instanceof Error ? failure.message : 'Could not update profile')
+    } finally {
+      setProfileBusy(false)
+    }
+  }
+
+  async function saveSignupUsername(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const username = profileForm.username.trim().toLowerCase()
+    if (!/^[a-z0-9_]{3,24}$/.test(username)) {
+      setProfileError('Username must be 3–24 characters using lowercase letters, numbers, or underscores.')
+      return
+    }
+    setProfileBusy(true)
+    setProfileError(null)
+    try {
+      const response = await updateProfile(authToken, { username })
+      setProfile(response.profile)
+      setProfileForm((current) => ({ ...current, username: response.profile.username ?? username }))
+      setUsernameSetupStatus('complete')
+      setShowAuth(false)
+    } catch (failure) {
+      setProfileError(failure instanceof Error ? failure.message : 'Could not save your username')
     } finally {
       setProfileBusy(false)
     }
@@ -282,7 +357,7 @@ export function App() {
     setProfileError(null)
     setProfileNotice(null)
     try {
-      const response = await updateAccount(session, { ...(accountForm.email ? { email: accountForm.email } : {}), ...(accountForm.password ? { password: accountForm.password } : {}) })
+      const response = await updateAccount(authToken, { ...(accountForm.email ? { email: accountForm.email } : {}), ...(accountForm.password ? { password: accountForm.password } : {}) })
       setAccountForm({ email: '', password: '' })
       setProfileNotice(response.user.email ? 'Account updated. Check your email if confirmation is required.' : 'Account updated.')
     } catch (failure) {
@@ -305,7 +380,7 @@ export function App() {
     setProfileNotice(null)
     try {
       const data = await cropProfilePicture(file)
-      const response = await uploadProfilePicture(session, data, 'image/jpeg')
+      const response = await uploadProfilePicture(authToken, data, 'image/jpeg')
       setProfile(response.profile)
       setProfileForm((current) => ({ ...current, avatarUrl: response.profile.avatarUrl ?? '' }))
       setProfileNotice('Profile picture updated.')
@@ -320,7 +395,22 @@ export function App() {
     setSelectedId(null)
     setShowBookings(false)
     setShowProfile(false)
+    setShowSocial(false)
     setShowExplore(true)
+    setPassBooking(null)
+    setPassEvent(null)
+  }
+
+  function openSocial() {
+    if (!session) {
+      setShowProfile(true)
+      return
+    }
+    setSelectedId(null)
+    setShowBookings(false)
+    setShowExplore(false)
+    setShowProfile(false)
+    setShowSocial(true)
     setPassBooking(null)
     setPassEvent(null)
   }
@@ -379,7 +469,7 @@ export function App() {
   }
 
   async function logout() {
-    if (supabase) await supabase.auth.signOut()
+    await signOut()
     setShowProfile(false)
     setShowBookings(false)
     setShowExplore(false)
@@ -391,6 +481,11 @@ export function App() {
     setPassEvent(null)
 
     try {
+      const loadedEvent = events.find((event) => event.id === bookingToOpen.eventId)
+      if (loadedEvent) {
+        setPassEvent(loadedEvent)
+        return
+      }
       const response = await getEvent(bookingToOpen.eventId)
       setPassEvent(response.data)
     } catch {
@@ -405,7 +500,7 @@ export function App() {
     setBookingError(null)
 
     try {
-      const response = await createBooking(session, {
+      const response = await createBooking(authToken, {
         eventId: selected.id,
         ticketTierId: selectedTierId,
         quantity,
@@ -418,93 +513,114 @@ export function App() {
     }
   }
 
+  if (!authLoaded) return null
+
+  if (session && usernameSetupStatus === 'checking') {
+    return <main className="shell auth-shell username-setup-page"><p>Finishing your account setup…</p></main>
+  }
+
+  if (session && usernameSetupStatus === 'required') {
+    return (
+      <main className="shell auth-shell username-setup-page">
+        <section className="username-setup" aria-labelledby="username-setup-title">
+          <p className="eyebrow">One last thing</p>
+          <h1 id="username-setup-title">Choose your username.</h1>
+          <p className="lede">Friends can search this username to find and add you.</p>
+          <form className="profile-form" onSubmit={saveSignupUsername}>
+            <label>Username
+              <input autoComplete="username" required minLength={3} maxLength={24} pattern="[a-z0-9_]{3,24}" value={profileForm.username} onChange={(event) => setProfileForm((current) => ({ ...current, username: event.target.value.toLowerCase() }))} placeholder="your_username" />
+              <small>3–24 lowercase letters, numbers, or underscores.</small>
+            </label>
+            {profileError && <p className="error" role="alert">{profileError}</p>}
+            <button className="primary-button" disabled={profileBusy}>{profileBusy ? 'Saving…' : 'Continue'}</button>
+          </form>
+        </section>
+      </main>
+    )
+  }
+
   if (showAuth) {
     return (
       <main className="shell auth-shell">
         <button className="back" data-testid="back-from-auth" onClick={() => setShowAuth(false)}>
           <span aria-hidden="true">←</span> Back to event
         </button>
-        <header>
-          <p className="eyebrow">One more step</p>
-          <h1>Sign in to book.</h1>
-          <p className="lede">Create an account or sign in to keep your tickets and passes together.</p>
-        </header>
-        <AuthPanel page onAuthenticated={() => setShowAuth(false)} />
+        <section className="auth-content" aria-labelledby="booking-auth-title">
+          <header>
+            <p className="eyebrow">One more step</p>
+            <h1 id="booking-auth-title">Sign in to book.</h1>
+            <p className="lede">Create an account or sign in to keep your tickets and passes together.</p>
+          </header>
+          <AuthPanel />
+        </section>
       </main>
+    )
+  }
+
+  if (showSocial && session) {
+    return (
+      <SocialPanel
+        getToken={authToken}
+        onBack={openProfile}
+        navigation={<Navigation onHome={() => { setShowSocial(false); setSelectedId(null) }} onBookings={openBookings} onExplore={openExplore} onProfile={openProfile} onChat={openSocial} active="chat" language={language} />}
+      />
     )
   }
 
   if (showProfile) {
     if (!session) {
       return (
-        <main className="shell auth-shell">
+        <main className="shell auth-shell profile-auth-page">
           <button className="back" data-testid="back-from-profile" onClick={() => setShowProfile(false)}>
             <span aria-hidden="true">←</span> Back to events
           </button>
-          <header>
-            <p className="eyebrow">Your account</p>
-            <h1>Sign in to see your profile.</h1>
-            <p className="lede">Your profile and bookings live here once you have an account.</p>
-          </header>
-          <button className="primary-button booking-button" data-testid="profile-sign-in" onClick={() => { setShowProfile(false); setShowAuth(true) }}>
-            Sign in or create account
-          </button>
+          <section className="profile-auth-content" aria-labelledby="profile-auth-title">
+            <header>
+              <p className="eyebrow">Your account</p>
+              <h1 id="profile-auth-title">Sign in to see your profile.</h1>
+              <p className="lede">Your profile and bookings live here once you have an account.</p>
+            </header>
+            <button className="primary-button booking-button" data-testid="profile-sign-in" onClick={() => { setShowProfile(false); setShowAuth(true) }}>
+              Sign in or create account
+            </button>
+          </section>
         </main>
       )
     }
 
     return (
       <main className="shell profile-shell">
-        <Navigation onHome={() => setShowProfile(false)} onBookings={openBookings} onExplore={openExplore} onProfile={openProfile} active="profile" />
-        <header>
-          <p className="eyebrow">Your account</p>
-          <h1>Your profile.</h1>
-          <p className="lede">Your saved events, tickets, and reminders in one place.</p>
-        </header>
-        <section className="profile-card" data-testid="profile-card">
+        <Navigation onHome={() => setShowProfile(false)} onBookings={openBookings} onExplore={openExplore} onProfile={openProfile} onChat={openSocial} active="profile" language={language} />
+        <section className="profile-card profile-hero" data-testid="profile-card">
           {profile?.avatarUrl ? <img className="profile-avatar profile-avatar-image" src={profile.avatarUrl} alt="" /> : <div className="profile-avatar" aria-hidden="true">{(profile?.displayName ?? session.user.email ?? 'U').slice(0, 1).toUpperCase()}</div>}
           <div className="profile-identity">
             <strong>{profile?.displayName || 'Your name'}</strong>
             <span>{profile?.username ? `@${profile.username}` : session.user.email}</span>
           </div>
-          <button className="logout-button" data-testid="logout" onClick={logout}>Log out</button>
         </section>
         {profileLoading && <p className="profile-loading">Loading your profile…</p>}
-        <section className="profile-settings" aria-label="Profile settings">
-          <div className="settings-heading"><span className="label">Your identity</span><span>Public profile</span></div>
-          <form className="profile-form" onSubmit={saveProfile}>
-            <label>Display name<input value={profileForm.displayName} onChange={(event) => setProfileForm({ ...profileForm, displayName: event.target.value })} placeholder="Your name" maxLength={80} /></label>
-            <label>Username<input value={profileForm.username} onChange={(event) => setProfileForm({ ...profileForm, username: event.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '') })} placeholder="your_username" maxLength={24} /></label>
-            <label>Profile picture URL<input type="url" value={profileForm.avatarUrl} onChange={(event) => setProfileForm({ ...profileForm, avatarUrl: event.target.value })} placeholder="https://…" /></label>
-            <label className="picture-upload">Choose a picture<input type="file" accept="image/png,image/jpeg,image/webp" onChange={handlePictureUpload} disabled={pictureUploading} /><small>{pictureUploading ? 'Cropping and uploading…' : 'We crop it to a square and save it to profile storage.'}</small></label>
-            <button className="primary-button" disabled={profileBusy}>{profileBusy ? 'Saving…' : 'Save profile'}</button>
-          </form>
+        <section className="profile-counts" aria-label={t('Your activity')}>
+          <div><strong>{savedIds.length}</strong><span>{t('saved')}</span></div>
+          <div><strong>{bookings.filter((item) => isUpcoming(bookingEvents[item.eventId])).length}</strong><span>{t('upcoming')}</span></div>
+          <div><strong>{Object.keys(reminders).length}</strong><span>{t('reminders')}</span></div>
         </section>
-        <section className="profile-settings" aria-label="Account security">
-          <div className="settings-heading"><span className="label">Account security</span><span>Private</span></div>
-          <form className="profile-form" onSubmit={saveAccount}>
-            <label>Email address<input type="email" value={accountForm.email} onChange={(event) => setAccountForm({ ...accountForm, email: event.target.value })} placeholder={session.user.email ?? 'you@example.com'} /></label>
-            <label>New password<input type="password" value={accountForm.password} onChange={(event) => setAccountForm({ ...accountForm, password: event.target.value })} placeholder="At least 6 characters" minLength={6} /></label>
-            <button className="quiet-button settings-submit" disabled={profileBusy || (!accountForm.email && !accountForm.password)}>Update account</button>
-          </form>
+        <section className="profile-dock-actions" aria-label={t('Profile')}>
+          <button className="profile-publish-button" onClick={() => { setProfileTab('account'); window.setTimeout(() => document.getElementById('account-verification-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80) }}><span aria-hidden="true">＋</span>{t('Publish an event')}</button>
+          <button className="profile-utility-button" aria-label={t('Account settings')} onClick={() => setProfileTab('account')}>⚙</button>
         </section>
-        {(profileError || profileNotice) && <p className={profileError ? 'error' : 'profile-notice'}>{profileError ?? profileNotice}</p>}
-        <section className="profile-stats" aria-label="Your activity">
-          <div><strong>{savedIds.length}</strong><span>Saved</span></div>
-          <div><strong>{bookings.filter((item) => isUpcoming(bookingEvents[item.eventId])).length}</strong><span>Upcoming</span></div>
-          <div><strong>{Object.keys(reminders).length}</strong><span>Reminders</span></div>
-        </section>
-        <section className="profile-actions" aria-label="Profile shortcuts">
-          <button onClick={openBookings}><span><strong>Your bookings</strong><small>View upcoming and past passes</small></span><span aria-hidden="true">→</span></button>
-          <button onClick={openExplore}><span><strong>Explore events</strong><small>Find something worth going to</small></span><span aria-hidden="true">→</span></button>
-        </section>
-        <section className="saved-section" aria-label="Saved events">
-          <div className="section-heading">
-            <h2>Saved events</h2>
-            <span>{savedIds.length}</span>
-          </div>
+        <button className="profile-membership-card" onClick={() => setProfileTab('account')}>
+          <span className="profile-membership-icon" aria-hidden="true">✦</span>
+          <span><strong>{t('Host with Went To Event')}</strong><small>{t('Verification and event tools live in your account.')}</small></span>
+          <span className="profile-membership-arrow" aria-hidden="true">→</span>
+        </button>
+        <div className="profile-segmented" role="tablist" aria-label={t('Profile sections')}>
+          <button role="tab" aria-selected={profileTab === 'saved'} className={profileTab === 'saved' ? 'profile-segment-active' : ''} onClick={() => setProfileTab('saved')}>{t('Saved')}{savedIds.length ? ` · ${savedIds.length}` : ''}</button>
+          <button role="tab" aria-selected={profileTab === 'going'} className={profileTab === 'going' ? 'profile-segment-active' : ''} onClick={() => setProfileTab('going')}>{t('Going')}{bookings.length ? ` · ${bookings.length}` : ''}</button>
+          <button role="tab" aria-selected={profileTab === 'account'} className={profileTab === 'account' ? 'profile-segment-active' : ''} onClick={() => setProfileTab('account')}>{t('Account')}</button>
+        </div>
+        {profileTab === 'saved' && <section className="profile-tab-content" role="tabpanel" aria-label={t('Saved events')}>
           {savedIds.length === 0 ? (
-            <div className="empty-state"><h2>No saved events yet.</h2><p>Save an event from its detail page and it will appear here.</p></div>
+            <div className="empty-state"><h2>{t('Nothing saved')}</h2><p>{t('Tap the bookmark on any event and it waits for you here.')}</p><button className="primary-button" onClick={openExplore}>{t('Find events')}</button></div>
           ) : (
             <div className="saved-list">
               {savedIds.map((eventId) => {
@@ -522,11 +638,68 @@ export function App() {
               })}
             </div>
           )}
+        </section>}
+        {profileTab === 'going' && <section className="profile-tab-content" role="tabpanel" aria-label={t('Going to events')}>
+          {bookingsLoading ? <p className="profile-loading">{t('Loading bookings…')}</p> : bookings.length === 0 ? (
+            <div className="empty-state"><h2>{t('Nothing booked')}</h2><p>{t('Book something and it will appear here with your event pass.')}</p><button className="primary-button" onClick={openExplore}>{t('Find events')}</button></div>
+          ) : <div className="booking-list">
+            {bookings.map((booking) => {
+              const event = bookingEvents[booking.eventId]
+              return <button className="booking-list-item" key={booking.id} onClick={() => { setProfileTab('saved'); void openPass(booking); setShowProfile(false); setShowBookings(true) }}>
+                <span><span className="label">{event && isUpcoming(event) ? 'Upcoming' : 'Past'} · {booking.status}</span><strong>{event?.title ?? booking.eventId}</strong>{event && <small>{formatDate(event.startsAt)} · {event.venue.name}</small>}</span>
+                <span><strong>{booking.quantity} ×</strong><span>${(booking.totalCents / 100).toFixed(2)} →</span></span>
+              </button>
+            })}
+          </div>}
+        </section>}
+        {profileTab === 'account' && <section className="profile-tab-content profile-account-content" role="tabpanel" aria-label={t('Account settings')}>
+          <section className="profile-settings" aria-label={t('Account language')}>
+          <div className="settings-heading"><span className="label">{t('Account language')}</span></div>
+          <label className="language-setting">{t('Choose the language used across Went To Event.')}
+            <select value={language} onChange={(event) => setLanguage(event.target.value as Language)} aria-label={t('Account language')}>
+              {languageOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+            </select>
+          </label>
         </section>
-        <section className="account-note" aria-label="Account settings">
-          <div><span className="label">Account</span><strong>Your account is secured by Supabase.</strong></div>
-          <small>Profile editing and password recovery are coming next.</small>
+        <section className="profile-settings" aria-label={t('Your identity')}>
+          <div className="settings-heading"><span className="label">{t('Your identity')}</span><span>{t('Public profile')}</span></div>
+          <form className="profile-form" onSubmit={saveProfile}>
+            <label>{t('Display name')}<input value={profileForm.displayName} onChange={(event) => setProfileForm({ ...profileForm, displayName: event.target.value })} placeholder="Your name" maxLength={80} /></label>
+            <label>{t('Username')}<input value={profileForm.username} onChange={(event) => setProfileForm({ ...profileForm, username: event.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '') })} placeholder="your_username" maxLength={24} /></label>
+            <label className="profile-picture-label">{t('Profile photo')}
+              <span className="profile-picture-picker">
+                <input className="profile-picture-input" type="file" accept="image/png,image/jpeg,image/webp" onChange={handlePictureUpload} disabled={pictureUploading} aria-label="Choose a profile photo" />
+                {profile?.avatarUrl ? <img className="profile-picture-preview" src={profile.avatarUrl} alt="" /> : <span className="profile-picture-preview profile-picture-initial" aria-hidden="true">{(profile?.displayName ?? session.user.email ?? 'U').slice(0, 1).toUpperCase()}</span>}
+                <span className="profile-picture-copy"><strong>{t(pictureUploading ? 'Uploading your photo…' : profile?.avatarUrl ? 'Update your photo' : 'Choose a profile photo')}</strong><small>{t('Square crop · JPG, PNG or WebP')}</small></span>
+                <span className="profile-picture-action" aria-hidden="true">{pictureUploading ? '…' : t('Choose')}</span>
+              </span>
+            </label>
+            <button className="primary-button" disabled={profileBusy}>{profileBusy ? 'Saving…' : t('Save profile')}</button>
+          </form>
         </section>
+        <VerificationPanel
+          getToken={authToken}
+          onEventCreated={(createdEvent) => {
+            setEvents((current) => [createdEvent, ...current.filter((event) => event.id !== createdEvent.id)].sort((left, right) => left.startsAt.localeCompare(right.startsAt)))
+            setShowProfile(false)
+            setSelectedId(createdEvent.id)
+          }}
+        />
+        {(profileError || profileNotice) && <p className={profileError ? 'error' : 'profile-notice'}>{profileError ?? profileNotice}</p>}
+        <section className="profile-settings" aria-label={t('Account security')}>
+          <div className="settings-heading"><span className="label">{t('Account security')}</span><span>{t('Private')}</span></div>
+          <form className="profile-form" onSubmit={saveAccount}>
+            <label>{t('Email address')}<input type="email" value={accountForm.email} onChange={(event) => setAccountForm({ ...accountForm, email: event.target.value })} placeholder={session.user.email ?? 'you@example.com'} /></label>
+            <label>{t('New password')}<input type="password" value={accountForm.password} onChange={(event) => setAccountForm({ ...accountForm, password: event.target.value })} placeholder={t('At least 8 characters')} minLength={8} /></label>
+            <button className="quiet-button settings-submit" disabled={profileBusy || (!accountForm.email && !accountForm.password)}>{t('Update account')}</button>
+          </form>
+        </section>
+        <section className="account-note" aria-label={t('Account settings')}>
+          <div><span className="label">{t('Account')}</span><strong>{t('Your account is secured by Clerk.')}</strong></div>
+          <small>{t('Profile data and bookings remain stored securely in Went To Event.')}</small>
+        </section>
+        <button className="logout-button profile-logout" data-testid="logout" onClick={logout}>{t('Log out')}</button>
+        </section>}
       </main>
     )
   }
@@ -559,33 +732,33 @@ export function App() {
 
     return (
       <main className="shell">
-        <Navigation onHome={() => setShowExplore(false)} onBookings={openBookings} onExplore={openExplore} onProfile={openProfile} active="explore" />
+        <Navigation onHome={() => setShowExplore(false)} onBookings={openBookings} onExplore={openExplore} onProfile={openProfile} onChat={openSocial} active="explore" language={language} />
         <header>
-          <p className="eyebrow">Discover</p>
-          <h1>Explore events.</h1>
-          <p className="lede">Search for something worth going to.</p>
+          <p className="eyebrow">{t('Discover')}</p>
+          <h1>{t('Explore events.')}</h1>
+          <p className="lede">{t('Search events, venues, or hosts')}</p>
         </header>
         <section className="explore-controls" aria-label="Event filters">
           <input
-            aria-label="Search events"
+            aria-label={t('Search events, venues, or hosts')}
             className="explore-search"
-            placeholder="Search events, hosts, venues"
+            placeholder={t('Search events, venues, or hosts')}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
           />
           <div className="filter-grid">
-            <label>Category<select aria-label="Category" value={category} onChange={(event) => setCategory(event.target.value)}>
+            <label><span>Category</span><select aria-label="Category" value={category} onChange={(event) => setCategory(event.target.value)}>
               <option>All categories</option>
               {[...new Set(events.map((event) => event.category))].map((value) => <option key={value}>{value}</option>)}
             </select></label>
-            <label>Date<select aria-label="Date" value={dateFilter} onChange={(event) => setDateFilter(event.target.value)}>
-              <option>Any date</option><option>Today</option><option>This week</option>
+            <label><span>{t('Date')}</span><select aria-label={t('Date')} value={dateFilter} onChange={(event) => setDateFilter(event.target.value)}>
+              <option value="Any date">{t('Any date')}</option><option value="Today">{t('Today')}</option><option value="This week">{t('This week')}</option>
             </select></label>
-            <label>Price<select aria-label="Price" value={priceFilter} onChange={(event) => setPriceFilter(event.target.value)}>
-              <option>Any price</option><option>Free</option><option>Under $25</option><option>Under $50</option>
+            <label><span>{t('Price')}</span><select aria-label={t('Price')} value={priceFilter} onChange={(event) => setPriceFilter(event.target.value)}>
+              <option value="Any price">{t('Any price')}</option><option value="Free">{t('Free')}</option><option value="Under $25">{t('Under $25')}</option><option value="Under $50">{t('Under $50')}</option>
             </select></label>
-            <label>Sort<select aria-label="Sort" value={sort} onChange={(event) => setSort(event.target.value)}>
-              <option>Recommended</option><option>Soonest</option><option>Most going</option><option>Price: low to high</option>
+            <label><span>{t('Sort')}</span><select aria-label={t('Sort')} value={sort} onChange={(event) => setSort(event.target.value)}>
+              <option value="Recommended">{t('Recommended')}</option><option value="Soonest">{t('Soonest')}</option><option value="Most going">{t('Most going')}</option><option value="Price: low to high">{t('Price: low to high')}</option>
             </select></label>
           </div>
         </section>
@@ -619,9 +792,7 @@ export function App() {
   if (selected) {
     return (
       <main className="shell">
-        <button className="back" data-testid="back-to-events" onClick={() => setSelectedId(null)}>
-          <span aria-hidden="true">←</span> Back to events
-        </button>
+        <Navigation onHome={() => setSelectedId(null)} onBookings={openBookings} onExplore={() => setSelectedId(null)} onProfile={openProfile} onChat={openSocial} active="explore" language={language} />
         <div className="detail-hero">
           <Cover event={selected} />
           <div className="detail-hero-copy">
@@ -686,15 +857,22 @@ export function App() {
           </section>
         ) : (
           <section className="booking-panel">
+            <div className="booking-heading">
+              <div>
+                <span className="label">Reserve your place</span>
+                <strong>How many tickets?</strong>
+              </div>
+              <span className="booking-total">{selectedTierId ? priceLabel({ ...selected, ticketTiers: selected.ticketTiers.filter((tier) => tier.id === selectedTierId) }) : 'Choose a ticket'}</span>
+            </div>
             <div className="booking-row">
               <div>
                 <span className="label">Quantity</span>
                 <strong>{quantity} ticket{quantity === 1 ? '' : 's'}</strong>
               </div>
               <div className="quantity-stepper" aria-label="Ticket quantity">
-                <button aria-label="Decrease quantity" disabled={quantity === 1} onClick={() => setQuantity((value) => Math.max(1, value - 1))}>−</button>
+                <button className="quantity-button" aria-label="Decrease quantity" disabled={quantity === 1} onClick={() => setQuantity((value) => Math.max(1, value - 1))}>−</button>
                 <span>{quantity}</span>
-                <button aria-label="Increase quantity" disabled={quantity === 10} onClick={() => setQuantity((value) => Math.min(10, value + 1))}>+</button>
+                <button className="quantity-button" aria-label="Increase quantity" disabled={quantity === 10} onClick={() => setQuantity((value) => Math.min(10, value + 1))}>+</button>
               </div>
             </div>
             {session ? (
@@ -776,7 +954,7 @@ export function App() {
 
     return (
       <main className="shell">
-        <Navigation onHome={() => setShowBookings(false)} onBookings={openBookings} onExplore={openExplore} onProfile={openProfile} active="bookings" />
+        <Navigation onHome={() => setShowBookings(false)} onBookings={openBookings} onExplore={openExplore} onProfile={openProfile} onChat={openSocial} active="bookings" language={language} />
         <button className="back" data-testid="back-to-events-from-bookings" onClick={() => setShowBookings(false)}>
           <span aria-hidden="true">←</span> Back to events
         </button>
@@ -820,16 +998,16 @@ export function App() {
 
   return (
     <main className="shell">
-      <Navigation onHome={() => { setShowExplore(false); setShowBookings(false) }} onBookings={openBookings} onExplore={openExplore} onProfile={openProfile} />
+      <Navigation onHome={() => { setShowExplore(false); setShowBookings(false); setShowSocial(false); setShowProfile(false) }} onBookings={openBookings} onExplore={openExplore} onProfile={openProfile} onChat={openSocial} language={language} />
       <header>
-        <p className="eyebrow">San Francisco</p>
-        <h1>What’s happening?</h1>
-        <p className="lede">Find something worth going to.</p>
-      </header>
-      {session && <button className="bookings-link" data-testid="open-bookings" onClick={openBookings}>Your bookings <span aria-hidden="true">→</span></button>}
+          <p className="eyebrow">Tabriz</p>
+          <h1>{t('What’s happening?')}</h1>
+          <p className="lede">{t('Find something worth going to.')}</p>
+        </header>
+        {session && <button className="bookings-link" data-testid="open-bookings" onClick={openBookings}>{t('Your bookings')} <span aria-hidden="true">→</span></button>}
       {error && <p className="error">{error}</p>}
       {loading ? (
-        <p>Loading events…</p>
+          <p>{t('Loading events…')}</p>
       ) : (
         <section className="events" aria-label="Events">
           {events.map((event) => (

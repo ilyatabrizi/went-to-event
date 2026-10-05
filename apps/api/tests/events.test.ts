@@ -20,10 +20,10 @@ describe('GET /events', () => {
     const body = response.json()
 
     expect(response.statusCode).toBe(200)
-    expect(body.total).toBe(3)
+    expect(body.total).toBe(5)
     expect(body.data[0]).toMatchObject({
       id: 'event-1',
-      title: 'Warehouse Sessions Vol. 9',
+      title: 'Warehouse Sessions: Autumn Opening',
       category: 'Nightlife',
     })
     expect(body.data[0].ticketTiers[0].priceCents).toBe(2500)

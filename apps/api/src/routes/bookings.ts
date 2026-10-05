@@ -55,6 +55,19 @@ export async function bookingRoutes(
     return { data: await options.bookingService.list(user.id) }
   })
 
+  // Vercel's native Fastify deployment exposes this single-segment alias
+  // reliably; keep the canonical nested route above for local/server use.
+  app.get('/bookings', async (request, reply) => {
+    if (!options.authService || !options.bookingService) {
+      return reply.code(503).send({ error: 'Bookings are not configured' })
+    }
+
+    const user = await currentUser(request, options.authService)
+    if (!user) return reply.code(401).send({ error: 'Authentication required' })
+
+    return { data: await options.bookingService.list(user.id) }
+  })
+
   app.get<{ Params: { id: string } }>('/me/bookings/:id', async (request, reply) => {
     if (!options.authService || !options.bookingService) {
       return reply.code(503).send({ error: 'Bookings are not configured' })

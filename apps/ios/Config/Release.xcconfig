@@ -2,3 +2,4 @@
 // Release builds use the same local development routing as Debug builds.
 WTE_API_BASE_URL = https:/$()/api-orcin-one-49.vercel.app
 WTE_API_BASE_URL[sdk=iphoneos*] = https:/$()/api-orcin-one-49.vercel.app
+WTE_CLERK_PUBLISHABLE_KEY = pk_test_YXdhcmUtc29sZS0zMDI2LmNsZXJrLmFjY291bnRzLmRldiQ

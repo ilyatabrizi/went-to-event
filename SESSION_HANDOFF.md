@@ -1,12 +1,225 @@
 # Went To Event — Session Handoff
 
-**Updated:** September 28, 2026
+**Updated:** September 30, 2026
 
 **Branch:** `develop`
 
-**Latest code commit:** deployment and production iOS routing updates are currently uncommitted pending final commit
+**Latest code commit:** the current working tree contains the latest uncommitted product, auth, event-catalog, and domain-related changes; do not assume `HEAD` contains all current work
 
 This document explains the active architecture, local setup, application flows, API contracts, testing process, known limitations, and recommended next steps.
+
+## Current snapshot — September 30, 2026
+
+This is the authoritative handoff for the latest session. The repository has a
+large set of intentional uncommitted changes from the product work described
+below. Preserve those changes when switching branches or preparing a commit.
+
+### What is currently working
+
+- The web app and API are deployed as separate Vercel projects.
+- The API CORS allow-list includes the Vercel web origin and both custom domains;
+  this was redeployed after the custom domain first showed “Could not load
+  events.” HTTP entries are temporary compatibility support while Vercel
+  finishes provisioning the custom-domain certificate.
+- The iOS app builds successfully for the iOS Simulator with the current
+  SwiftUI navigation, booking, profile, and authentication changes.
+- The hosted Supabase event catalog was replaced with five future Tabriz events
+  so event reminders can be tested.
+- The iOS primary navigation is a custom bottom bar with five tabs: **Home,
+  Explore, Profile, Booked, and Chat**.
+- The iOS Booked flow is a full-page experience rather than a pull-up sheet.
+  Booking passes push inside the navigation stack and no longer use the old
+  default Close toolbar treatment.
+- The iOS profile screen is presented as a separate page with the custom `e.`
+  header and custom navigation behavior.
+- Signup now has a prominent Create an account action and a dedicated
+  verification-success screen rather than leaving the signup form visible.
+- The web signup screen also shows a dedicated verification confirmation state.
+- Web signup now passes the current production origin as Supabase
+  `emailRedirectTo` and normalizes email addresses before signup/sign-in.
+- The Vercel production web deployment includes that auth redirect fix.
+
+### Current production URLs and deployments
+
+```text
+Web production alias: https://web-sigma-roan-83.vercel.app
+API production:       https://api-orcin-one-49.vercel.app
+Web health check:     https://api-orcin-one-49.vercel.app/health
+Web events endpoint:  https://api-orcin-one-49.vercel.app/events
+```
+
+The latest web auth deployment was made on September 30, 2026:
+
+```text
+Deployment ID: dpl_DVD7WLgCLhZZz3UvTiwh4MdPPYdj
+Preview URL:  https://web-jza34kacg-samshahverdi78-3858.vercel.app
+Target:       production
+Alias:        https://web-sigma-roan-83.vercel.app
+```
+
+The latest API CORS deployment was made on October 1, 2026:
+
+```text
+Deployment ID: dpl_DUP9bprBsQBCjLMe1gH8zXbutyx6
+Preview URL:  https://api-865z36jra-samshahverdi78-3858.vercel.app
+Target:       production
+Alias:        https://api-orcin-one-49.vercel.app
+```
+
+Production CORS was verified with successful `200` responses and matching
+`Access-Control-Allow-Origin` headers for both custom domains over HTTP and
+HTTPS:
+
+```text
+https://wenttoevent.com
+https://www.wenttoevent.com
+http://wenttoevent.com
+http://www.wenttoevent.com
+```
+
+The Vercel project is `samshahverdi78-3858/web`, rooted at `apps/web`. The
+production environment contains `VITE_API_URL`, `VITE_SUPABASE_URL`, and
+`VITE_SUPABASE_ANON_KEY`. Never print the values of those variables; the anon
+key is public-facing, but service-role credentials are not.
+
+### Custom domain state
+
+The domain `wenttoevent.com` was purchased from a third-party registrar and
+has been added to the Vercel `web` project, along with `www.wenttoevent.com`.
+Vercel currently reports the domain as not configured because its nameservers
+are still:
+
+```text
+ns1.limoo.host
+ns2.limoo.host
+ns3.limoo.host
+ns4.limoo.host
+```
+
+At the Limoo DNS panel, add the records Vercel requested:
+
+```text
+Type   Host   Value
+A      @      76.76.21.21
+A      www    76.76.21.21
+```
+
+Remove conflicting `A` or `AAAA` records for the apex and `www` host if they
+exist. After DNS propagation, verify with:
+
+```bash
+cd apps/web
+npx vercel domains inspect wenttoevent.com
+npx vercel domains inspect www.wenttoevent.com
+```
+
+Supabase does not need its paid custom-domain feature. After the domain is
+verified, update the free Supabase Auth URL Configuration manually in the
+Supabase Dashboard:
+
+```text
+Site URL:       https://wenttoevent.com
+Redirect URL:   https://wenttoevent.com/**
+Redirect URL:   https://www.wenttoevent.com/**
+```
+
+The web code uses `window.location.origin` for email confirmation redirects, so
+the same build will work when opened through the custom domain. The Supabase
+API/Auth URL remains `https://legyknewpiwcxwdccbjd.supabase.co`.
+
+### Hosted event catalog
+
+The hosted Supabase database was updated directly using the authenticated CLI
+query command because `supabase db push --include-seed` reported no seed files
+to apply:
+
+```bash
+npx supabase db query --linked \
+  --project-ref legyknewpiwcxwdccbjd \
+  --file infra/supabase/seed.sql
+```
+
+The deployed API was then verified and returned these five events:
+
+```text
+event-1  Warehouse Sessions: Autumn Opening       2026-10-03
+event-2  Sunrise Rooftop Yoga                      2026-10-07
+event-3  Third Culture Supper Club                 2026-10-12
+event-4  Light / Sound Installation Night          2026-10-20
+event-5  Autumn Night Market                       2026-10-29
+```
+
+The source of truth for the fallback catalog is
+`apps/api/src/data/events.ts`; the repeatable hosted/local seed is
+`infra/supabase/seed.sql`. All old September event content was replaced. The
+five dates are intentionally future relative to September 30, 2026, and the
+October 29 event is approximately one month out for reminder testing.
+
+### Validation performed in the current session
+
+API validation from `apps/api`:
+
+```bash
+npm test       # 5 test files, 11 tests passed
+npm run build  # TypeScript build passed
+```
+
+Web validation from `apps/web`:
+
+```bash
+npm run build  # TypeScript and Vite production build passed
+npx vercel --prod
+```
+
+iOS validation from the repository root:
+
+```bash
+xcodebuild \
+  -project apps/ios/WentToEvent.xcodeproj \
+  -scheme WentToEvent \
+  -sdk iphonesimulator \
+  -configuration Debug \
+  CODE_SIGNING_ALLOWED=NO build
+```
+
+The iOS simulator build passed after the bottom-tab, booking-page, signup
+confirmation-screen, and email-normalization changes. The deployed API was
+also queried directly after seeding and returned all five new future events.
+
+### Verification-email diagnosis and current limitation
+
+The hosted Supabase Auth settings were checked through the public Auth settings
+endpoint. Email signup is enabled and `mailer_autoconfirm` is false, meaning
+email confirmation is required. A database check showed that the newest test
+user was still unconfirmed (`email_confirmed_at` was null), which explains why
+login returned “Invalid login credentials” after the attempted confirmation.
+
+The web fix is in `apps/web/src/AuthPanel.tsx`:
+
+- Signup calls Supabase with `options.emailRedirectTo` set to the current site
+  origin.
+- Signup and sign-in trim whitespace and lowercase the email address.
+- Signup displays a large dedicated “Verification email sent” state.
+
+The iOS normalization fix is in `apps/ios/WentToEvent/AuthStore.swift`:
+
+- Native signup and sign-in trim whitespace and lowercase email addresses.
+- Native signup shows the verification message/screen when Supabase returns no
+  session.
+
+The iOS app still does not have a custom URL scheme or deep-link callback. Its
+confirmation link therefore needs to complete in the browser before the user
+returns to the app and signs in. A future native deep-link implementation needs
+an iOS URL scheme, a Supabase allow-listed redirect URI, and app-level URL
+handling.
+
+The project currently uses Supabase’s built-in email sender. Repeated signup or
+resend attempts produced “email rate limit exceeded”; this is an external
+Supabase mailer limit, not an API or UI exception. Waiting for the limit to
+reset is required for testing. Reliable production delivery requires configuring
+a custom SMTP provider in Supabase and adding that provider’s SPF/DKIM DNS
+records. The app does not yet have a resend-confirmation flow or client-side
+resend cooldown.
 
 ## Current status at a glance
 
@@ -31,7 +244,8 @@ The current Phase 2 roadmap is **Better event ownership and history**:
 3. Better ticket pass — complete.
 4. Event reminders — iOS local reminders implemented; physical-device notification test remains.
 5. Save/bookmark synchronization.
-6. Improved profile page.
+6. Improved profile page — current identity, settings, saved-events, picture,
+   and separate-page navigation work is implemented; password recovery remains.
 
 Payment is intentionally not part of the current test flow. ZarinPal remains
 deferred until the non-payment product experience is stable.
@@ -52,8 +266,9 @@ c430cf3 Configure native API URL per build environment
 6f44001 Improve event ticket pass details
 ```
 
-All work has been committed locally on `develop`. Nothing has been pushed to
-the remote unless explicitly requested.
+Earlier milestone work is committed locally on `develop`, but the latest
+session changes are intentionally uncommitted. Nothing should be pushed to the
+remote unless explicitly requested.
 
 ## 1. Which code is active?
 
@@ -106,7 +321,8 @@ It is useful for visual reference and screenshots, but it is not connected to th
 
 The important separation is:
 
-- Supabase Auth owns accounts and access tokens.
+- Clerk owns web/API accounts and access tokens. The native iOS client still
+  uses Supabase Auth until the native migration is completed.
 - Supabase Postgres owns persisted events, profiles, bookings, and booking items.
 - Fastify owns server-side business rules and protected API access.
 - Web and iOS own screens, navigation, form state, and presentation.
@@ -115,10 +331,10 @@ The important separation is:
 The normal authenticated request is:
 
 ```text
-Client signs in with Supabase
-→ receives access token
+Client signs in with Clerk on web (Supabase Auth on the current iOS build)
+→ receives an access token
 → sends Authorization: Bearer <token> to Fastify
-→ Fastify asks Supabase Auth to verify the token
+→ Fastify verifies the Clerk token for web requests
 → Fastify performs the protected operation
 ```
 
@@ -231,9 +447,10 @@ If the Mac’s hotspot/LAN address changes, update only the
 `Info.plist` stores the resolved value as `WTE_API_BASE_URL`, and
 `AppConfig.apiBaseURL` reads it at runtime.
 
-Release currently uses the same development addresses because a production API
-has not been deployed yet. Do not treat the current Release configuration as
-App Store-ready.
+Release points to the deployed API at
+`https://api-orcin-one-49.vercel.app`. The release configuration is still not
+App Store-ready because signing, TestFlight metadata, notification capability,
+production deep-link handling, and final physical-device validation remain.
 
 For a physical iPhone, run the API on all interfaces:
 
@@ -322,8 +539,8 @@ contracts under `apps/api/src/contracts` and `apps/web/src/contracts`. This is
 required because each Vercel project is deployed from its app directory rather
 than the repository root.
 
-The current Vercel URLs are deployment URLs and should eventually be replaced
-with custom domains. Supabase project `legyknewpiwcxwdccbjd` is linked to the
+The Vercel deployment URLs remain available while `wenttoevent.com` is being
+connected. Supabase project `legyknewpiwcxwdccbjd` is linked to the
 repository and migration `004_profile_identity.sql` has been applied remotely,
 including the profile username constraint and `profile-pictures` Storage
 bucket. The iOS Release configuration now points to the deployed API instead
@@ -538,7 +755,11 @@ Sign-in sequence:
 
 The native token URL bug was fixed in commit `8702a35`: `grant_type` is now built as a real URL query item rather than being appended as part of a path string.
 
-Sign-up uses Supabase `POST /auth/v1/signup`. If Supabase requires email confirmation and returns no session, the app displays a message asking the user to check email and sign in after confirmation.
+Sign-up uses Supabase `POST /auth/v1/signup`. If Supabase requires email
+confirmation and returns no session, the app displays a dedicated confirmation
+screen with the target email and a Back to sign in action. The signup and
+sign-in email values are trimmed and lowercased before the request. The app
+does not yet intercept a native email-link deep link.
 
 ### Native session restoration
 
@@ -550,15 +771,14 @@ On app launch, `AuthStore` loads the stored session from Keychain.
 
 ### Native profile/logout
 
-The profile sheet shows the user’s email and ID, saved events, and a logout
+The Profile tab shows the user’s email and ID, saved events, and a logout
 button. Native saved event IDs are stored with `UserDefaults` through
 `SavedEventsStore`; they are currently local to that device and are not yet
 synced to Supabase. It also has editable identity/security fields and a Photos
 picker that center-crops and uploads a profile picture through the API.
 
-The profile sheet also has an account header, saved-event and local-reminder
-counts, a direct bookings shortcut, and a note that profile editing and
-password recovery are still pending.
+The Profile tab also has an account header, saved-event and local-reminder
+counts, a direct Booked shortcut, and the custom `e.` navigation treatment.
 
 The profile sheet now includes editable display name, username, profile-picture
 URL, email, and password fields backed by the same API endpoints as the web
@@ -575,20 +795,21 @@ POST /bookings
 Authorization: Bearer <supabase-access-token>
 ```
 
-The native bookings sheet requests:
+The native Booked tab requests:
 
 ```text
 GET /me/bookings
 ```
 
-The native bookings sheet loads the booking list and then fetches each related
-event. It renders two sections:
+The native Booked tab is a custom full-page SwiftUI screen. It loads the booking
+list and then fetches each related event. It renders two sections:
 
 - **Upcoming:** related event `endsAt` is greater than or equal to the current
   date/time.
 - **Past:** the event has ended, or its event details are unavailable.
 
-Selecting a booking opens `BookingPassView`, which now displays:
+Selecting a booking pushes `BookingPassView` inside the same navigation stack,
+not another sheet. It now displays:
 
 - Confirmed/status label.
 - Event artwork and title.
@@ -816,8 +1037,8 @@ values are resolved through `apps/ios/Config/Debug.xcconfig` and embedded in
 `Config/Info.plist`. Update the `iphoneos` value when the Mac’s hotspot/LAN IP
 changes.
 
-Release currently points to the same development addresses because no hosted
-production API exists yet.
+Release points to the hosted API at `https://api-orcin-one-49.vercel.app`.
+Debug continues to use local Simulator/LAN addresses.
 
 ### Ticket pass limitations
 
@@ -850,9 +1071,12 @@ are implemented on web and iOS. Profile pictures are center-cropped to 512×512
 and stored in the `profile-pictures` Supabase Storage bucket. Password recovery
 and re-authentication UX remain future work.
 
-### Password recovery
+### Password recovery and confirmation recovery
 
-Forgot-password, resend-confirmation, and deep-link confirmation flows are not implemented yet.
+Forgot-password, resend-confirmation, and native deep-link confirmation flows
+are not implemented yet. Web confirmation now uses the current browser origin
+as `emailRedirectTo`, but Supabase URL Configuration must include the production
+custom domain before those links can reliably return to the branded site.
 
 ### Payments
 
@@ -930,7 +1154,7 @@ The current working vertical slice is:
 Browse events without an account
 → open event details
 → authenticate only when needed
-→ verify the Supabase token through Fastify
+→ verify the Clerk token through Fastify
 → view profile and logout
 → select ticket tier and quantity
 → create a protected booking
@@ -938,4 +1162,90 @@ Browse events without an account
 → open a detailed ticket pass
 ```
 
-The web and iOS clients use the same API contracts. Supabase is the source of truth for authentication and persisted data. Fastify is the source of truth for protected server behavior and booking rules. ZarinPal is planned but not yet connected.
+The web and iOS clients use the same API contracts. Clerk is now the web/API
+identity provider, while Supabase remains the source of truth for persisted
+events, profiles, bookings, and storage. Fastify is the source of truth for
+protected server behavior and booking rules. The iOS client still uses its old
+Supabase AuthStore until the native Clerk SDK work in section 16 is completed.
+ZarinPal is planned but not yet connected.
+
+## 16. Clerk migration status — October 1, 2026
+
+The authentication migration from Supabase Auth to Clerk was started after the
+Clerk CLI was authenticated as `sam.shahverdi78@gmail.com`. The linked Clerk
+application is the real `wenttoevent` app (`app_3K5nK0PtKNf1p46GgSOtAbHGtb3`),
+not one of the unrelated Clerk applications in the account.
+
+### Completed in this migration
+
+- Initialized Clerk in `apps/web` with the current `@clerk/react` package and
+  wrapped the app in `ClerkProvider`.
+- Replaced the web Supabase session listener and Supabase sign-in/sign-up panel
+  with Clerk's embedded `SignIn` and `SignUp` components.
+- Changed web API calls to request a Clerk token on demand using `getToken()`;
+  booking, profile, account, and profile-picture requests now send that token.
+- Added `@clerk/backend` to the API.
+- Added `ClerkAuthService`, which verifies bearer tokens with Clerk, retrieves
+  the Clerk user's email, and keeps the existing API contract.
+- Kept Supabase's service-role client for database, storage, and event data; it
+  is no longer used to authenticate web requests.
+- Added `infra/supabase/migrations/005_clerk_auth.sql`. It changes profile and
+  booking user IDs to text, removes the old `auth.users` foreign-key dependency,
+  adds `public.user_identities`, and changes `create_booking` to accept Clerk
+  IDs. Existing UUID IDs are preserved as text.
+- Existing users are mapped by matching their Clerk email to the old Supabase
+  Auth user on their first authenticated API request. Their old bookings and
+  profile remain addressable. New users use their Clerk ID directly.
+- Applied migration 005 to hosted Supabase project
+  `legyknewpiwcxwdccbjd` with the Supabase CLI.
+- Added production Vercel environment variables:
+  - Web: `VITE_CLERK_PUBLISHABLE_KEY` on project `web`.
+  - API: `CLERK_SECRET_KEY` on project `api` as a sensitive secret.
+- API production deployment completed and `/health` plus `/events` were checked.
+- Web production deployment completed and was aliased to
+  `https://wenttoevent.com`.
+- Local API build and all 12 API tests pass. Local web TypeScript/Vite build
+  passes.
+
+### Auth UI polish and latest deployment
+
+The first Clerk deployment exposed Clerk's default card styling, which did not
+match the product UI. `apps/web/src/AuthPanel.tsx` now passes a custom Clerk
+appearance configuration for the dark Went To Event theme. The corresponding
+styles are in `apps/web/src/styles.css` and cover the Clerk root, card, title,
+subtitle, labels, inputs, primary action, social buttons, divider, footer,
+links, errors, and alerts.
+
+The auth page also had a centering problem because it inherited the responsive
+event shell width while Clerk used its own internal width. The `.auth-shell`
+layout now explicitly uses a centered `min(calc(100% - 32px), 520px)` column;
+the auth panel, header, and Clerk root all fill that same column. This was
+verified by a successful production web build and deployed as:
+
+- Latest web deployment: `dpl_8AtheqCx2kX2BPXrn3FuBqQfSS7k`.
+- Latest production alias: `https://wenttoevent.com`.
+- Latest preview URL: `https://web-46y5zrheo-samshahverdi78-3858.vercel.app`.
+
+If the old layout still appears in a browser, perform a hard refresh or open a
+private window because the Vite bundle is cached by the browser/service worker.
+
+### Important remaining work
+
+The web/API Clerk migration is deployed, but the iOS app still contains the
+old Supabase AuthStore. The Clerk CLI can detect the Swift project and write
+`apps/ios/.env`, but it cannot add the Swift Package Manager dependency or
+complete native-app registration. The iOS follow-up is:
+
+1. In Clerk Dashboard → Native Applications, enable Native API and register
+   bundle ID `com.samshahverdipersonalteam.WentToEvent`.
+2. In Xcode add `https://github.com/clerk/clerk-ios`, products `ClerkKit` and
+   `ClerkKitUI`, and the Associated Domains capability required by Clerk.
+3. Configure `Clerk.configure(publishableKey:)` in `MyApp`, inject
+   `Clerk.shared` into the SwiftUI environment, and replace the Supabase
+   `AuthStore` token/session code with Clerk's native session/token APIs.
+4. Point iOS API requests at the same Clerk-protected API and run the simulator
+   and physical-device builds.
+
+Do not remove the remaining Supabase Auth files from iOS until this native
+Clerk flow is implemented and tested. Also do not remove the old Supabase Auth
+users until all existing accounts have successfully been matched to Clerk.

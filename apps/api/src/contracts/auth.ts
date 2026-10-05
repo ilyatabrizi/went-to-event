@@ -1,6 +1,7 @@
 export type CurrentUser = {
   id: string
   email: string | null
+  authId?: string
 }
 
 export type UserProfile = {

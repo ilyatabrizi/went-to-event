@@ -6,10 +6,15 @@
 	objectVersion = 90;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		000000000000000000000201 /* ClerkKit in Frameworks */ = {isa = PBXBuildFile; productRef = 000000000000000000000301 /* ClerkKit */; };
+		000000000000000000000202 /* ClerkKitUI in Frameworks */ = {isa = PBXBuildFile; productRef = 000000000000000000000302 /* ClerkKitUI */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
-		000000000000000000000130 /* Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config/Debug.xcconfig; sourceTree = SOURCE_ROOT; };
-		000000000000000000000131 /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config/Release.xcconfig; sourceTree = SOURCE_ROOT; };
 		000000000000000000000120 /* WentToEvent.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = WentToEvent.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		000000000000000000000130 /* Config/Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config/Debug.xcconfig; sourceTree = SOURCE_ROOT; };
+		000000000000000000000131 /* Config/Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config/Release.xcconfig; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -24,6 +29,8 @@
 		000000000000000130000000 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			files = (
+				000000000000000000000201 /* ClerkKit in Frameworks */,
+				000000000000000000000202 /* ClerkKitUI in Frameworks */,
 			);
 		};
 /* End PBXFrameworksBuildPhase section */
@@ -34,6 +41,7 @@
 			children = (
 				000000000000000000000010 /* WentToEvent */,
 				000000000000000000000020 /* Products */,
+				1C8FDD1630724C5A00CFDBEE /* Recovered References */,
 			);
 			sourceTree = "<group>";
 		};
@@ -43,6 +51,15 @@
 				000000000000000000000120 /* WentToEvent.app */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		1C8FDD1630724C5A00CFDBEE /* Recovered References */ = {
+			isa = PBXGroup;
+			children = (
+				000000000000000000000130 /* Config/Debug.xcconfig */,
+				000000000000000000000131 /* Config/Release.xcconfig */,
+			);
+			name = "Recovered References";
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -62,6 +79,10 @@
 				000000000000000000000010 /* WentToEvent */,
 			);
 			name = WentToEvent;
+			packageProductDependencies = (
+				000000000000000000000301 /* ClerkKit */,
+				000000000000000000000302 /* ClerkKitUI */,
+			);
 			productName = MyApp;
 			productReference = 000000000000000000000120 /* WentToEvent.app */;
 			productType = "com.apple.product-type.application";
@@ -78,6 +99,11 @@
 				TargetAttributes = {
 					000000000000000100000000 = {
 						CreatedOnToolsVersion = 26.3;
+						SystemCapabilities = {
+							com.apple.AssociatedDomains = {
+								enabled = 1;
+							};
+						};
 					};
 				};
 			};
@@ -90,6 +116,9 @@
 			);
 			mainGroup = 000000000000000000000001;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				000000000000000000000401 /* XCRemoteSwiftPackageReference "clerk-ios" */,
+			);
 			preferredProjectObjectVersion = 90;
 			productRefGroup = 000000000000000000000020 /* Products */;
 			projectDirPath = "";
@@ -119,7 +148,7 @@
 /* Begin XCBuildConfiguration section */
 		000000000000000011000000 /* Debug configuration for PBXProject "WentToEvent" */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 000000000000000000000130 /* Debug.xcconfig */;
+			baseConfigurationReference = 000000000000000000000130 /* Config/Debug.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
@@ -190,7 +219,7 @@
 		};
 		000000000000000012000000 /* Release configuration for PBXProject "WentToEvent" */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 000000000000000000000131 /* Release.xcconfig */;
+			baseConfigurationReference = 000000000000000000000131 /* Config/Release.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
@@ -254,6 +283,9 @@
 		000000000000000111000000 /* Debug configuration for PBXNativeTarget "WentToEvent" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
+				CODE_SIGN_ENTITLEMENTS = Config/WentToEvent.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 9A42VA5HT6;
@@ -295,6 +327,9 @@
 		000000000000000112000000 /* Release configuration for PBXNativeTarget "WentToEvent" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
+				CODE_SIGN_ENTITLEMENTS = Config/WentToEvent.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 9A42VA5HT6;
@@ -353,6 +388,30 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		000000000000000000000401 /* XCRemoteSwiftPackageReference "clerk-ios" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/clerk/clerk-ios";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.5.8;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		000000000000000000000301 /* ClerkKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 000000000000000000000401 /* XCRemoteSwiftPackageReference "clerk-ios" */;
+			productName = ClerkKit;
+		};
+		000000000000000000000302 /* ClerkKitUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 000000000000000000000401 /* XCRemoteSwiftPackageReference "clerk-ios" */;
+			productName = ClerkKitUI;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 000000000000000000000000 /* Project object */;
 }

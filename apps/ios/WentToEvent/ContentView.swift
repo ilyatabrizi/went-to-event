@@ -1,15 +1,17 @@
 import SwiftUI
 import PhotosUI
 import UIKit
+import ClerkKit
+import ClerkKitUI
 
 @MainActor
 struct ContentView: View {
+    @Environment(Clerk.self) private var clerk
     @StateObject private var store = EventStore()
     @StateObject private var auth = AuthStore()
     @StateObject private var saved = SavedEventsStore()
     @State private var showAuth = false
-    @State private var showProfile = false
-    @State private var showBookings = false
+    @State private var selectedTab: AppTab = .home
 
     init() {
         _store = StateObject(wrappedValue: EventStore())
@@ -18,77 +20,204 @@ struct ContentView: View {
     }
 
     var body: some View {
-        NavigationStack {
+        ZStack {
             Group {
-                if store.isLoading && store.events.isEmpty {
-                    ProgressView("Finding events…")
-                } else if let errorMessage = store.errorMessage, store.events.isEmpty {
-                    ContentUnavailableView {
-                        Label("Couldn’t load events", systemImage: "wifi.exclamationmark")
-                    } description: {
-                        Text(errorMessage)
-                    } actions: {
-                        Button("Try again") {
-                            Task { await store.load() }
+                switch selectedTab {
+                case .home:
+                    homePage
+                case .explore:
+                    explorePage
+                case .booked:
+                    BookingsView(auth: auth) { selectedTab = .home }
+                case .chat:
+                    ChatView()
+                case .profile:
+                    NavigationStack {
+                        ProfileView(auth: auth, saved: saved, events: store.events, onExit: { selectedTab = .home }) {
+                            showAuth = true
+                        } onOpenBookings: {
+                            selectedTab = .booked
                         }
                     }
-                } else {
-                    eventList
                 }
             }
-            .navigationTitle("What’s happening?")
-            .navigationBarTitleDisplayMode(.large)
-            .toolbar {
-                ToolbarItemGroup(placement: .topBarTrailing) {
-                    if auth.isSignedIn {
-                        Button { showBookings = true } label: {
-                            Image(systemName: "ticket")
-                        }
-                        .accessibilityLabel("Your bookings")
-                    }
-                    Button { showProfile = true } label: {
-                        Image(systemName: auth.isSignedIn ? "person.crop.circle.fill" : "person.crop.circle")
-                    }
-                    .accessibilityLabel(auth.isSignedIn ? "Profile" : "Sign in")
-                }
-            }
-            .task { await store.load() }
-            .refreshable { await store.load() }
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            bottomNavigation
         }
         .tint(Color(red: 0.95, green: 0.93, blue: 0.88))
-        .sheet(isPresented: $showAuth) { AuthView(auth: auth) }
-        .sheet(isPresented: $showProfile) {
-            ProfileView(auth: auth, saved: saved, events: store.events) {
-                showProfile = false
-                showAuth = true
-            } onOpenBookings: {
-                showProfile = false
-                showBookings = true
+        .sheet(isPresented: $showAuth) {
+            ClerkKitUI.AuthView(onAuthComplete: { Task { await auth.refreshUser() } })
+                .environment(clerk)
+        }
+        .onOpenURL { url in
+            Task {
+                do { try await clerk.handle(url) }
+                catch { auth.errorMessage = error.localizedDescription }
             }
         }
-        .sheet(isPresented: $showBookings) { BookingsView(auth: auth) }
+        .task(id: clerk.isLoaded) {
+            guard clerk.isLoaded else { return }
+            if clerk.session != nil { await auth.refreshUser() }
+            else { auth.clearSession() }
+        }
+        .onChange(of: clerk.session?.id) { _, sessionID in
+            Task {
+                if sessionID == nil { auth.clearSession() }
+                else { await auth.refreshUser() }
+            }
+        }
     }
 
-    private var eventList: some View {
-        ScrollView {
-            LazyVStack(spacing: 14) {
-                HStack {
-                    Label("San Francisco", systemImage: "location.fill")
-                    Spacer()
-                    Text("\(store.events.count) events").foregroundStyle(.secondary)
-                }
-                .font(.subheadline)
-                .padding(.horizontal)
+    private var homePage: some View {
+        NavigationStack {
+            eventList(title: "What’s happening?")
+                .navigationTitle("What’s happening?")
+                .navigationBarTitleDisplayMode(.large)
+                .toolbar { brandToolbarItem }
+                .task { await store.load() }
+                .refreshable { await store.load() }
+        }
+    }
 
-                ForEach(store.events) { event in
-                    NavigationLink(value: event) { EventCard(event: event) }
-                        .buttonStyle(.plain)
+    private var explorePage: some View {
+        NavigationStack {
+            eventList(title: "Explore")
+                .navigationTitle("Explore")
+                .navigationBarTitleDisplayMode(.large)
+                .toolbar { brandToolbarItem }
+                .task { await store.load() }
+        }
+    }
+
+    private var brandToolbarItem: some ToolbarContent {
+        ToolbarItem(placement: .topBarLeading) {
+            Image("WteMark")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 30, height: 30)
+                .accessibilityLabel("Went To Event")
+        }
+    }
+
+    private func eventList(title: String) -> some View {
+        Group {
+            if store.isLoading && store.events.isEmpty {
+                ProgressView("Finding events…")
+            } else if let errorMessage = store.errorMessage, store.events.isEmpty {
+                ContentUnavailableView {
+                    Label("Couldn’t load events", systemImage: "wifi.exclamationmark")
+                } description: {
+                    Text(errorMessage)
+                } actions: {
+                    Button("Try again") {
+                        Task { await store.load() }
+                    }
+                }
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: 14) {
+                        HStack {
+                            Label("Tabriz", systemImage: "location.fill")
+                            Spacer()
+                            Text("\(store.events.count) events").foregroundStyle(.secondary)
+                        }
+                        .font(.subheadline)
+                        .padding(.horizontal)
+
+                        ForEach(store.events) { event in
+                            NavigationLink(value: event) { EventCard(event: event) }
+                                .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.vertical)
+                }
+                .navigationDestination(for: Event.self) { event in
+                    EventDetailView(event: event, auth: auth, saved: saved) { showAuth = true }
                 }
             }
-            .padding(.vertical)
         }
-        .navigationDestination(for: Event.self) { event in
-            EventDetailView(event: event, auth: auth, saved: saved) { showAuth = true }
+    }
+
+    private var bottomNavigation: some View {
+        HStack(spacing: 0) {
+            ForEach(AppTab.allCases) { tab in
+                Button { selectedTab = tab } label: {
+                    VStack(spacing: 5) {
+                        Image(systemName: tab.icon)
+                            .font(.system(size: 17, weight: .semibold))
+                        Text(tab.title)
+                            .font(.caption2.weight(.semibold))
+                    }
+                    .foregroundStyle(selectedTab == tab ? Color(red: 0.06, green: 0.05, blue: 0.07) : Color.primary.opacity(0.68))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                    .background {
+                        if selectedTab == tab {
+                            Capsule().fill(Color(red: 0.95, green: 0.93, blue: 0.88))
+                        }
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(tab.title)
+            }
+        }
+        .padding(6)
+        .background(.regularMaterial, in: Capsule())
+        .overlay(Capsule().stroke(Color.white.opacity(0.14), lineWidth: 1))
+        .shadow(color: .black.opacity(0.3), radius: 18, x: 0, y: 8)
+        .padding(.horizontal, 24)
+        .padding(.top, 8)
+        .padding(.bottom, 8)
+    }
+}
+
+private enum AppTab: String, CaseIterable, Identifiable {
+    case home, explore, profile, booked, chat
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .home: "Home"
+        case .explore: "Explore"
+        case .booked: "Booked"
+        case .chat: "Chat"
+        case .profile: "Profile"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .home: "house"
+        case .explore: "safari"
+        case .booked: "ticket"
+        case .chat: "bubble.left.and.bubble.right"
+        case .profile: "person.crop.circle"
+        }
+    }
+}
+
+private struct ChatView: View {
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 16) {
+                Image(systemName: "bubble.left.and.bubble.right")
+                    .font(.system(size: 26, weight: .semibold))
+                    .frame(width: 62, height: 62)
+                    .background(Color(uiColor: .secondarySystemBackground))
+                    .clipShape(Circle())
+                Text("Your chats")
+                    .font(.title2.weight(.bold))
+                Text("Connect with hosts and people going to the same events.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 28)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .navigationTitle("Chat")
         }
     }
 }
@@ -231,7 +360,7 @@ struct EventDetailView: View {
     }
 
     private func createBooking() async {
-        guard let accessToken = auth.session?.accessToken, let selectedTierID else { return }
+        guard let accessToken = try? await auth.accessToken(), let selectedTierID else { return }
         isBooking = true
         errorMessage = nil
         do {
@@ -247,55 +376,12 @@ struct EventDetailView: View {
 }
 
 @MainActor
-private struct AuthView: View {
-    @Environment(\.dismiss) private var dismiss
-    @ObservedObject var auth: AuthStore
-    @State private var isSignUp = false
-    @State private var email = ""
-    @State private var password = ""
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section {
-                    TextField("Email", text: $email)
-                        .textContentType(.emailAddress).keyboardType(.emailAddress)
-                        .textInputAutocapitalization(.never).autocorrectionDisabled()
-                    SecureField("Password", text: $password)
-                        .textContentType(isSignUp ? .newPassword : .password)
-                }
-                Section {
-                    Button(isSignUp ? "Create account" : "Sign in") {
-                        Task {
-                            if isSignUp { await auth.signUp(email: email, password: password) }
-                            else { await auth.signIn(email: email, password: password) }
-                            if auth.isSignedIn { dismiss() }
-                        }
-                    }
-                    .disabled(auth.isLoading || email.isEmpty || password.count < 6)
-                    Button(isSignUp ? "Already have an account? Sign in" : "New here? Create an account") {
-                        isSignUp.toggle()
-                        auth.errorMessage = nil
-                        auth.noticeMessage = nil
-                    }
-                    .buttonStyle(.borderless)
-                }
-                if auth.isLoading { Section { ProgressView("Working…") } }
-                if let errorMessage = auth.errorMessage { Section { Text(errorMessage).foregroundStyle(.red) } }
-                if let noticeMessage = auth.noticeMessage { Section { Text(noticeMessage).foregroundStyle(.secondary) } }
-            }
-            .navigationTitle(isSignUp ? "Create account" : "Sign in")
-            .toolbar { ToolbarItem(placement: .topBarLeading) { Button("Close") { dismiss() } } }
-        }
-    }
-}
-
-@MainActor
 private struct ProfileView: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject var auth: AuthStore
     @ObservedObject var saved: SavedEventsStore
     let events: [Event]
+    let onExit: (() -> Void)?
     let onSignIn: () -> Void
     let onOpenBookings: () -> Void
     @StateObject private var reminders = ReminderStore()
@@ -310,127 +396,278 @@ private struct ProfileView: View {
     @State private var profileNotice: String?
     @State private var selectedPhoto: PhotosPickerItem?
     @State private var isUploadingPhoto = false
+    @State private var showSettings = false
 
     var body: some View {
-        NavigationStack {
-            Group {
-                if let user = auth.user {
-                    Form {
-                        Section {
-                            HStack(spacing: 14) {
-                                if let avatarUrl = profile?.avatarUrl, let url = URL(string: avatarUrl) {
-                                    AsyncImage(url: url) { image in
-                                        image.resizable().scaledToFill()
-                                    } placeholder: {
-                                        initialsAvatar(user: user)
-                                    }
-                                    .frame(width: 48, height: 48)
-                                    .clipShape(Circle())
-                                } else {
-                                    initialsAvatar(user: user)
-                                }
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text(profile?.displayName ?? "Your account").font(.headline)
-                                    Text(profile?.username.map { "@\($0)" } ?? user.email ?? "No email").font(.subheadline).foregroundStyle(.secondary)
-                                }
+        Group {
+            if let user = auth.user {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
+                        HStack {
+                            Button { onExit?() ?? dismiss() } label: {
+                                Text("e.").font(.system(size: 24, weight: .black, design: .rounded))
                             }
-                            .padding(.vertical, 6)
-                        }
-                        Section("Your activity") {
-                            LabeledContent("Saved events", value: "\(saved.eventIDs.count)")
-                            LabeledContent("Reminders", value: "\(reminders.reminderBookingIDs.count)")
-                        }
-                        Section {
-                            Button {
-                                onOpenBookings()
-                            } label: {
-                                Label("Your bookings", systemImage: "ticket")
-                            }
-                            Text("View your upcoming and past passes.")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        Section("Saved events") {
-                            let savedEvents = events.filter { saved.contains($0.id) }
-                            if savedEvents.isEmpty {
-                                Text("No saved events yet.")
-                                    .foregroundStyle(.secondary)
-                            } else {
-                                ForEach(savedEvents) { event in
-                                    NavigationLink {
-                                        EventDetailView(event: event, auth: auth, saved: saved) { onSignIn() }
-                                    } label: {
-                                        VStack(alignment: .leading, spacing: 4) {
-                                            Text(event.title)
-                                            Text(event.startsAt.formatted(date: .abbreviated, time: .shortened))
-                                                .font(.caption)
-                                                .foregroundStyle(.secondary)
-                                        }
-                                    }
-                                }
+                            .foregroundStyle(.primary)
+                            Spacer()
+                            Button { showSettings = true } label: {
+                                Image(systemName: "gearshape").frame(width: 40, height: 40)
                             }
                         }
-                        Section("Account") {
-                            LabeledContent("User ID", value: user.id)
-                            Text("Profile editing and password recovery are coming next.")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        Section("Your identity") {
-                            TextField("Display name", text: $displayName)
-                            TextField("Username", text: $username)
-                                .textInputAutocapitalization(.never)
-                                .autocorrectionDisabled()
-                            TextField("Profile picture URL", text: $avatarUrl)
-                                .keyboardType(.URL)
-                                .textInputAutocapitalization(.never)
-                                .autocorrectionDisabled()
-                            PhotosPicker(selection: $selectedPhoto, matching: .images) {
-                                Label(isUploadingPhoto ? "Uploading…" : "Choose profile picture", systemImage: "photo")
+                        .padding(.bottom, 22)
+                        HStack(spacing: 15) {
+                            profileAvatar(user: user).frame(width: 74, height: 74)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(profile?.displayName ?? "Your name").font(.title2.weight(.bold))
+                                Text(profile?.username.map { "@\($0)" } ?? user.email ?? "No email").font(.subheadline).foregroundStyle(.secondary)
                             }
-                            .disabled(isUploadingPhoto)
-                            Button(isSaving ? "Saving…" : "Save profile") {
-                                Task { await saveProfile() }
-                            }
-                            .disabled(isSaving)
                         }
-                        Section("Account security") {
-                            TextField("New email", text: $email)
-                                .textContentType(.emailAddress)
-                                .keyboardType(.emailAddress)
-                                .textInputAutocapitalization(.never)
-                                .autocorrectionDisabled()
-                            SecureField("New password", text: $password)
-                                .textContentType(.newPassword)
-                            Button(isSaving ? "Updating…" : "Update account") {
-                                Task { await saveAccount() }
-                            }
-                            .disabled(isSaving || (email.isEmpty && password.isEmpty))
+                        Text("Chasing warehouse sets and slow rooftop mornings.")
+                            .font(.subheadline).foregroundStyle(.secondary).padding(.top, 14)
+                        HStack(spacing: 22) {
+                            profileStat("428", "followers")
+                            profileStat("186", "following")
+                        }.padding(.top, 16)
+                        HStack(spacing: 10) {
+                            Button { onExit?() ?? dismiss() } label: {
+                                Label("Publish an event", systemImage: "plus").font(.subheadline.weight(.bold)).frame(maxWidth: .infinity).padding(.vertical, 14)
+                            }.buttonStyle(.borderedProminent)
+                            Button {} label: { Image(systemName: "paperplane").frame(width: 46, height: 46) }.buttonStyle(.bordered)
+                        }.padding(.top, 18)
+                        profileShortcut(title: "Went Membership", subtitle: "No booking fees, members-only nights, early access.", systemImage: "diamond") { }
+                            .padding(.top, 14)
+                        HStack(spacing: 0) {
+                            profileTab("Posts · 0", selected: true)
+                            profileTab("Saved · \(saved.eventIDs.count)", selected: false)
+                            profileTab("Going", selected: false)
                         }
-                        if let profileError { Section { Text(profileError).foregroundStyle(.red) } }
-                        if let profileNotice { Section { Text(profileNotice).foregroundStyle(.secondary) } }
-                        Section {
-                            Button("Sign out", role: .destructive) { auth.signOut(); dismiss() }
-                        }
+                        .padding(4).background(Color(uiColor: .secondarySystemBackground)).clipShape(Capsule()).padding(.top, 22)
+                        if let profileError { Text(profileError).foregroundStyle(.red).padding(.top, 14) }
+                        if let profileNotice { Text(profileNotice).foregroundStyle(.secondary).padding(.top, 14) }
+                        savedEventsSection.padding(.top, 26)
                     }
-                    .task { await loadProfile() }
-                    .onChange(of: selectedPhoto) { _, item in
-                        guard let item else { return }
-                        Task { await uploadPhoto(item) }
-                    }
-                } else {
-                    ContentUnavailableView {
-                        Label("Sign in to see your profile", systemImage: "person.crop.circle")
-                    } description: {
-                        Text("Create an account to book events and keep your passes here.")
-                    } actions: {
-                        Button("Sign in or sign up") { dismiss(); onSignIn() }
+                    .padding(.horizontal)
+                    .padding(.vertical, 18)
+                }
+                .task { await loadProfile() }
+                .onChange(of: selectedPhoto) { _, item in
+                    guard let item else { return }
+                    Task { await uploadPhoto(item) }
+                }
+                .sheet(isPresented: $showSettings) {
+                    NavigationStack {
+                        ScrollView { VStack(spacing: 18) { profileSettingsCard; accountSecurityCard }.padding() }
+                            .navigationTitle("Settings")
+                            .navigationBarTitleDisplayMode(.inline)
                     }
                 }
+            } else {
+                ContentUnavailableView {
+                    Label("Sign in to see your profile", systemImage: "person.crop.circle")
+                } description: {
+                    Text("Create an account to book events and keep your passes here.")
+                } actions: {
+                    Button("Sign in or sign up") { onExit?() ?? dismiss(); onSignIn() }
+                }
             }
-            .navigationTitle("Profile")
-            .toolbar { ToolbarItem(placement: .topBarLeading) { Button("Close") { dismiss() } } }
         }
+        .navigationTitle("Profile")
+    }
+
+    private func profileStat(_ value: String, _ label: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 5) {
+            Text(value).font(.subheadline.weight(.bold))
+            Text(label).font(.caption).foregroundStyle(.secondary)
+        }
+    }
+
+    private func profileTab(_ title: String, selected: Bool) -> some View {
+        Text(title)
+            .font(.subheadline.weight(selected ? .bold : .regular))
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 11)
+            .background(selected ? Color(uiColor: .systemBackground) : .clear)
+            .clipShape(Capsule())
+    }
+
+    private var profileSettingsCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            settingsHeading(title: "YOUR IDENTITY", detail: "Public profile")
+            profileField("Display name", text: $displayName, placeholder: "Your name")
+            profileField("Username", text: $username, placeholder: "your_username")
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+            profileField("Profile picture URL", text: $avatarUrl, placeholder: "https://…")
+                .keyboardType(.URL)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+            PhotosPicker(selection: $selectedPhoto, matching: .images) {
+                Label(isUploadingPhoto ? "Uploading…" : "Choose a picture", systemImage: "photo")
+                    .font(.subheadline.weight(.semibold))
+            }
+            .disabled(isUploadingPhoto)
+            Button(isSaving ? "Saving…" : "Save profile") {
+                Task { await saveProfile() }
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(isSaving)
+        }
+        .padding(18)
+        .background(Color(uiColor: .secondarySystemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+    }
+
+    private var accountSecurityCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            settingsHeading(title: "ACCOUNT SECURITY", detail: "Private")
+            profileField("Email address", text: $email, placeholder: auth.user?.email ?? "you@example.com")
+                .keyboardType(.emailAddress)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+            SecureField("New password", text: $password)
+                .textContentType(.newPassword)
+                .padding(12)
+                .background(Color(uiColor: .systemBackground))
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            Button(isSaving ? "Updating…" : "Update account") {
+                Task { await saveAccount() }
+            }
+            .buttonStyle(.bordered)
+            .disabled(isSaving || (email.isEmpty && password.isEmpty))
+        }
+        .padding(18)
+        .background(Color(uiColor: .secondarySystemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+    }
+
+    private var savedEventsSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("Saved events")
+                    .font(.title3.weight(.bold))
+                Spacer()
+                Text("\(saved.eventIDs.count)")
+                    .foregroundStyle(.secondary)
+            }
+            let savedEvents = events.filter { saved.contains($0.id) }
+            if savedEvents.isEmpty {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text("No saved events yet.")
+                        .font(.headline)
+                    Text("Save an event from its detail page and it will appear here.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(16)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color(uiColor: .secondarySystemBackground))
+                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            } else {
+                ForEach(savedEvents) { event in
+                    NavigationLink {
+                        EventDetailView(event: event, auth: auth, saved: saved) { onSignIn() }
+                    } label: {
+                        HStack(spacing: 12) {
+                            Artwork(category: event.category)
+                                .frame(width: 70, height: 70)
+                                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            VStack(alignment: .leading, spacing: 5) {
+                                Text(event.title)
+                                    .font(.subheadline.weight(.semibold))
+                                    .lineLimit(1)
+                                Text("\(event.startsAt.formatted(date: .abbreviated, time: .shortened)) · \(event.venue.name)")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                            }
+                            Spacer(minLength: 0)
+                            Image(systemName: "chevron.right")
+                                .font(.caption.weight(.bold))
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(10)
+                        .foregroundStyle(.primary)
+                        .background(Color(uiColor: .secondarySystemBackground))
+                        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    private func settingsHeading(title: String, detail: String) -> some View {
+        HStack {
+            Text(title)
+                .font(.caption.weight(.bold))
+                .tracking(1.2)
+            Spacer()
+            Text(detail)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private func profileField(_ title: String, text: Binding<String>, placeholder: String) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            TextField(placeholder, text: text)
+                .padding(12)
+                .background(Color(uiColor: .systemBackground))
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        }
+    }
+
+    private func activityStat(value: Int, title: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("\(value)")
+                .font(.title2.weight(.bold))
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .background(Color(uiColor: .secondarySystemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+
+    private func profileShortcut(title: String, subtitle: String, systemImage: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                Image(systemName: systemImage)
+                    .frame(width: 28)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(title).font(.subheadline.weight(.semibold))
+                    Text(subtitle).font(.caption).foregroundStyle(.secondary)
+                }
+                Spacer()
+                Image(systemName: "arrow.right")
+                    .font(.caption.weight(.bold))
+            }
+            .padding(15)
+            .foregroundStyle(.primary)
+            .background(Color(uiColor: .secondarySystemBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func profileAvatar(user: AuthUser) -> some View {
+        Group {
+            if let avatarUrl = profile?.avatarUrl, let url = URL(string: avatarUrl) {
+                AsyncImage(url: url) { image in
+                    image.resizable().scaledToFill()
+                } placeholder: {
+                    initialsAvatar(user: user)
+                }
+            } else {
+                initialsAvatar(user: user)
+            }
+        }
+        .frame(width: 52, height: 52)
+        .clipShape(Circle())
     }
 
     private func initialsAvatar(user: AuthUser) -> some View {
@@ -443,7 +680,7 @@ private struct ProfileView: View {
     }
 
     private func loadProfile() async {
-        guard let token = auth.session?.accessToken else { return }
+        guard let token = try? await auth.accessToken() else { return }
         do {
             let loaded = try await APIClient().getProfile(accessToken: token)
             profile = loaded
@@ -456,7 +693,7 @@ private struct ProfileView: View {
     }
 
     private func saveProfile() async {
-        guard let token = auth.session?.accessToken else { return }
+        guard let token = try? await auth.accessToken() else { return }
         isSaving = true
         profileError = nil
         profileNotice = nil
@@ -473,7 +710,7 @@ private struct ProfileView: View {
     }
 
     private func saveAccount() async {
-        guard let token = auth.session?.accessToken else { return }
+        guard let token = try? await auth.accessToken() else { return }
         isSaving = true
         profileError = nil
         profileNotice = nil
@@ -493,7 +730,7 @@ private struct ProfileView: View {
     }
 
     private func uploadPhoto(_ item: PhotosPickerItem) async {
-        guard let token = auth.session?.accessToken else { return }
+        guard let token = try? await auth.accessToken() else { return }
         isUploadingPhoto = true
         profileError = nil
         profileNotice = nil
@@ -537,6 +774,7 @@ private struct ProfileView: View {
 private struct BookingsView: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject var auth: AuthStore
+    let onExit: (() -> Void)?
     @State private var bookings: [Booking] = []
     @State private var events: [String: Event] = [:]
     @State private var selectedBooking: Booking?
@@ -545,23 +783,50 @@ private struct BookingsView: View {
 
     var body: some View {
         NavigationStack {
-            Group {
-                if isLoading { ProgressView("Loading bookings…") }
-                else if let errorMessage {
-                    ContentUnavailableView("Couldn’t load bookings", systemImage: "ticket", description: Text(errorMessage))
-                } else if bookings.isEmpty {
-                    ContentUnavailableView("No bookings yet", systemImage: "ticket", description: Text("Book an event and your pass will appear here."))
-                } else {
-                    List {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    HStack {
+                        Button { onExit?() ?? dismiss() } label: {
+                            Text("e.")
+                                .font(.system(size: 24, weight: .black, design: .rounded))
+                        }
+                        .foregroundStyle(.primary)
+                        .accessibilityLabel("Back to events")
+
+                        Spacer()
+
+                        Text("Your bookings")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                    }
+
+                    VStack(alignment: .leading, spacing: 7) {
+                        Text("Your passes")
+                            .font(.system(size: 34, weight: .bold, design: .rounded))
+                        Text("Everything you’re going to, in one place.")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    if isLoading {
+                        bookingState(icon: "ticket", title: "Finding your passes…", message: "Your bookings will appear here in a moment.", showsProgress: true)
+                    } else if let errorMessage {
+                        bookingState(icon: "wifi.exclamationmark", title: "Couldn’t load bookings", message: errorMessage)
+                    } else if bookings.isEmpty {
+                        bookingState(icon: "ticket", title: "No bookings yet", message: "Book an event and your pass will appear here.")
+                    } else {
                         bookingSection(title: "Upcoming", bookings: bookings.filter(isUpcoming))
                         bookingSection(title: "Past", bookings: bookings.filter { !isUpcoming($0) })
                     }
                 }
+                .padding(.horizontal)
+                .padding(.top, 18)
+                .padding(.bottom, 28)
             }
-            .navigationTitle("Your bookings")
-            .toolbar { ToolbarItem(placement: .topBarLeading) { Button("Close") { dismiss() } } }
+            .background(Color(uiColor: .systemBackground))
+            .toolbar(.hidden, for: .navigationBar)
             .task { await loadBookings() }
-            .sheet(item: $selectedBooking) { booking in
+            .navigationDestination(item: $selectedBooking) { booking in
                 BookingPassView(booking: booking, event: events[booking.eventId])
             }
         }
@@ -570,7 +835,12 @@ private struct BookingsView: View {
     @ViewBuilder
     private func bookingSection(title: String, bookings: [Booking]) -> some View {
         if !bookings.isEmpty {
-            Section(title) {
+            VStack(alignment: .leading, spacing: 12) {
+                Text(title.uppercased())
+                    .font(.caption.weight(.bold))
+                    .tracking(1.4)
+                    .foregroundStyle(.secondary)
+
                 ForEach(bookings) { booking in
                     Button {
                         selectedBooking = booking
@@ -583,13 +853,37 @@ private struct BookingsView: View {
         }
     }
 
+    private func bookingState(icon: String, title: String, message: String, showsProgress: Bool = false) -> some View {
+        VStack(spacing: 14) {
+            if showsProgress {
+                ProgressView()
+                    .tint(.primary)
+                    .scaleEffect(1.15)
+            } else {
+                Image(systemName: icon)
+                    .font(.system(size: 22, weight: .semibold))
+                    .frame(width: 52, height: 52)
+                    .background(Color(uiColor: .secondarySystemBackground))
+                    .clipShape(Circle())
+            }
+            Text(title)
+                .font(.headline)
+            Text(message)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 42)
+    }
+
     private func isUpcoming(_ booking: Booking) -> Bool {
         guard let event = events[booking.eventId] else { return false }
         return event.endsAt >= Date()
     }
 
     private func loadBookings() async {
-        guard let accessToken = auth.session?.accessToken else { isLoading = false; return }
+        guard let accessToken = try? await auth.accessToken() else { isLoading = false; return }
         do {
             bookings = try await APIClient().getBookings(accessToken: accessToken)
             let eventIDs = Set(bookings.map(\.eventId))
@@ -633,9 +927,11 @@ private struct BookingRow: View {
             Spacer()
             Image(systemName: "chevron.right")
                 .font(.caption.weight(.bold))
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(.secondary)
         }
-        .padding(.vertical, 6)
+        .padding(14)
+        .background(Color(uiColor: .secondarySystemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
     }
 }
 
@@ -647,23 +943,36 @@ private struct BookingPassView: View {
     @State private var reminderError: String?
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(spacing: 0) {
-                    Artwork(category: event?.category ?? "")
-                        .frame(height: 190)
-                        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        ScrollView {
+            VStack(spacing: 0) {
+                HStack {
+                    Button { dismiss() } label: {
+                        Label("Bookings", systemImage: "chevron.left")
+                            .font(.subheadline.weight(.semibold))
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.primary)
+                    Spacer()
+                    Text("Your pass")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.bottom, 18)
 
-                    VStack(alignment: .leading, spacing: 18) {
-                        HStack {
-                            Label("Confirmed pass", systemImage: "checkmark.seal.fill")
-                                .font(.subheadline.weight(.semibold))
-                                .foregroundStyle(.green)
-                            Spacer()
-                            Text(booking.status.capitalized)
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(.secondary)
-                        }
+                Artwork(category: event?.category ?? "")
+                    .frame(height: 190)
+                    .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+
+                VStack(alignment: .leading, spacing: 18) {
+                    HStack {
+                        Label("Confirmed pass", systemImage: "checkmark.seal.fill")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.green)
+                        Spacer()
+                        Text(booking.status.capitalized)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                    }
 
                         Text(event?.title ?? "Your event pass")
                             .font(.largeTitle.bold())
@@ -717,24 +1026,18 @@ private struct BookingPassView: View {
                             DetailRow(label: "Booked", value: formattedBookingDate)
                         }
 
-                        if let event, event.endsAt >= Date() {
-                            reminderSection(event: event)
-                        }
+                    if let event, event.endsAt >= Date() {
+                        reminderSection(event: event)
                     }
-                    .padding(22)
                 }
-                .background(Color(uiColor: .systemBackground))
-                .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
-                .padding()
+                .padding(22)
             }
-            .navigationTitle("Your pass")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("Close") { dismiss() }
-                }
-            }
+            .background(Color(uiColor: .systemBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
+            .padding()
         }
+        .background(Color(uiColor: .systemGroupedBackground))
+        .toolbar(.hidden, for: .navigationBar)
     }
 
     @ViewBuilder
@@ -775,7 +1078,12 @@ private struct BookingPassView: View {
                 )
                 .frame(maxWidth: .infinity)
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(.plain)
+            .foregroundStyle(.primary)
+            .padding(.vertical, 13)
+            .frame(maxWidth: .infinity)
+            .background(Color(red: 0.95, green: 0.93, blue: 0.88))
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
         .padding(16)
         .background(Color(uiColor: .secondarySystemBackground))

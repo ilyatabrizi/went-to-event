@@ -10,9 +10,12 @@
     "dev": "tsx watch src/server.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/server.js",
+    "export:business-leads": "node scripts/export-business-leads.mjs",
     "test": "vitest run"
   },
   "dependencies": {
+    "@clerk/backend": "^3.21.1",
+    "@fastify/cors": "^11.3.0",
     "@supabase/supabase-js": "^2.47.0",
     "dotenv": "^16.4.7",
     "fastify": "^5.0.0"

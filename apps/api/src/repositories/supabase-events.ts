@@ -1,5 +1,5 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
-import type { Event, EventRepository } from '../contracts/events.js'
+import type { CreateEventInput, Event, EventRepository } from '../contracts/events.js'
 
 type EventRow = {
   id: string
@@ -67,6 +67,28 @@ export class SupabaseEventRepository implements EventRepository {
 
     if (error) throw error
     return data ? toEvent(data as EventRow) : null
+  }
+
+  async create(userId: string, input: CreateEventInput): Promise<Event> {
+    const { data: eventId, error } = await this.client.rpc('create_event_for_verified_user', {
+      p_user_id: userId,
+      p_category: input.category,
+      p_title: input.title,
+      p_description: input.description,
+      p_starts_at: input.startsAt,
+      p_ends_at: input.endsAt,
+      p_venue_name: input.venueName,
+      p_venue_address: input.venueAddress,
+      p_ticket_tiers: input.ticketTiers.map((tier) => ({
+        name: tier.name,
+        description: tier.description,
+        price_cents: tier.priceCents,
+      })),
+    })
+    if (error) throw error
+    const created = await this.getById(eventId as string)
+    if (!created) throw new Error('Created event could not be loaded')
+    return created
   }
 }
 

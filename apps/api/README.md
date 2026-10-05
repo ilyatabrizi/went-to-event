@@ -86,7 +86,47 @@ infra/supabase/migrations/001_events.sql
 infra/supabase/seed.sql
 ```
 
+Account verification and verified-user event publishing use migrations
+`007_account_verification.sql`, `008_verified_event_creation.sql`, and
+`009_admin_delegation.sql`. Apply these migrations before enabling the flow.
+Set `ADMIN_CLERK_USER_IDS` to the primary admin Clerk user ID(s). Those primary
+admins can manage additional admins from the profile screen; delegated admins
+are stored in `app_admins` and can review verification requests but cannot
+delegate admin access. Every event create request is checked against the
+account's database verification status on the API and again in the database
+function.
+
 Copy `.env.example` to `.env`, fill in the Supabase project URL and server-only
 service-role key, then restart the API. The development server loads this file
 automatically. The API will use Supabase automatically.
 Never expose `SUPABASE_SERVICE_ROLE_KEY` to the web app or iOS app.
+
+## Business inquiries
+
+The `/business-join/` form posts to `POST /business-leads`. Apply
+`infra/supabase/migrations/010_business_leads.sql` to store each inquiry in the
+private `business_leads` table; review submissions in Supabase Table Editor.
+The endpoint requires `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` on the API
+server. The service-role key must never be exposed to the browser.
+
+Email alerts are optional. To enable them, create a Resend API key, verify a
+Went To Event sender address, then set `RESEND_API_KEY`,
+`BUSINESS_LEADS_FROM_EMAIL`, and `BUSINESS_LEADS_TO_EMAIL` in the API
+environment. For example, send from `leads@wenttoevent.com` to a real inbox such
+as `ads@wenttoevent.com`. The sender domain must have the DNS records Resend
+provides. The database save still succeeds if the email provider is not
+configured or a notification fails.
+
+After the migration is applied and new leads have been received, create an
+Excel-friendly CSV with:
+
+```bash
+npm run export:business-leads
+```
+
+The file is written under `apps/api/exports/` and is git-ignored so contact
+details are not accidentally committed. You can pass a different output path:
+
+```bash
+npm run export:business-leads -- /path/to/business-leads.csv
+```

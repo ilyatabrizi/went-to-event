@@ -20,7 +20,23 @@ If the Mac's hotspot or LAN address changes, update only the
 `WTE_API_BASE_URL[sdk=iphoneos*]` line in `Config/Debug.xcconfig`, then rebuild.
 The API must still be started with `HOST=0.0.0.0` for a physical device.
 
-The project currently contains the default SwiftUI app shell. Build it with:
+## Clerk authentication
+
+The app uses Clerk's native sign-in/sign-up UI and sends fresh Clerk session
+tokens to the API. Debug and Release currently use the same Clerk test instance
+as the existing web app. Replace the publishable key in both xcconfig files
+with the live instance key before App Store release.
+
+Before native authentication can complete, enable **Native API** in that
+instance's Clerk Dashboard and add an iOS native application using the app's
+bundle ID (`com.samshahverdipersonalteam.WentToEvent`) and your Apple App ID
+Prefix.
+
+The app callback URL scheme and Clerk frontend `webcredentials` associated
+domain are configured in `Config/Info.plist` and
+`Config/WentToEvent.entitlements`.
+
+Build it with:
 
 ```bash
 xcodebuild -project WentToEvent.xcodeproj \

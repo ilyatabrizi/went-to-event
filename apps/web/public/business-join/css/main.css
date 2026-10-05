@@ -1,0 +1,310 @@
+/* Went To Event — business sign-up.
+   Dark, and built the way iOS builds a form: grouped rows on a black ground, labels on the
+   leading edge, every answer typed, glass only for the chrome that floats over the page.
+   Ink ground, Bone words, and the orange of the logo's dot for state and nothing else. */
+
+@font-face {
+  font-family: "YekanX";
+  src: url("../assets/fonts/iranyekanx-fanum-vf.woff2") format("woff2");
+  font-weight: 100 1000; font-style: normal; font-display: swap;
+}
+/* Latin figures, for the one field where a Persian ۱ would be wrong: the email address. */
+@font-face {
+  font-family: "YekanX Latin";
+  src: url("../assets/fonts/iranyekanx-latin-vf.woff2") format("woff2");
+  font-weight: 100 1000; font-style: normal; font-display: swap;
+  unicode-range: U+0020-007E, U+00A0, U+2013-2014, U+2026;
+}
+
+:root {
+  color-scheme: dark;
+  --ink: #0B0A0C;                            /* the ground */
+  --bone: #F4F1EC;                           /* the words, and the one button */
+  --orange: #FE4222;                         /* the dot, centre pixel: state only */
+  --orange-deep: #EE3314;
+  --orange-lit: #FF6A4A;
+
+  --row: #1A191C;                            /* a grouped row, lifted off the ground */
+  --row-on: #242327;                         /* the row being edited */
+  --sep: rgba(244, 241, 236, .12);
+  --text-2: rgba(244, 241, 236, .62);        /* secondary label */
+  --text-3: rgba(244, 241, 236, .38);        /* placeholder */
+  --fill: rgba(244, 241, 236, .09);          /* grey pills */
+  --fill-2: rgba(244, 241, 236, .13);
+
+  --font: "YekanX", -apple-system, BlinkMacSystemFont, "Segoe UI", Tahoma, sans-serif;
+  --font-lat: "YekanX Latin", "YekanX", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+
+  /* Dark glass, after the house recipe: small blur, a big saturation lift, and brightness()
+     inside the filter so a thin tint still holds Bone type over the brightest photograph. */
+  --glass-tint: rgba(22, 21, 24, .46);
+  --glass-filter: blur(12px) saturate(185%) brightness(.56);
+
+  --gutter: 16px;
+  --top: calc(env(safe-area-inset-top, 0px) + 10px);
+  --bar-h: 44px;
+  --col: 560px;
+  --label-w: 108px;
+  --logo-w: 227px;                           /* the whole canvas; the e itself is 66% of it */
+  --ease: cubic-bezier(.22, 1, .36, 1);
+  --spring: cubic-bezier(.34, 1.4, .64, 1);
+}
+@media (min-width: 720px) { :root { --gutter: 28px; --top: 18px; --label-w: 122px; --logo-w: 272px; } }
+@media (min-width: 1080px) { :root { --gutter: 40px; --top: 22px; } }
+
+*, *::before, *::after { box-sizing: border-box; }
+html {
+  background: var(--ink);
+  -webkit-text-size-adjust: 100%; text-size-adjust: 100%;
+  scroll-padding-top: calc(var(--top) + var(--bar-h) + 20px);
+}
+@media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
+body {
+  margin: 0; min-height: 100vh; background: var(--ink); color: var(--bone);
+  font: 400 17px/1.75 var(--font);
+  font-variation-settings: "dots" 4;         /* round Persian dots, after the round dot in the mark */
+  -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+  overflow-wrap: break-word;
+}
+[hidden] { display: none !important; }
+h1, h2, p, dl, dd, fieldset, legend { margin: 0; padding: 0; }
+fieldset { border: 0; min-width: 0; }
+button, input { font: inherit; color: inherit; }
+a { color: inherit; }
+::selection { background: rgba(254, 66, 34, .38); }
+:focus-visible { outline: 2px solid var(--orange); outline-offset: 3px; }
+.brand { font-family: var(--font-lat); unicode-bidi: isolate; }
+
+.vh { position: absolute !important; width: 1px; height: 1px; margin: -1px; padding: 0; border: 0; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
+.sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
+.hp { position: absolute; left: -9999px; top: auto; width: 1px; height: 1px; overflow: hidden; }
+.skip {
+  position: fixed; z-index: 80; top: var(--top); right: var(--gutter);
+  padding: 10px 18px; border-radius: 999px; background: var(--bone); color: var(--ink);
+  font-weight: 700; font-size: 15px; text-decoration: none; translate: 0 -200%;
+}
+.skip:focus { translate: 0 0; }
+
+/* ── Glass: the floating chrome, and only that ─────────────────────────── */
+.glass {
+  position: relative;
+  background: var(--glass-tint);
+  -webkit-backdrop-filter: var(--glass-filter);
+  backdrop-filter: var(--glass-filter);
+  box-shadow: inset 0 0 0 .5px rgba(255, 255, 255, .16), 0 10px 28px -10px rgba(0, 0, 0, .6);
+}
+/* The specular rim: light along the upper edge, a whisper along the lower. */
+@supports ((-webkit-mask-composite: xor) or (mask-composite: exclude)) {
+  .glass::before {
+    content: ""; position: absolute; inset: 0; z-index: 2; border-radius: inherit; padding: 1px; pointer-events: none;
+    background: linear-gradient(170deg, rgba(255, 255, 255, .32), rgba(255, 255, 255, .06) 30%, rgba(255, 255, 255, 0) 60%, rgba(255, 255, 255, .1));
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor;
+    mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); mask-composite: exclude;
+  }
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .glass { background: rgba(26, 25, 28, .95); }
+}
+
+.bar {
+  position: fixed; z-index: 50; inset: 0 0 auto;
+  display: flex; justify-content: space-between; align-items: center;
+  padding: var(--top) max(var(--gutter), env(safe-area-inset-right, 0px)) 0 max(var(--gutter), env(safe-area-inset-left, 0px));
+  pointer-events: none;
+}
+.bar > * { pointer-events: auto; }
+.cap {
+  height: var(--bar-h); display: inline-flex; align-items: center; gap: 9px;
+  padding: 0 16px; border: 0; border-radius: 999px;
+  color: var(--bone); text-decoration: none; font-weight: 700; font-size: 15px; line-height: 1;
+  cursor: pointer; -webkit-tap-highlight-color: transparent;
+  transition: scale .3s var(--spring);
+}
+.cap:active { scale: .95; }
+.mark { width: 25px; height: 19px; color: var(--bone); flex: none; }
+.mark__dot { fill: var(--orange); }
+.cap__name { font-family: var(--font-lat); font-weight: 750; letter-spacing: -.01em; }
+.cap--progress { padding: 0 14px 0 16px; gap: 8px; font-size: 14px; font-weight: 650; }
+.cap__text { white-space: nowrap; }
+.ring { width: 22px; height: 22px; flex: none; }
+.ring circle { fill: none; stroke-width: 2.6; }
+.ring__track { stroke: rgba(244, 241, 236, .2); }
+.ring__fill { stroke: var(--orange); stroke-linecap: round; stroke-dasharray: 59.7; stroke-dashoffset: 59.7; transition: stroke-dashoffset .6s var(--ease), stroke .3s; }
+.ring__check { fill: none; stroke: var(--ink); stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 13; stroke-dashoffset: 13; transition: stroke-dashoffset .35s var(--ease) .15s; }
+.cap--progress[data-empty] .ring__fill { opacity: 0; }
+.cap--progress[data-complete] .ring__track { stroke: var(--bone); fill: var(--bone); }
+.cap--progress[data-complete] .ring__fill { stroke: var(--bone); }
+.cap--progress[data-complete] .ring__check { stroke-dashoffset: 0; }
+
+/* The scroll edge: what passes beneath the capsules sinks into the ground, as iOS 26 does. */
+.edge {
+  position: fixed; z-index: 40; inset: 0 0 auto; height: calc(var(--top) + var(--bar-h) + 28px);
+  pointer-events: none; opacity: 0; transition: opacity .3s linear;
+  background: linear-gradient(rgba(11, 10, 12, .9), rgba(11, 10, 12, .62) 50%, rgba(11, 10, 12, 0));
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+  -webkit-mask-image: linear-gradient(#000 50%, transparent); mask-image: linear-gradient(#000 50%, transparent);
+}
+.edge[data-on] { opacity: 1; }
+
+/* ── Hero ──────────────────────────────────────────────────────────────── */
+.page { position: relative; overflow-x: clip; }
+.hero {
+  display: flex; flex-direction: column; align-items: center; text-align: center;
+  padding: calc(var(--top) + var(--bar-h) + 34px) var(--gutter) 38px;
+}
+/* The canvas is centred on the e (scripts/build_logo.py), so centring the image centres the letter. */
+.hero__logo { display: block; width: var(--logo-w); height: auto; aspect-ratio: 1338 / 859; user-select: none; -webkit-user-drag: none; }
+.hero__title {
+  margin-top: 26px; max-width: 13em;
+  font-size: clamp(25px, 6.9vw, 34px); font-weight: 800; line-height: 1.42; letter-spacing: 0;
+  text-wrap: balance;
+}
+.hero__title .brand { font-weight: 800; letter-spacing: -.025em; white-space: nowrap; }
+.hero__lede { margin-top: 10px; max-width: 24em; font-size: 16px; line-height: 1.85; color: var(--text-2); text-wrap: balance; }
+
+@media (max-width: 380px) {
+  .cap--brand { gap: 6px; padding-inline: 9px; }
+  .cap--brand .mark { width: 20px; }
+  .cap--brand .cap__name { display: none; }
+  .cap--progress { gap: 5px; padding-inline: 8px; font-size: 12px; }
+}
+
+/* ── The form: iOS inset-grouped rows ──────────────────────────────────── */
+.join { width: min(100% - var(--gutter) * 2, var(--col)); margin-inline: auto; outline: none; }
+.section + .section { margin-top: 30px; }
+.section__head {
+  float: right; width: 100%;
+  padding: 0 16px 8px; font-size: 13.5px; font-weight: 600; line-height: 1.5; color: var(--text-2);
+}
+.section__head + * { clear: both; }
+.section__foot { padding: 8px 16px 0; font-size: 13px; line-height: 1.7; color: var(--text-2); }
+
+.group { position: relative; overflow: hidden; border-radius: 20px; background: var(--row); }
+.row {
+  position: relative;
+  display: grid; grid-template-columns: var(--label-w) minmax(0, 1fr); align-items: center; column-gap: 10px;
+  min-height: 54px; padding: 0 16px;
+  transition: background-color .2s ease;
+}
+/* Hairlines inset from the leading edge; none above the first row. */
+.row::before {
+  content: ""; position: absolute; top: 0; inset-inline-start: 16px; inset-inline-end: 0; height: 1px;
+  background: var(--sep); transform: scaleY(.5); transform-origin: top;
+}
+.group > .row:first-child::before, .summary > div:first-child::before { display: none; }
+.row > label { grid-column: 1; font-size: 16.5px; font-weight: 500; line-height: 1.4; color: var(--bone); transition: color .2s ease; }
+.row > input {
+  grid-column: 2; width: 100%; height: 54px; margin: 0; padding: 0;
+  border: 0; border-radius: 0; background: transparent; outline: none;
+  font: 500 17px/1.3 var(--font); font-variation-settings: "dots" 4; color: var(--bone);
+  text-align: right; caret-color: var(--orange);
+  -webkit-appearance: none; appearance: none;
+}
+.row--lat > input { font-family: var(--font-lat); }
+.row > input::placeholder { color: var(--text-3); opacity: 1; }
+.row:focus-within { background: var(--row-on); }
+.row > input:-webkit-autofill,
+.row > input:-webkit-autofill:hover,
+.row > input:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--bone);
+  -webkit-box-shadow: 0 0 0 100px var(--row-on) inset;
+  transition: background-color 9999s;
+}
+
+/* Validation: the label takes the orange, the message carries the logo's dot. */
+.row.is-invalid > label { color: var(--orange); }
+.msg { grid-column: 1 / -1; display: grid; grid-template-rows: 0fr; transition: grid-template-rows .26s var(--ease); }
+.msg > span { min-height: 0; overflow: hidden; display: flex; align-items: baseline; gap: 8px; font-size: 14px; font-weight: 500; line-height: 1.6; color: var(--text-2); }
+.msg > span::before { content: ""; flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--orange); translate: 0 -1px; }
+.row.is-invalid > .msg { grid-template-rows: 1fr; }
+.row.is-invalid > .msg > span { padding-bottom: 13px; }
+@media (prefers-reduced-motion: no-preference) {
+  .row.shake > label, .row.shake > input { animation: shake .42s var(--ease); }
+}
+@keyframes shake { 20% { translate: 6px 0; } 40% { translate: -5px 0; } 60% { translate: 3px 0; } 80% { translate: -1px 0; } }
+
+/* City suggestions: quiet pills under the group while the city row is being edited. */
+.suggest { display: flex; flex-wrap: wrap; gap: 8px; padding: 10px 8px 0; }
+.suggest button {
+  height: 34px; padding: 0 14px; border: 0; border-radius: 999px; cursor: pointer;
+  background: var(--fill); color: var(--bone); font-size: 14.5px; font-weight: 550;
+  -webkit-tap-highlight-color: transparent; transition: background-color .2s ease, scale .3s var(--spring);
+}
+.suggest button:active { scale: .95; }
+@media (hover: hover) and (pointer: fine) { .suggest button:hover { background: var(--fill-2); } }
+
+.hint { padding: 8px 16px 0; font-size: 14px; line-height: 1.8; color: var(--text-2); }
+.hint .brand { color: var(--bone); font-weight: 600; }
+.hint button {
+  margin-inline-start: 6px; padding: 3px 11px; border: 0; border-radius: 999px; cursor: pointer;
+  background: var(--bone); color: var(--ink); font-size: 13px; font-weight: 700;
+}
+
+/* ── Send ──────────────────────────────────────────────────────────────── */
+.submit { margin-top: 30px; }
+.alert {
+  display: flex; align-items: baseline; gap: 10px; margin-bottom: 12px; padding: 13px 16px;
+  border-radius: 16px; background: var(--row); font-size: 14.5px; font-weight: 500; line-height: 1.7;
+}
+.alert::before { content: ""; flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--orange); translate: 0 -1px; }
+.btn {
+  position: relative; display: flex; align-items: center; justify-content: center; gap: 10px;
+  width: 100%; min-height: 54px; padding: 0 24px; border: 0; border-radius: 999px;
+  background: var(--bone); color: var(--ink); font-size: 17px; font-weight: 750; line-height: 1;
+  cursor: pointer; -webkit-tap-highlight-color: transparent;
+  transition: scale .3s var(--spring), background-color .2s ease;
+}
+.btn:active { scale: .975; background: #DCD8D1; }
+.btn__spin { display: none; width: 19px; height: 19px; border-radius: 50%; border: 2.2px solid rgba(11, 10, 12, .22); border-top-color: var(--ink); }
+.btn[aria-busy="true"] { cursor: progress; }
+.btn[aria-busy="true"] .btn__spin { display: block; animation: spin .8s linear infinite; }
+@keyframes spin { to { rotate: 360deg; } }
+.btn--gray { background: var(--fill-2); color: var(--bone); }
+.btn--gray:active { background: rgba(244, 241, 236, .18); }
+.fine { margin-top: 14px; padding: 0 12px; text-align: center; font-size: 13px; line-height: 1.85; color: var(--text-2); }
+.fine .brand { color: var(--bone); font-weight: 600; }
+.preview-flag {
+  display: flex; align-items: center; justify-content: center; gap: 8px; width: fit-content; margin: 14px auto 0;
+  padding: 6px 13px; border-radius: 999px; background: var(--fill);
+  font-size: 12.5px; font-weight: 550; line-height: 1.6; color: var(--text-2); text-align: center;
+}
+.preview-flag__dot { width: 6px; height: 6px; border-radius: 50%; background: var(--orange); flex: none; }
+
+/* ── Done ──────────────────────────────────────────────────────────────── */
+.done { padding-top: 6px; text-align: center; }
+.done__mark {
+  width: 60px; height: 60px; margin: 0 auto 18px; border-radius: 50%; display: grid; place-items: center;
+  background: radial-gradient(circle at 36% 32%, var(--orange-lit), var(--orange) 48%, var(--orange-deep));
+}
+.done__mark svg { width: 30px; height: 30px; fill: none; stroke: #fff; stroke-width: 2.8; stroke-linecap: round; stroke-linejoin: round; }
+.done__title { font-size: 24px; font-weight: 800; line-height: 1.4; outline: none; }
+.done__text { margin: 6px auto 0; max-width: 24em; font-size: 16px; line-height: 1.85; color: var(--text-2); text-wrap: pretty; }
+.summary { margin-top: 24px; text-align: right; }
+.summary > div { position: relative; display: flex; justify-content: space-between; align-items: center; gap: 16px; min-height: 50px; padding: 12px 16px; }
+.summary > div::before {
+  content: ""; position: absolute; top: 0; inset-inline-start: 16px; inset-inline-end: 0; height: 1px;
+  background: var(--sep); transform: scaleY(.5); transform-origin: top;
+}
+.summary dt { flex: none; font-size: 15.5px; color: var(--text-2); }
+.summary dd { min-width: 0; font-size: 16px; font-weight: 600; line-height: 1.5; text-align: left; overflow-wrap: anywhere; }
+.summary dd.lat { font-family: var(--font-lat); }
+.summary dd[dir="ltr"] { unicode-bidi: isolate; }
+.done .preview-flag { margin-top: 16px; }
+.done .btn--gray { margin-top: 18px; }
+
+.foot { padding: 34px var(--gutter) calc(20px + env(safe-area-inset-bottom, 0px)); text-align: center; font-size: 12.5px; color: var(--text-3); }
+
+/* ── Arrival: fill-mode backwards only, so nothing is left holding a transform ── */
+@media (prefers-reduced-motion: no-preference) {
+  .js .hero__logo { animation: rise .8s var(--ease) backwards; }
+  .js .hero__title { animation: rise .7s var(--ease) .08s backwards; }
+  .js .hero__lede { animation: rise .7s var(--ease) .14s backwards; }
+  .js .join { animation: rise .8s var(--ease) .22s backwards; }
+  .done:not([hidden]) .done__mark { animation: pop .55s var(--spring) backwards; }
+  .done:not([hidden]) .done__mark svg { stroke-dasharray: 26; animation: draw .45s var(--ease) .25s backwards; }
+  .done:not([hidden]) > :not(.done__mark) { animation: rise .55s var(--ease) .1s backwards; }
+  .join__form.is-back { animation: rise .45s var(--ease) backwards; }
+}
+@keyframes rise { from { opacity: 0; translate: 0 12px; } }
+@keyframes pop { from { opacity: 0; scale: .5; } }
+@keyframes draw { from { stroke-dashoffset: 26; } }

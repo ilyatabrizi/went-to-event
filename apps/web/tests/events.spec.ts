@@ -1,7 +1,29 @@
 import { expect, test } from '@playwright/test'
 
-test('browse events and open event detail', async ({ page }) => {
+test('business landing page links into the demo app', async ({ page }) => {
   await page.goto('/')
+
+  const landing = page.frameLocator('iframe[title="Went To Event business sign-up"]')
+  await expect(landing.getByRole('heading', { name: /Went To Event/ })).toBeVisible()
+  await landing.getByRole('link', { name: /Went To Event/ }).click()
+  await expect(page).toHaveURL(/\/demo$/)
+  await expect(page.getByRole('heading', { name: 'What’s happening?' })).toBeVisible()
+})
+
+test('applies a saved Farsi language and right-to-left layout', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('wte.language', 'fa'))
+  await page.goto('/demo')
+
+  await expect(page.locator('html')).toHaveAttribute('lang', 'fa')
+  await expect(page.locator('html')).toHaveAttribute('dir', 'rtl')
+  await expect(page.getByRole('navigation', { name: 'پیمایش اصلی' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'چه خبره؟' })).toBeVisible()
+  await page.reload()
+  await expect(page.getByRole('heading', { name: 'چه خبره؟' })).toBeVisible()
+})
+
+test('browse events and open event detail', async ({ page }) => {
+  await page.goto('/demo')
 
   await expect(page.getByRole('heading', { name: 'What’s happening?' })).toBeVisible()
   await expect(page.getByTestId('event-card')).toHaveCount(3)
@@ -19,7 +41,7 @@ test('browse events and open event detail', async ({ page }) => {
 
 test('renders the event grid on desktop', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 })
-  await page.goto('/')
+  await page.goto('/demo')
 
   await expect(page.getByRole('navigation', { name: 'Main navigation' })).toBeVisible()
   await expect(page.getByTestId('event-card')).toHaveCount(3)
@@ -28,7 +50,7 @@ test('renders the event grid on desktop', async ({ page }) => {
 
 test('keeps auth inputs at a mobile-safe font size', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
-  await page.goto('/')
+  await page.goto('/demo')
 
   await page.getByRole('button', { name: /Warehouse Sessions Vol\. 9/ }).click()
   await page.getByTestId('sign-in-to-book').click()
@@ -38,7 +60,7 @@ test('keeps auth inputs at a mobile-safe font size', async ({ page }) => {
 
 test('asks signed-out visitors to sign in when booking', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
-  await page.goto('/')
+  await page.goto('/demo')
   await page.getByRole('button', { name: /Warehouse Sessions Vol\. 9/ }).click()
 
   await page.getByTestId('sign-in-to-book').click()
@@ -49,7 +71,7 @@ test('asks signed-out visitors to sign in when booking', async ({ page }) => {
 
 test('shows a signed-out profile entry point', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
-  await page.goto('/')
+  await page.goto('/demo')
 
   await page.getByRole('button', { name: 'Profile' }).click()
   await expect(page.getByRole('heading', { name: 'Sign in to see your profile.' })).toBeVisible()
@@ -57,7 +79,7 @@ test('shows a signed-out profile entry point', async ({ page }) => {
 })
 
 test('searches and filters events from the explore screen', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/demo')
   await page.getByRole('button', { name: 'Explore' }).click()
 
   await expect(page.getByRole('heading', { name: 'Explore events.' })).toBeVisible()
@@ -75,7 +97,7 @@ test('searches and filters events from the explore screen', async ({ page }) => 
 })
 
 test('saves an event and restores the saved state after reload', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/demo')
   await page.getByRole('button', { name: /Warehouse Sessions Vol\. 9/ }).click()
 
   const saveButton = page.getByRole('button', { name: /Save event/ })

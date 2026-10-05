@@ -2,6 +2,17 @@
   "buildCommand": "echo Vercel will bundle the API function",
   "installCommand": "npm ci",
   "rewrites": [
-    { "source": "/(.*)", "destination": "/api/$1" }
+    { "source": "/me/profile", "destination": "/api/me/profile" },
+    { "source": "/me/account", "destination": "/api/me/account" },
+    { "source": "/me/profile-picture", "destination": "/api/me/profile-picture" },
+    { "source": "/events/:id", "destination": "/api/event?eventId=:id" },
+    { "source": "/social/users", "destination": "/api/social/users" },
+    { "source": "/social/requests", "destination": "/api/social/requests" },
+    { "source": "/social/requests/:id", "destination": "/api/social/request?requestId=:id" },
+    { "source": "/admin-users/:userId", "destination": "/api/admin-user?userId=:userId" },
+    { "source": "/social/conversations", "destination": "/api/social/conversations" },
+    { "source": "/social/conversations/:id/messages", "destination": "/api/social/conversation-messages?conversationId=:id" },
+    { "source": "/admin-business-leads/export.csv", "destination": "/api/admin-user?businessLeadsExport=1" },
+    { "source": "/:path*", "destination": "/api/:path*" }
   ]
 }

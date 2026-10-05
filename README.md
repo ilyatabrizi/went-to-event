@@ -4,10 +4,37 @@ What is on near you, and who is going. Join in two taps, keep a record of the
 good ones, and publish your own in four steps.
 
 **Live:** https://ilyatabrizi.github.io/went-to-event/
-**Local:** `python3 serve.py` → http://localhost:8141
+**Local app:** run the API and web app as described below → http://localhost:5173
+**Design preview:** `python3 serve.py` → http://localhost:8141 (prototype; publishing is local-only)
 **Tests:** `python3 e2e.py` → 194 checks + screenshots into `docs/shots/`
 
 Built by Alpha Agency. Installable on iOS and Android; works offline once opened.
+
+---
+
+## Run the app locally
+
+For sign-in, profile verification, and database-backed event publishing, run
+the API and React web app (not the static design preview) in two terminals:
+
+```bash
+cd apps/api && npm install && npm run dev
+```
+
+```bash
+cd apps/web && npm install && npm run dev
+```
+
+The API needs `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and the matching
+Clerk `CLERK_SECRET_KEY` in `apps/api/.env`. The web app needs the matching
+`VITE_CLERK_PUBLISHABLE_KEY` in `apps/web/.env.local`. Keep the service-role
+and Clerk secret keys out of browser-prefixed variables. The web dev server
+proxies `/api` to the API on port 3000.
+
+The `python3 serve.py` preview is a separate static prototype. Its publish
+flow updates prototype state only; it does not authenticate or save events to
+the shared database. In the full app, an admin must approve your account's
+verification request before event publishing is enabled.
 
 ---
 

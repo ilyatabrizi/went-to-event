@@ -28,6 +28,17 @@ export type EventsResponse = {
   total: number
 }
 
+export type CreateEventInput = {
+  category: string
+  title: string
+  description: string
+  startsAt: string
+  endsAt: string
+  venueName: string
+  venueAddress: string
+  ticketTiers: Array<Pick<TicketTier, 'name' | 'description' | 'priceCents'>>
+}
+
 export type EventResponse = {
   data: Event
 }
@@ -35,4 +46,5 @@ export type EventResponse = {
 export interface EventRepository {
   list(): Promise<Event[]>
   getById(id: string): Promise<Event | null>
+  create?(userId: string, input: CreateEventInput): Promise<Event>
 }
