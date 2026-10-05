@@ -1,16 +1,13 @@
 import SwiftUI
 import PhotosUI
 import UIKit
-import ClerkKit
-import ClerkKitUI
 
 @MainActor
 struct ContentView: View {
-    @Environment(Clerk.self) private var clerk
     @StateObject private var store = EventStore()
     @StateObject private var auth = AuthStore()
     @StateObject private var saved = SavedEventsStore()
-    @State private var showAuth = false
+    @State private var showAuthNotice = false
     @State private var selectedTab: AppTab = .home
 
     init() {
@@ -34,7 +31,7 @@ struct ContentView: View {
                 case .profile:
                     NavigationStack {
                         ProfileView(auth: auth, saved: saved, events: store.events, onExit: { selectedTab = .home }) {
-                            showAuth = true
+                            showAuthNotice = true
                         } onOpenBookings: {
                             selectedTab = .booked
                         }
@@ -46,26 +43,10 @@ struct ContentView: View {
             bottomNavigation
         }
         .tint(Color(red: 0.95, green: 0.93, blue: 0.88))
-        .sheet(isPresented: $showAuth) {
-            ClerkKitUI.AuthView(onAuthComplete: { Task { await auth.refreshUser() } })
-                .environment(clerk)
-        }
-        .onOpenURL { url in
-            Task {
-                do { try await clerk.handle(url) }
-                catch { auth.errorMessage = error.localizedDescription }
-            }
-        }
-        .task(id: clerk.isLoaded) {
-            guard clerk.isLoaded else { return }
-            if clerk.session != nil { await auth.refreshUser() }
-            else { auth.clearSession() }
-        }
-        .onChange(of: clerk.session?.id) { _, sessionID in
-            Task {
-                if sessionID == nil { auth.clearSession() }
-                else { await auth.refreshUser() }
-            }
+        .alert("Sign-in unavailable", isPresented: $showAuthNotice) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("The iOS preview is in guest mode. Sign-in and booking are temporarily disabled.")
         }
     }
 
@@ -133,7 +114,7 @@ struct ContentView: View {
                     .padding(.vertical)
                 }
                 .navigationDestination(for: Event.self) { event in
-                    EventDetailView(event: event, auth: auth, saved: saved) { showAuth = true }
+                    EventDetailView(event: event, auth: auth, saved: saved) { showAuthNotice = true }
                 }
             }
         }
