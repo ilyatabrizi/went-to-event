@@ -16,15 +16,61 @@ export async function socialRoutes(
   app: FastifyInstance,
   options: { authService: AuthService | null; socialService: SocialService | null },
 ) {
+  app.post<{ Body: { endpoint?: string; keys?: { p256dh?: string; auth?: string } } }>('/notifications/push-subscription', async (request, reply) => {
+    const user = await currentUser(request, options.authService)
+    if (!user) return reply.code(401).send({ error: 'Authentication required' })
+    if (!options.socialService) return reply.code(503).send({ error: 'Notifications are not configured' })
+    const subscription = request.body
+    if (typeof subscription?.endpoint !== 'string' || typeof subscription.keys?.p256dh !== 'string' || typeof subscription.keys?.auth !== 'string') {
+      return reply.code(400).send({ error: 'A valid push subscription is required' })
+    }
+    try {
+      return await options.socialService.subscribeToPush(user.id, { endpoint: subscription.endpoint, keys: { p256dh: subscription.keys.p256dh, auth: subscription.keys.auth } })
+    } catch (error) {
+      request.log.error({ error }, 'Could not save push subscription')
+      return reply.code(400).send({ error: 'Could not enable notifications' })
+    }
+  })
+
+  app.delete<{ Body: { endpoint?: string } }>('/notifications/push-subscription', async (request, reply) => {
+    const user = await currentUser(request, options.authService)
+    if (!user) return reply.code(401).send({ error: 'Authentication required' })
+    if (!options.socialService || typeof request.body?.endpoint !== 'string') return reply.code(400).send({ error: 'A subscription endpoint is required' })
+    try {
+      return await options.socialService.unsubscribeFromPush(user.id, request.body.endpoint)
+    } catch (error) {
+      request.log.error({ error }, 'Could not remove push subscription')
+      return reply.code(400).send({ error: 'Could not disable notifications' })
+    }
+  })
+
   app.get('/social', async (request, reply) => {
+    const startedAt = performance.now()
     const user = await currentUser(request, options.authService)
     if (!user) return reply.code(401).send({ error: 'Authentication required' })
     if (!options.socialService) return reply.code(503).send({ error: 'Social features are not configured' })
     try {
-      return await options.socialService.overview(user.id)
+      const overview = await options.socialService.overview(user.id)
+      reply.header('Server-Timing', `social;dur=${Math.round(performance.now() - startedAt)}`)
+      return overview
     } catch (error) {
       request.log.error({ error }, 'Could not load social overview')
       return reply.code(500).send({ error: 'Could not load friends and conversations' })
+    }
+  })
+
+  app.get('/social/conversations', async (request, reply) => {
+    const startedAt = performance.now()
+    const user = await currentUser(request, options.authService)
+    if (!user) return reply.code(401).send({ error: 'Authentication required' })
+    if (!options.socialService) return reply.code(503).send({ error: 'Social features are not configured' })
+    try {
+      const conversations = await options.socialService.conversations(user.id)
+      reply.header('Server-Timing', `social;dur=${Math.round(performance.now() - startedAt)}`)
+      return { conversations }
+    } catch (error) {
+      request.log.error({ error }, 'Could not load conversations')
+      return reply.code(500).send({ error: 'Could not load conversations' })
     }
   })
 
@@ -59,6 +105,17 @@ export async function socialRoutes(
     if (request.body?.action !== 'accept' && request.body?.action !== 'decline') return reply.code(400).send({ error: 'action must be accept or decline' })
     try {
       return await options.socialService.respondToRequest(user.id, request.params.id, request.body.action)
+    } catch (error) {
+      return handleSocialError(reply, error)
+    }
+  })
+
+  app.delete<{ Params: { friendId: string } }>('/social/friends/:friendId', async (request, reply) => {
+    const user = await currentUser(request, options.authService)
+    if (!user) return reply.code(401).send({ error: 'Authentication required' })
+    if (!options.socialService) return reply.code(503).send({ error: 'Social features are not configured' })
+    try {
+      return await options.socialService.removeFriend(user.id, request.params.friendId)
     } catch (error) {
       return handleSocialError(reply, error)
     }

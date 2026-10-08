@@ -46,12 +46,40 @@ function toEvent(row: EventRow): Event {
 }
 
 export class SupabaseEventRepository implements EventRepository {
+  private readonly cacheTtlMs = (() => {
+    const configured = Number(process.env.EVENT_CACHE_TTL_MS ?? 15_000)
+    return Number.isFinite(configured) ? Math.max(5_000, configured) : 15_000
+  })()
+  private listCache: { data: Event[]; expiresAt: number } | null = null
+  private listInFlight: Promise<Event[]> | null = null
+  private readonly eventCache = new Map<string, { data: Event | null; expiresAt: number }>()
+  private readonly eventInFlight = new Map<string, Promise<Event | null>>()
+
   constructor(private readonly client: SupabaseClient) {}
 
   async list(): Promise<Event[]> {
+    if (this.listCache && this.listCache.expiresAt > Date.now()) return this.listCache.data
+    if (this.listInFlight) return this.listInFlight
+
+    this.listInFlight = this.loadList()
+      .then((data) => {
+        this.listCache = { data, expiresAt: Date.now() + this.cacheTtlMs }
+        return data
+      })
+      .finally(() => {
+        this.listInFlight = null
+      })
+    return this.listInFlight
+  }
+
+  private async loadList(): Promise<Event[]> {
     const { data, error } = await this.client
       .from('events')
       .select('id, category, title, description, starts_at, ends_at, host_name, going_count, venue:venues(name, address), ticketTiers:ticket_tiers(id, name, description, price_cents)')
+      // Discovery contains only live events from verified hosts. Keep ended
+      // events addressable through getById so existing passes remain usable.
+      .gt('ends_at', new Date().toISOString())
+      .not('host_user_id', 'is', null)
       .order('starts_at', { ascending: true })
 
     if (error) throw error
@@ -59,6 +87,23 @@ export class SupabaseEventRepository implements EventRepository {
   }
 
   async getById(id: string): Promise<Event | null> {
+    const cached = this.eventCache.get(id)
+    if (cached && cached.expiresAt > Date.now()) return cached.data
+    if (this.eventInFlight.has(id)) return this.eventInFlight.get(id)!
+
+    const request = this.loadById(id)
+      .then((data) => {
+        this.eventCache.set(id, { data, expiresAt: Date.now() + this.cacheTtlMs * 2 })
+        return data
+      })
+      .finally(() => {
+        this.eventInFlight.delete(id)
+      })
+    this.eventInFlight.set(id, request)
+    return request
+  }
+
+  private async loadById(id: string): Promise<Event | null> {
     const { data, error } = await this.client
       .from('events')
       .select('id, category, title, description, starts_at, ends_at, host_name, going_count, venue:venues(name, address), ticketTiers:ticket_tiers(id, name, description, price_cents)')
@@ -88,6 +133,8 @@ export class SupabaseEventRepository implements EventRepository {
     if (error) throw error
     const created = await this.getById(eventId as string)
     if (!created) throw new Error('Created event could not be loaded')
+    this.listCache = null
+    this.eventCache.delete(created.id)
     return created
   }
 }

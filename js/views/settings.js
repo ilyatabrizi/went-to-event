@@ -10,6 +10,8 @@ import { sheet, closeSheet, toast } from "../ui.js";
 import { canInstall, installed, promptInstall } from "../install.js";
 import { go, refresh } from "../router.js";
 import { haptic, warn } from "../motion.js";
+import { cityName } from "../place.js";
+import { openCityPicker } from "./pickers.js";
 
 const TITLES = {
   root: "Settings", account: "Account", notifications: "Notifications", privacy: "Privacy",
@@ -64,6 +66,11 @@ export default function settings({ key = "root" } = {}) {
           return;
         }
         if (e.target.closest("#install")) { promptInstall(); return; }
+        if (e.target.closest("[data-open-city-picker]")) {
+          haptic(6);
+          openCityPicker();
+          return;
+        }
         if (e.target.closest("#reset")) {
           sheet(`
             <div class="sheet-t">Reset this preview</div>
@@ -146,6 +153,14 @@ const PAGES = {
         <p class="tiny" style="padding-top:14px">Editing a profile is stubbed — there is no account
           behind this preview, so nothing here saves.</p>
       </section>
+      <section class="section"><div class="rows">
+        <button class="row-btn" type="button" data-open-city-picker>
+          <span class="ico">${icon("pin")}</span>
+          <span class="row-copy"><span class="row-t">City</span>
+            <span class="row-s">${esc(cityName())} · Change where you browse</span></span>
+          <span class="row-go">${icon("fwd")}</span>
+        </button>
+      </div></section>
       <section class="section"><div class="rows">
         ${toggle("lock", "Private account", "Only approved followers see your posts",
           state.privateAcct, 'data-toggle="s.privateAcct"')}

@@ -109,13 +109,12 @@ private `business_leads` table; review submissions in Supabase Table Editor.
 The endpoint requires `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` on the API
 server. The service-role key must never be exposed to the browser.
 
-Email alerts are optional. To enable them, create a Resend API key, verify a
-Went To Event sender address, then set `RESEND_API_KEY`,
-`BUSINESS_LEADS_FROM_EMAIL`, and `BUSINESS_LEADS_TO_EMAIL` in the API
-environment. For example, send from `leads@wenttoevent.com` to a real inbox such
-as `ads@wenttoevent.com`. The sender domain must have the DNS records Resend
-provides. The database save still succeeds if the email provider is not
-configured or a notification fails.
+Email alerts and booking confirmations use Resend. To enable them, verify the
+`wenttoevent.com` domain in Resend, add the DNS records Resend provides, then
+set `RESEND_API_KEY` and `RESEND_FROM_EMAIL=info@wenttoevent.com` in the API
+environment. Business inquiry alerts additionally use
+`BUSINESS_LEADS_TO_EMAIL` (for example `ads@wenttoevent.com`). Booking creation
+still succeeds if the email provider is not configured or a notification fails.
 
 After the migration is applied and new leads have been received, create an
 Excel-friendly CSV with:

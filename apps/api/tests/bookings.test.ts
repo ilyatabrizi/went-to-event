@@ -25,6 +25,13 @@ const bookingService: BookingService = {
   },
   async list() { return [] },
   async get() { return null },
+  async verifyTicket() {
+    return {
+      status: 'checked_in' as const,
+      ticket: { id: 'ticket-1', number: 1, checkedInAt: '2026-09-24T18:00:00.000Z' },
+      event: { id: 'event-1', title: 'Test event' },
+    }
+  },
 }
 
 describe('booking routes', () => {
@@ -77,5 +84,27 @@ describe('booking routes', () => {
     })
 
     expect(response.statusCode).toBe(400)
+  })
+
+  it('requires authentication to verify a ticket', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/ticket-checkins',
+      payload: { qrCode: 'wte-ticket:v1:ticket:token' },
+    })
+
+    expect(response.statusCode).toBe(401)
+  })
+
+  it('verifies a ticket for an authenticated host', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/ticket-checkins',
+      headers: { authorization: 'Bearer valid-token' },
+      payload: { qrCode: 'wte-ticket:v1:ticket:token' },
+    })
+
+    expect(response.statusCode).toBe(200)
+    expect(response.json()).toEqual({ data: expect.objectContaining({ status: 'checked_in' }) })
   })
 })

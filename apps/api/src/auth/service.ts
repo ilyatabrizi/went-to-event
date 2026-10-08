@@ -89,12 +89,39 @@ export class SupabaseAuthService implements AuthService {
 
 export class ClerkAuthService implements AuthService {
   private readonly clerk
+  private readonly userCache = new Map<string, { user: CurrentUser; expiresAt: number }>()
+  private readonly inFlight = new Map<string, Promise<CurrentUser | null>>()
+  private readonly cacheTtlMs = (() => {
+    const configured = Number(process.env.AUTH_USER_CACHE_TTL_MS ?? 30_000)
+    return Number.isFinite(configured) ? Math.max(5_000, configured) : 30_000
+  })()
+  private readonly cacheSize = 500
 
   constructor(private readonly database: SupabaseClient, secretKey: string) {
     this.clerk = createClerkClient({ secretKey })
   }
 
   async getUser(accessToken: string): Promise<CurrentUser | null> {
+    const now = Date.now()
+    const cached = this.userCache.get(accessToken)
+    if (cached) {
+      if (cached.expiresAt > now) return cached.user
+      this.userCache.delete(accessToken)
+    }
+
+    const pending = this.inFlight.get(accessToken)
+    if (pending) return pending
+
+    const request = this.resolveUser(accessToken)
+    this.inFlight.set(accessToken, request)
+    try {
+      return await request
+    } finally {
+      this.inFlight.delete(accessToken)
+    }
+  }
+
+  private async resolveUser(accessToken: string): Promise<CurrentUser | null> {
     let verified: Awaited<ReturnType<typeof verifyToken>>
     try {
       verified = await verifyToken(accessToken, {
@@ -121,7 +148,9 @@ export class ClerkAuthService implements AuthService {
 
     if (existing) {
       await this.ensureProfile(existing.database_user_id, displayName, signupUsername)
-      return { id: existing.database_user_id, authId: verified.sub, email: email ?? existing.email ?? null }
+      const user = { id: existing.database_user_id, authId: verified.sub, email: email ?? existing.email ?? null }
+      this.cacheUser(accessToken, user, verified.exp)
+      return user
     }
 
     let databaseUserId = verified.sub
@@ -143,7 +172,20 @@ export class ClerkAuthService implements AuthService {
 
     await this.ensureProfile(databaseUserId, displayName, signupUsername)
 
-    return { id: databaseUserId, authId: verified.sub, email }
+    const user = { id: databaseUserId, authId: verified.sub, email }
+    this.cacheUser(accessToken, user, verified.exp)
+    return user
+  }
+
+  private cacheUser(accessToken: string, user: CurrentUser, tokenExpirySeconds?: number) {
+    const tokenExpiry = tokenExpirySeconds ? tokenExpirySeconds * 1000 : Number.POSITIVE_INFINITY
+    const expiresAt = Math.min(Date.now() + this.cacheTtlMs, tokenExpiry)
+    if (expiresAt <= Date.now()) return
+    if (this.userCache.size >= this.cacheSize) {
+      const oldest = this.userCache.keys().next().value
+      if (oldest) this.userCache.delete(oldest)
+    }
+    this.userCache.set(accessToken, { user, expiresAt })
   }
 
   private async ensureProfile(userId: string, displayName: string | null, signupUsername: string | null) {

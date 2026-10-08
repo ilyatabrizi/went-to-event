@@ -16,6 +16,7 @@ import { verificationRoutes } from './routes/verification.js'
 import { createAccountVerificationService, type AccountVerificationService } from './verification/service.js'
 import { leadRoutes } from './routes/leads.js'
 import { createBusinessLeadService, type BusinessLeadService } from './leads/service.js'
+import { createEmailService, type EmailService } from './email/service.js'
 
 export function buildApp(
   repository: EventRepository = createEventRepository(),
@@ -24,6 +25,7 @@ export function buildApp(
   socialService: SocialService | null = createSocialService(),
   verificationService: AccountVerificationService | null = createAccountVerificationService(),
   businessLeadService: BusinessLeadService | null = createBusinessLeadService(),
+  emailService: EmailService | null = createEmailService(),
 ) {
   const app = Fastify({
     logger: process.env.NODE_ENV !== 'test',
@@ -55,7 +57,7 @@ export function buildApp(
 
   app.register(eventsRoutes, { repository, authService, verificationService })
   app.register(meRoutes, { authService })
-  app.register(bookingRoutes, { authService, bookingService })
+  app.register(bookingRoutes, { authService, bookingService, emailService })
   app.register(socialRoutes, { authService, socialService })
   app.register(verificationRoutes, { authService, verificationService })
   app.register(leadRoutes, { leadService: businessLeadService, authService, verificationService })

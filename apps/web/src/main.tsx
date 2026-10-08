@@ -6,7 +6,7 @@ import './styles.css'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <ClerkProvider afterSignOutUrl="/">
+    <ClerkProvider afterSignOutUrl="/demo">
       <App />
     </ClerkProvider>
   </StrictMode>,

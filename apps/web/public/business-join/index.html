@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <base href="/business-join/">
   <title>ثبت‌نام کسب‌وکارها | Went To Event</title>
   <meta name="description" content="کسب‌وکارتان را در Went To Event ثبت کنید. فرم کوتاه را پر کنید تا پس از بررسی، برای همکاری با شما تماس بگیریم.">
   <!-- Preview: off every index until the form is wired to a real destination (js/config.js). -->
@@ -48,21 +49,24 @@
        so the glass can still see what passes beneath it. -->
   <div class="edge" aria-hidden="true" data-edge></div>
   <header class="bar">
-    <a class="cap cap--brand glass" href="/demo" target="_top" aria-label="Went To Event — مشاهدهٔ برنامه">
+    <a class="cap cap--brand glass" href="#top" aria-label="Went To Event — بالای صفحه">
       <svg class="mark" viewBox="211 279 602 466" aria-hidden="true" focusable="false">
         <g transform="matrix(0.79929,0,0,-0.79929,188.694,733.403)"><path fill="currentColor" d="M580 235H175Q180 175 217.0 141.0Q254 107 308 107Q386 107 419 174H570Q546 94 478.0 42.5Q410 -9 311 -9Q231 -9 167.5 26.5Q104 62 68.5 127.0Q33 192 33 277Q33 363 68.0 428.0Q103 493 166.0 528.0Q229 563 311 563Q390 563 452.5 529.0Q515 495 549.5 432.5Q584 370 584 289Q584 259 580 235ZM439 329Q438 383 400.0 415.5Q362 448 307 448Q255 448 219.5 416.5Q184 385 176 329Z"/></g>
         <circle class="mark__dot" cx="759.43" cy="683.90" r="49.50"/>
       </svg>
       <span class="cap__name" dir="ltr">Went To Event</span>
     </a>
-    <button class="cap cap--progress glass" type="button" data-progress data-empty aria-label="۰ از ۶ مورد ضروری کامل شده؛ رفتن به مورد بعدی">
+    <div class="bar__actions">
+      <a class="cap cap--demo glass" href="/demo" target="_top" aria-label="رفتن به نسخهٔ نمایشی">مشاهدهٔ برنامه</a>
+      <button class="cap cap--progress glass" type="button" data-progress data-empty aria-label="۰ از ۶ مورد ضروری کامل شده؛ رفتن به مورد بعدی">
       <svg class="ring" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
         <circle class="ring__track" cx="12" cy="12" r="9.5"/>
         <circle class="ring__fill" cx="12" cy="12" r="9.5" transform="rotate(-90 12 12)"/>
         <path class="ring__check" d="M7.6 12.3l2.9 2.9 5.9-6.2"/>
       </svg>
       <span class="cap__text" data-progress-text>0 از 6</span>
-    </button>
+      </button>
+    </div>
   </header>
 
   <main class="page" id="top">

@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAuth, useUser } from '@clerk/react'
+import QRCode from 'qrcode'
 import { createBooking, getBookings, getEvent, getEvents, getProfile, updateAccount, updateProfile, uploadProfilePicture, type Booking, type Event, type UserProfile } from './api'
 import { AuthPanel } from './AuthPanel'
 import { SocialPanel } from './SocialPanel'
+import { CheckInPanel } from './CheckInPanel'
 import { VerificationPanel } from './VerificationPanel'
 import { languageOptions, translate, type Language } from './i18n'
 
@@ -27,9 +29,9 @@ function formatBookingDate(value: string) {
   }).format(new Date(value))
 }
 
-function priceLabel(event: Event) {
+function priceLabel(event: Event, language: Language = 'en') {
   const lowest = Math.min(...event.ticketTiers.map((tier) => tier.priceCents))
-  return lowest === 0 ? 'Free' : `From $${(lowest / 100).toFixed(0)}`
+  return lowest === 0 ? translate(language, 'Free') : `${translate(language, 'From')} $${(lowest / 100).toFixed(0)}`
 }
 
 function isUpcoming(event: Event | undefined) {
@@ -75,24 +77,45 @@ function Cover({ event }: { event: Event }) {
   )
 }
 
+function TicketQr({ ticket, language }: { ticket: NonNullable<Booking['tickets']>[number]; language: Language }) {
+  const [src, setSrc] = useState('')
+  useEffect(() => {
+    QRCode.toDataURL(ticket.qrCode, { margin: 1, width: 220, errorCorrectionLevel: 'M', color: { dark: '#0b0a0c', light: '#f7f2e9' } })
+      .then(setSrc)
+      .catch(() => setSrc(''))
+  }, [ticket.qrCode])
+  const t = (text: string) => translate(language, text)
+  return <div className="pass-ticket-qr"><div className="pass-ticket-qr-image">{src ? <img src={src} alt={`${t('Ticket')} ${ticket.number} ${t('QR code')}`} /> : <span>{t('Loading…')}</span>}</div><span>{t('Ticket')} {ticket.number}{ticket.checkedInAt ? ` · ${t('Checked in')}` : ''}</span></div>
+}
+
 function Navigation({ onBookings, onHome, onExplore, onProfile, onChat, active = 'home', language }: { onBookings: () => void; onHome: () => void; onExplore: () => void; onProfile: () => void; onChat: () => void; active?: string; language: Language }) {
   const t = (text: string) => translate(language, text)
+  const icon = (name: 'home' | 'explore' | 'went' | 'chat' | 'profile') => {
+    const paths = {
+      home: <><path d="m3 10 9-7 9 7"/><path d="M5 9v11h14V9M9 20v-6h6v6"/></>,
+      explore: <><circle cx="12" cy="12" r="9"/><path d="m15.5 8.5-2 5-5 2 2-5 5-2Z"/></>,
+      went: <><path d="M3 8a2 2 0 0 0 0 4v3a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-3a2 2 0 0 0 0-4V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v1Z"/><path d="M13 5v2m0 3v2m0 3v2"/></>,
+      chat: <><path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8A8.5 8.5 0 0 1 8.7 3.9a8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8v.5Z"/></>,
+      profile: <><circle cx="12" cy="8" r="4"/><path d="M5 21a7 7 0 0 1 14 0"/></>,
+    }
+    return <svg className="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>
+  }
   return (
     <nav className="app-nav" aria-label={t('Main navigation')}>
       <button className={`nav-item ${active === 'home' ? 'nav-active' : ''}`} onClick={onHome}>
-        <span aria-hidden="true">⌂</span><span>{t('Home')}</span>
+        {icon('home')}<span>{t('Home')}</span>
       </button>
       <button className={`nav-item ${active === 'explore' ? 'nav-active' : ''}`} onClick={onExplore}>
-        <span aria-hidden="true">⌕</span><span>{t('Explore')}</span>
+        {icon('explore')}<span>{t('Explore')}</span>
       </button>
       <button className={`nav-item ${active === 'bookings' ? 'nav-active' : ''}`} onClick={onBookings}>
-        <span aria-hidden="true">▣</span><span>{t('Bookings')}</span>
+        {icon('went')}<span>{t('Went')}</span>
       </button>
       <button className={`nav-item ${active === 'chat' ? 'nav-active' : ''}`} onClick={onChat}>
-        <span aria-hidden="true">◌</span><span>{t('Chat')}</span>
+        {icon('chat')}<span>{t('Chat')}</span>
       </button>
       <button className={`nav-item ${active === 'profile' ? 'nav-active' : ''}`} onClick={onProfile}>
-        <span aria-hidden="true">●</span><span>{t('Profile')}</span>
+        {icon('profile')}<span>{t('Profile')}</span>
       </button>
     </nav>
   )
@@ -142,6 +165,7 @@ function ProductApp() {
   const [showProfile, setShowProfile] = useState(false)
   const [profileTab, setProfileTab] = useState<'saved' | 'going' | 'account'>('saved')
   const [showSocial, setShowSocial] = useState(false)
+  const [showCheckIn, setShowCheckIn] = useState(false)
   const [savedIds, setSavedIds] = useState<string[]>([])
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [usernameSetupStatus, setUsernameSetupStatus] = useState<'idle' | 'checking' | 'required' | 'complete'>('idle')
@@ -209,7 +233,7 @@ function ProductApp() {
   useEffect(() => {
     getEvents()
       .then((response) => setEvents(response.data))
-      .catch(() => setError('Could not load events. Is the API running?'))
+      .catch(() => setError(t('Could not load events. Is the API running?')))
       .finally(() => setLoading(false))
   }, [])
 
@@ -249,7 +273,7 @@ function ProductApp() {
         setBooking(null)
         setBookingError(null)
       })
-      .catch(() => setError('Could not load that event.'))
+      .catch(() => setError(t('Could not load that event.')))
   }, [selectedId])
 
   async function openBookings() {
@@ -305,7 +329,7 @@ function ProductApp() {
           missingEvents.forEach((event) => { if (event) loadedEvents[event.id] = event })
           setBookingEvents(loadedEvents)
         })
-        .catch((failure) => setProfileError(failure instanceof Error ? failure.message : 'Could not load your profile'))
+        .catch((failure) => setProfileError(failure instanceof Error ? failure.message : t('Could not load your profile')))
         .finally(() => { setProfileLoading(false); setBookingsLoading(false) })
     }
   }
@@ -415,6 +439,21 @@ function ProductApp() {
     setPassEvent(null)
   }
 
+  function openCheckIn() {
+    if (!session) {
+      setShowProfile(true)
+      return
+    }
+    setSelectedId(null)
+    setShowBookings(false)
+    setShowExplore(false)
+    setShowProfile(false)
+    setShowSocial(false)
+    setShowCheckIn(true)
+    setPassBooking(null)
+    setPassEvent(null)
+  }
+
   function toggleSaved(eventId: string) {
     setSavedIds((current) => {
       const next = current.includes(eventId)
@@ -513,26 +552,24 @@ function ProductApp() {
     }
   }
 
-  if (!authLoaded) return null
-
   if (session && usernameSetupStatus === 'checking') {
-    return <main className="shell auth-shell username-setup-page"><p>Finishing your account setup…</p></main>
+    return <main className="shell auth-shell username-setup-page"><p>{t('Finishing your account setup…')}</p></main>
   }
 
   if (session && usernameSetupStatus === 'required') {
     return (
       <main className="shell auth-shell username-setup-page">
         <section className="username-setup" aria-labelledby="username-setup-title">
-          <p className="eyebrow">One last thing</p>
-          <h1 id="username-setup-title">Choose your username.</h1>
-          <p className="lede">Friends can search this username to find and add you.</p>
+          <p className="eyebrow">{t('One last thing')}</p>
+          <h1 id="username-setup-title">{t('Choose your username.')}</h1>
+          <p className="lede">{t('Friends can search this username to find and add you.')}</p>
           <form className="profile-form" onSubmit={saveSignupUsername}>
-            <label>Username
+            <label>{t('Username')}
               <input autoComplete="username" required minLength={3} maxLength={24} pattern="[a-z0-9_]{3,24}" value={profileForm.username} onChange={(event) => setProfileForm((current) => ({ ...current, username: event.target.value.toLowerCase() }))} placeholder="your_username" />
-              <small>3–24 lowercase letters, numbers, or underscores.</small>
+              <small>{t('3–24 lowercase letters, numbers, or underscores.')}</small>
             </label>
             {profileError && <p className="error" role="alert">{profileError}</p>}
-            <button className="primary-button" disabled={profileBusy}>{profileBusy ? 'Saving…' : 'Continue'}</button>
+            <button className="primary-button" disabled={profileBusy}>{profileBusy ? t('Saving…') : t('Continue')}</button>
           </form>
         </section>
       </main>
@@ -543,15 +580,17 @@ function ProductApp() {
     return (
       <main className="shell auth-shell">
         <button className="back" data-testid="back-from-auth" onClick={() => setShowAuth(false)}>
-          <span aria-hidden="true">←</span> Back to event
+          <span aria-hidden="true">←</span> {t('Back to event')}
         </button>
         <section className="auth-content" aria-labelledby="booking-auth-title">
           <header>
-            <p className="eyebrow">One more step</p>
-            <h1 id="booking-auth-title">Sign in to book.</h1>
-            <p className="lede">Create an account or sign in to keep your tickets and passes together.</p>
+            <p className="eyebrow">{t('One more step')}</p>
+            <h1 id="booking-auth-title">{t('Sign in to book.')}</h1>
+            <p className="lede">{t('Create an account or sign in to keep your tickets and passes together.')}</p>
           </header>
-          <AuthPanel />
+          {authLoaded
+            ? <AuthPanel language={language} />
+            : <p className="error" role="status">{t('Sign-in is unavailable right now. You can still browse events; try again later to book.')}</p>}
         </section>
       </main>
     )
@@ -562,9 +601,14 @@ function ProductApp() {
       <SocialPanel
         getToken={authToken}
         onBack={openProfile}
+        language={language}
         navigation={<Navigation onHome={() => { setShowSocial(false); setSelectedId(null) }} onBookings={openBookings} onExplore={openExplore} onProfile={openProfile} onChat={openSocial} active="chat" language={language} />}
       />
     )
+  }
+
+  if (showCheckIn && session) {
+    return <CheckInPanel getToken={authToken} onBack={() => { setShowCheckIn(false); setShowProfile(true) }} language={language} navigation={<Navigation onHome={() => { setShowCheckIn(false); setSelectedId(null) }} onBookings={openBookings} onExplore={openExplore} onProfile={openProfile} onChat={openSocial} active="profile" language={language} />} />
   }
 
   if (showProfile) {
@@ -572,16 +616,16 @@ function ProductApp() {
       return (
         <main className="shell auth-shell profile-auth-page">
           <button className="back" data-testid="back-from-profile" onClick={() => setShowProfile(false)}>
-            <span aria-hidden="true">←</span> Back to events
+            <span aria-hidden="true">←</span> {t('Back to events')}
           </button>
           <section className="profile-auth-content" aria-labelledby="profile-auth-title">
             <header>
-              <p className="eyebrow">Your account</p>
-              <h1 id="profile-auth-title">Sign in to see your profile.</h1>
-              <p className="lede">Your profile and bookings live here once you have an account.</p>
+              <p className="eyebrow">{t('Your account')}</p>
+              <h1 id="profile-auth-title">{t('Sign in to see your profile.')}</h1>
+              <p className="lede">{t('Your profile and bookings live here once you have an account.')}</p>
             </header>
             <button className="primary-button booking-button" data-testid="profile-sign-in" onClick={() => { setShowProfile(false); setShowAuth(true) }}>
-              Sign in or create account
+              {t('Sign in or create account')}
             </button>
           </section>
         </main>
@@ -598,7 +642,7 @@ function ProductApp() {
             <span>{profile?.username ? `@${profile.username}` : session.user.email}</span>
           </div>
         </section>
-        {profileLoading && <p className="profile-loading">Loading your profile…</p>}
+        {profileLoading && <p className="profile-loading">{t('Loading your profile…')}</p>}
         <section className="profile-counts" aria-label={t('Your activity')}>
           <div><strong>{savedIds.length}</strong><span>{t('saved')}</span></div>
           <div><strong>{bookings.filter((item) => isUpcoming(bookingEvents[item.eventId])).length}</strong><span>{t('upcoming')}</span></div>
@@ -608,6 +652,7 @@ function ProductApp() {
           <button className="profile-publish-button" onClick={() => { setProfileTab('account'); window.setTimeout(() => document.getElementById('account-verification-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80) }}><span aria-hidden="true">＋</span>{t('Publish an event')}</button>
           <button className="profile-utility-button" aria-label={t('Account settings')} onClick={() => setProfileTab('account')}>⚙</button>
         </section>
+        <button className="checkin-entry-button" onClick={openCheckIn}><span aria-hidden="true">⌾</span><span><strong>{t('Check in guests')}</strong><small>{t('Scan tickets for an event you host')}</small></span><span aria-hidden="true">→</span></button>
         <button className="profile-membership-card" onClick={() => setProfileTab('account')}>
           <span className="profile-membership-icon" aria-hidden="true">✦</span>
           <span><strong>{t('Host with Went To Event')}</strong><small>{t('Verification and event tools live in your account.')}</small></span>
@@ -632,7 +677,7 @@ function ProductApp() {
                       <Cover event={event} />
                       <span><strong>{event.title}</strong><small>{formatDate(event.startsAt)} · {event.venue.name}</small></span>
                     </button>
-                    <button className="saved-remove" aria-label={`Remove ${event.title} from saved events`} onClick={() => toggleSaved(event.id)}>×</button>
+                    <button className="saved-remove" aria-label={`${t('Remove from saved events')}: ${event.title}`} onClick={() => toggleSaved(event.id)}>×</button>
                   </div>
                 )
               })}
@@ -646,7 +691,7 @@ function ProductApp() {
             {bookings.map((booking) => {
               const event = bookingEvents[booking.eventId]
               return <button className="booking-list-item" key={booking.id} onClick={() => { setProfileTab('saved'); void openPass(booking); setShowProfile(false); setShowBookings(true) }}>
-                <span><span className="label">{event && isUpcoming(event) ? 'Upcoming' : 'Past'} · {booking.status}</span><strong>{event?.title ?? booking.eventId}</strong>{event && <small>{formatDate(event.startsAt)} · {event.venue.name}</small>}</span>
+                <span><span className="label">{t(event && isUpcoming(event) ? 'Upcoming' : 'Past')} · {t(booking.status === 'confirmed' ? 'Confirmed' : booking.status)}</span><strong>{event?.title ?? booking.eventId}</strong>{event && <small>{formatDate(event.startsAt)} · {event.venue.name}</small>}</span>
                 <span><strong>{booking.quantity} ×</strong><span>${(booking.totalCents / 100).toFixed(2)} →</span></span>
               </button>
             })}
@@ -664,21 +709,22 @@ function ProductApp() {
         <section className="profile-settings" aria-label={t('Your identity')}>
           <div className="settings-heading"><span className="label">{t('Your identity')}</span><span>{t('Public profile')}</span></div>
           <form className="profile-form" onSubmit={saveProfile}>
-            <label>{t('Display name')}<input value={profileForm.displayName} onChange={(event) => setProfileForm({ ...profileForm, displayName: event.target.value })} placeholder="Your name" maxLength={80} /></label>
+            <label>{t('Display name')}<input value={profileForm.displayName} onChange={(event) => setProfileForm({ ...profileForm, displayName: event.target.value })} placeholder={t('Your name')} maxLength={80} /></label>
             <label>{t('Username')}<input value={profileForm.username} onChange={(event) => setProfileForm({ ...profileForm, username: event.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '') })} placeholder="your_username" maxLength={24} /></label>
             <label className="profile-picture-label">{t('Profile photo')}
               <span className="profile-picture-picker">
-                <input className="profile-picture-input" type="file" accept="image/png,image/jpeg,image/webp" onChange={handlePictureUpload} disabled={pictureUploading} aria-label="Choose a profile photo" />
+                <input className="profile-picture-input" type="file" accept="image/png,image/jpeg,image/webp" onChange={handlePictureUpload} disabled={pictureUploading} aria-label={t('Choose a profile photo')} />
                 {profile?.avatarUrl ? <img className="profile-picture-preview" src={profile.avatarUrl} alt="" /> : <span className="profile-picture-preview profile-picture-initial" aria-hidden="true">{(profile?.displayName ?? session.user.email ?? 'U').slice(0, 1).toUpperCase()}</span>}
                 <span className="profile-picture-copy"><strong>{t(pictureUploading ? 'Uploading your photo…' : profile?.avatarUrl ? 'Update your photo' : 'Choose a profile photo')}</strong><small>{t('Square crop · JPG, PNG or WebP')}</small></span>
                 <span className="profile-picture-action" aria-hidden="true">{pictureUploading ? '…' : t('Choose')}</span>
               </span>
             </label>
-            <button className="primary-button" disabled={profileBusy}>{profileBusy ? 'Saving…' : t('Save profile')}</button>
+            <button className="primary-button" disabled={profileBusy}>{profileBusy ? t('Saving…') : t('Save profile')}</button>
           </form>
         </section>
         <VerificationPanel
           getToken={authToken}
+          language={language}
           onEventCreated={(createdEvent) => {
             setEvents((current) => [createdEvent, ...current.filter((event) => event.id !== createdEvent.id)].sort((left, right) => left.startsAt.localeCompare(right.startsAt)))
             setShowProfile(false)
@@ -738,7 +784,7 @@ function ProductApp() {
           <h1>{t('Explore events.')}</h1>
           <p className="lede">{t('Search events, venues, or hosts')}</p>
         </header>
-        <section className="explore-controls" aria-label="Event filters">
+        <section className="explore-controls" aria-label={t('Event filters')}>
           <input
             aria-label={t('Search events, venues, or hosts')}
             className="explore-search"
@@ -747,9 +793,9 @@ function ProductApp() {
             onChange={(event) => setQuery(event.target.value)}
           />
           <div className="filter-grid">
-            <label><span>Category</span><select aria-label="Category" value={category} onChange={(event) => setCategory(event.target.value)}>
+            <label><span>{t('Category')}</span><select aria-label={t('Category')} value={category} onChange={(event) => setCategory(event.target.value)}>
               <option>All categories</option>
-              {[...new Set(events.map((event) => event.category))].map((value) => <option key={value}>{value}</option>)}
+              {[...new Set(events.map((event) => event.category))].map((value) => <option key={value} value={value}>{t(value)}</option>)}
             </select></label>
             <label><span>{t('Date')}</span><select aria-label={t('Date')} value={dateFilter} onChange={(event) => setDateFilter(event.target.value)}>
               <option value="Any date">{t('Any date')}</option><option value="Today">{t('Today')}</option><option value="This week">{t('This week')}</option>
@@ -763,13 +809,13 @@ function ProductApp() {
           </div>
         </section>
         <div className="explore-results-heading">
-          <h2>{filteredEvents.length} {filteredEvents.length === 1 ? 'event' : 'events'}</h2>
+          <h2>{filteredEvents.length} {t(filteredEvents.length === 1 ? 'event' : 'events')}</h2>
           {(query || category !== 'All categories' || dateFilter !== 'Any date' || priceFilter !== 'Any price' || sort !== 'Recommended') && (
             <button className="quiet-button" onClick={() => { setQuery(''); setCategory('All categories'); setDateFilter('Any date'); setPriceFilter('Any price'); setSort('Recommended') }}>Clear filters</button>
           )}
         </div>
         {filteredEvents.length ? (
-          <section className="events" aria-label="Explore results">
+        <section className="events" aria-label={t('Explore results')}>
             {filteredEvents.map((event) => (
               <button className="event-card" key={event.id} onClick={() => { setShowExplore(false); setSelectedId(event.id) }}>
                 <Cover event={event} />
@@ -777,13 +823,16 @@ function ProductApp() {
                   <span className="category">{event.category}</span>
                   <h2>{event.title}</h2>
                   <span className="meta">{formatDate(event.startsAt)} · {event.venue.name}</span>
-                  <span className="card-footer"><strong>{priceLabel(event)}</strong><span>{event.goingCount} going →</span></span>
+                  <span className="card-footer"><strong>{priceLabel(event, language)}</strong><span>{event.goingCount} {t('going')} →</span></span>
                 </span>
               </button>
             ))}
           </section>
         ) : (
-          <section className="empty-state" data-testid="explore-empty"><h2>No events match.</h2><p>Try a different search or clear one of the filters.</p></section>
+          <section className="empty-state" data-testid="explore-empty">
+            <h2>{events.length ? t('No events match.') : t('No upcoming events yet.')}</h2>
+            <p>{events.length ? t('Try a different search or clear one of the filters.') : t('Approved events from verified hosts will appear here.')}</p>
+          </section>
         )}
       </main>
     )
@@ -806,26 +855,26 @@ function ProductApp() {
           aria-pressed={savedIds.includes(selected.id)}
           onClick={() => toggleSaved(selected.id)}
         >
-          {savedIds.includes(selected.id) ? '★ Saved event' : '☆ Save event'}
+          {savedIds.includes(selected.id) ? `★ ${t('Saved event')}` : `☆ ${t('Save event')}`}
         </button>
         <section className="detail-card">
           <div>
-            <span className="label">When</span>
+            <span className="label">{t('When')}</span>
             <strong>{formatDate(selected.startsAt)}</strong>
           </div>
           <div>
-            <span className="label">Where</span>
+            <span className="label">{t('Where')}</span>
             <strong>{selected.venue.name}</strong>
             <span>{selected.venue.address}</span>
           </div>
           <div>
-            <span className="label">Hosted by</span>
+            <span className="label">{t('Hosted by')}</span>
             <strong>{selected.host.name}</strong>
           </div>
         </section>
         <div className="section-heading">
-          <h2>Tickets</h2>
-          <span>{selected.goingCount} going</span>
+          <h2>{t('Tickets')}</h2>
+          <span>{selected.goingCount} {t('going')}</span>
         </div>
         <div className="tiers">
           {selected.ticketTiers.map((tier) => (
@@ -843,45 +892,46 @@ function ProductApp() {
                 <strong>{tier.name}</strong>
                 <span>{tier.description}</span>
               </div>
-              <strong>{tier.priceCents === 0 ? 'Free' : `$${(tier.priceCents / 100).toFixed(0)}`}</strong>
+              <strong>{tier.priceCents === 0 ? t('Free') : `$${(tier.priceCents / 100).toFixed(0)}`}</strong>
             </button>
           ))}
         </div>
         {booking ? (
           <section className="booking-confirmation" data-testid="booking-confirmation">
-            <span className="eyebrow">Confirmed</span>
-            <h2>You’re going.</h2>
-            <p>Booking reference</p>
+            <span className="eyebrow">{t('Confirmed')}</span>
+            <h2>{t('You’re going.')}</h2>
+            <p>{t('Booking reference')}</p>
             <strong>{booking.id}</strong>
-            <span>{booking.quantity} ticket{booking.quantity === 1 ? '' : 's'} · ${(booking.totalCents / 100).toFixed(2)}</span>
+            <span>{booking.quantity} {t(booking.quantity === 1 ? 'ticket' : 'tickets')} · ${(booking.totalCents / 100).toFixed(2)}</span>
+            <button className="primary-button booking-button" onClick={() => { setSelectedId(null); setShowBookings(true); void openPass(booking) }}>{t('Open your QR pass')}</button>
           </section>
         ) : (
           <section className="booking-panel">
             <div className="booking-heading">
               <div>
-                <span className="label">Reserve your place</span>
-                <strong>How many tickets?</strong>
+                <span className="label">{t('Reserve your place')}</span>
+                <strong>{t('How many tickets?')}</strong>
               </div>
-              <span className="booking-total">{selectedTierId ? priceLabel({ ...selected, ticketTiers: selected.ticketTiers.filter((tier) => tier.id === selectedTierId) }) : 'Choose a ticket'}</span>
+              <span className="booking-total">{selectedTierId ? priceLabel({ ...selected, ticketTiers: selected.ticketTiers.filter((tier) => tier.id === selectedTierId) }, language) : t('Choose a ticket')}</span>
             </div>
             <div className="booking-row">
               <div>
-                <span className="label">Quantity</span>
-                <strong>{quantity} ticket{quantity === 1 ? '' : 's'}</strong>
+                <span className="label">{t('Quantity')}</span>
+                <strong>{quantity} {t(quantity === 1 ? 'ticket' : 'tickets')}</strong>
               </div>
-              <div className="quantity-stepper" aria-label="Ticket quantity">
-                <button className="quantity-button" aria-label="Decrease quantity" disabled={quantity === 1} onClick={() => setQuantity((value) => Math.max(1, value - 1))}>−</button>
+              <div className="quantity-stepper" aria-label={t('Ticket quantity')}>
+                <button className="quantity-button" aria-label={t('Decrease quantity')} disabled={quantity === 1} onClick={() => setQuantity((value) => Math.max(1, value - 1))}>−</button>
                 <span>{quantity}</span>
-                <button className="quantity-button" aria-label="Increase quantity" disabled={quantity === 10} onClick={() => setQuantity((value) => Math.min(10, value + 1))}>+</button>
+                <button className="quantity-button" aria-label={t('Increase quantity')} disabled={quantity === 10} onClick={() => setQuantity((value) => Math.min(10, value + 1))}>+</button>
               </div>
             </div>
             {session ? (
               <button className="primary-button booking-button" disabled={bookingBusy || !selectedTierId} onClick={submitBooking}>
-                {bookingBusy ? 'Confirming…' : 'Confirm booking'}
+                {bookingBusy ? t('Confirming…') : t('Confirm booking')}
               </button>
             ) : (
               <button className="primary-button booking-button" data-testid="sign-in-to-book" onClick={() => setShowAuth(true)}>
-                Sign in to book
+                {t('Sign in to book')}
               </button>
             )}
             {bookingError && <p className="error">{bookingError}</p>}
@@ -896,44 +946,44 @@ function ProductApp() {
       return (
         <main className="shell">
           <button className="back" data-testid="back-to-bookings" onClick={() => setPassBooking(null)}>
-            <span aria-hidden="true">←</span> Back to bookings
+            <span aria-hidden="true">←</span> {t('Back to Went')}
           </button>
           <section className="pass-card" data-testid="booking-pass">
             <div className="pass-topline"><div className="pass-mark">e.</div><span className="pass-status">{passBooking.status}</span></div>
-            <span className="eyebrow">Your event pass</span>
-            <h1>{passEvent?.title ?? 'Your event pass'}</h1>
+            <span className="eyebrow">{t('Your event pass')}</span>
+            <h1>{passEvent?.title ?? t('Your event pass')}</h1>
             {passEvent && (
               <div className="pass-details">
-                <div><span className="label">When</span><strong>{formatDate(passEvent.startsAt)}</strong><small>Until {formatDate(passEvent.endsAt)}</small></div>
-                <div><span className="label">Where</span><strong>{passEvent.venue.name}</strong><small>{passEvent.venue.address}</small></div>
-                <div><span className="label">Hosted by</span><strong>{passEvent.host.name}</strong></div>
+                <div><span className="label">{t('When')}</span><strong>{formatDate(passEvent.startsAt)}</strong><small>{t('Until')} {formatDate(passEvent.endsAt)}</small></div>
+                <div><span className="label">{t('Where')}</span><strong>{passEvent.venue.name}</strong><small>{passEvent.venue.address}</small></div>
+                <div><span className="label">{t('Hosted by')}</span><strong>{passEvent.host.name}</strong></div>
               </div>
             )}
             <div className="pass-code-wrap">
-              <span className="label">Booking reference</span>
-              <div className="pass-code" aria-label="Booking reference" data-testid="booking-reference">{passBooking.id.slice(0, 8).toUpperCase()}</div>
-              <small>Show this reference at the door.</small>
+              <span className="label">{t('Ticket QR code')}</span>
+              {passBooking.tickets?.length ? <div className="pass-qr-list">{passBooking.tickets.map((ticket) => <TicketQr key={ticket.id} ticket={ticket} language={language} />)}</div> : <div className="pass-code" aria-label={t('Booking reference')} data-testid="booking-reference">{passBooking.id.slice(0, 8).toUpperCase()}</div>}
+              <small>{t('Show one code per ticket at the door.')}</small>
             </div>
             <div className="pass-summary">
-              <div><span className="label">Ticket</span><strong>{passEvent?.ticketTiers.find((tier) => tier.id === passBooking.ticketTierId)?.name ?? 'Ticket'}</strong></div>
-              <div><span className="label">Quantity</span><strong>{passBooking.quantity} ticket{passBooking.quantity === 1 ? '' : 's'}</strong></div>
-              <div><span className="label">Total</span><strong>${(passBooking.totalCents / 100).toFixed(2)}</strong></div>
-              <div><span className="label">Booked</span><strong>{formatBookingDate(passBooking.createdAt)}</strong></div>
+              <div><span className="label">{t('Ticket')}</span><strong>{passEvent?.ticketTiers.find((tier) => tier.id === passBooking.ticketTierId)?.name ?? t('Ticket')}</strong></div>
+              <div><span className="label">{t('Quantity')}</span><strong>{passBooking.quantity} {t(passBooking.quantity === 1 ? 'ticket' : 'tickets')}</strong></div>
+              <div><span className="label">{t('Total')}</span><strong>${(passBooking.totalCents / 100).toFixed(2)}</strong></div>
+              <div><span className="label">{t('Booked')}</span><strong>{formatBookingDate(passBooking.createdAt)}</strong></div>
             </div>
             {passEvent && isUpcoming(passEvent) && (
               <div className="pass-reminder">
                 <div>
-                  <strong>{reminders[passBooking.id] ? 'Event reminder set' : 'Event reminder'}</strong>
-                  <span>{reminders[passBooking.id] ? 'You’ll get a browser notification one hour before the event.' : 'Get a browser notification one hour before the event starts.'}</span>
+                    <strong>{reminders[passBooking.id] ? t('Event reminder set') : t('Event reminder')}</strong>
+                  <span>{reminders[passBooking.id] ? t('You’ll get a browser notification one hour before the event.') : t('Get a browser notification one hour before the event starts.')}</span>
                 </div>
                 <button className="secondary-button" onClick={() => { void toggleReminder(passBooking, passEvent) }}>
-                  {reminders[passBooking.id] ? 'Cancel reminder' : 'Remind me'}
+                  {reminders[passBooking.id] ? t('Cancel reminder') : t('Remind me')}
                 </button>
                 {reminderError && <small className="reminder-error">{reminderError}</small>}
               </div>
             )}
             <div className="pass-footer">
-              <span>Keep this pass ready for entry.</span>
+              <span>{t('Keep this pass ready for entry.')}</span>
               <span aria-hidden="true">✦</span>
             </div>
           </section>
@@ -956,16 +1006,16 @@ function ProductApp() {
       <main className="shell">
         <Navigation onHome={() => setShowBookings(false)} onBookings={openBookings} onExplore={openExplore} onProfile={openProfile} onChat={openSocial} active="bookings" language={language} />
         <button className="back" data-testid="back-to-events-from-bookings" onClick={() => setShowBookings(false)}>
-          <span aria-hidden="true">←</span> Back to events
+          <span aria-hidden="true">←</span> {t('Back to events')}
         </button>
         <header>
-          <p className="eyebrow">Your account</p>
-          <h1>Your bookings</h1>
-          <p className="lede">Your confirmed nights, all in one place.</p>
+          <p className="eyebrow">{t('Your account')}</p>
+          <h1>{t('Went')}</h1>
+          <p className="lede">{t('Your upcoming and past events, all in one place.')}</p>
         </header>
         {bookingsError && <p className="error">{bookingsError}</p>}
-        {bookingsLoading ? <p>Loading bookings…</p> : bookings.length === 0 ? (
-          <section className="empty-state"><h2>No bookings yet.</h2><p>Find an event worth going to and your pass will appear here.</p></section>
+        {bookingsLoading ? <p>{t('Loading bookings…')}</p> : bookings.length === 0 ? (
+          <section className="empty-state"><h2>{t('No bookings yet.')}</h2><p>{t('Find an event worth going to and your pass will appear here.')}</p></section>
         ) : (
           <div className="booking-sections">
             {bookingSections.map(({ title, items }) => (
@@ -1000,26 +1050,28 @@ function ProductApp() {
     <main className="shell">
       <Navigation onHome={() => { setShowExplore(false); setShowBookings(false); setShowSocial(false); setShowProfile(false) }} onBookings={openBookings} onExplore={openExplore} onProfile={openProfile} onChat={openSocial} language={language} />
       <header>
-          <p className="eyebrow">Tabriz</p>
+          <p className="eyebrow">{t('Tabriz')}</p>
           <h1>{t('What’s happening?')}</h1>
           <p className="lede">{t('Find something worth going to.')}</p>
         </header>
-        {session && <button className="bookings-link" data-testid="open-bookings" onClick={openBookings}>{t('Your bookings')} <span aria-hidden="true">→</span></button>}
+        {session && <button className="bookings-link" data-testid="open-bookings" onClick={openBookings}>{t('Went')} <span aria-hidden="true">→</span></button>}
       {error && <p className="error">{error}</p>}
       {loading ? (
           <p>{t('Loading events…')}</p>
+      ) : events.length === 0 ? (
+        <section className="empty-state" data-testid="events-empty"><h2>{t('No upcoming events yet.')}</h2><p>{t('Approved events from verified hosts will appear here.')}</p></section>
       ) : (
-        <section className="events" aria-label="Events">
+        <section className="events" aria-label={t('Events')}>
           {events.map((event) => (
             <button className="event-card" key={event.id} onClick={() => setSelectedId(event.id)}>
               <Cover event={event} />
               <span className="card-copy" data-testid="event-card">
-                <span className="category">{event.category}</span>
+                <span className="category">{t(event.category)}</span>
                 <h2>{event.title}</h2>
                 <span className="meta">{formatDate(event.startsAt)} · {event.venue.name}</span>
                 <span className="card-footer">
-                  <strong>{priceLabel(event)}</strong>
-                  <span>{event.goingCount} going <span aria-hidden="true">→</span></span>
+                  <strong>{priceLabel(event, language)}</strong>
+                  <span>{event.goingCount} {t('going')} <span aria-hidden="true">→</span></span>
                 </span>
               </span>
             </button>

@@ -1,4 +1,5 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+import { createPushNotificationService, type PushNotificationService } from '../notifications/service.js'
 
 export type SocialProfile = {
   id: string
@@ -42,7 +43,19 @@ export class SocialError extends Error {
 }
 
 export class SocialService {
-  constructor(private readonly database: SupabaseClient) {}
+  private readonly pushNotifications: PushNotificationService
+
+  constructor(private readonly database: SupabaseClient) {
+    this.pushNotifications = createPushNotificationService(database)
+  }
+
+  subscribeToPush(userId: string, subscription: { endpoint: string; keys: { p256dh: string; auth: string } }) {
+    return this.pushNotifications.subscribe(userId, subscription)
+  }
+
+  unsubscribeFromPush(userId: string, endpoint: string) {
+    return this.pushNotifications.unsubscribe(userId, endpoint)
+  }
 
   async overview(userId: string) {
     const [incomingResult, outgoingResult, acceptedFromResult, acceptedToResult] = await Promise.all([
@@ -75,31 +88,50 @@ export class SocialService {
     }
   }
 
+  async conversations(userId: string): Promise<SocialConversation[]> {
+    const { data, error } = await this.database.rpc('list_conversation_inbox', { p_user_id: userId })
+    if (error) return this.listConversations(userId)
+    return ((data ?? []) as Array<{
+      conversation_id: string
+      updated_at: string
+      person_id: string
+      username: string | null
+      display_name: string | null
+      avatar_url: string | null
+      message_id: string | null
+      message_sender_id: string | null
+      message_body: string | null
+      message_created_at: string | null
+    }>).map((row) => ({
+      id: row.conversation_id,
+      person: this.personFromProfile({ id: row.person_id, username: row.username, display_name: row.display_name, avatar_url: row.avatar_url }),
+      lastMessage: row.message_id ? this.messageFromRow({ id: row.message_id, conversation_id: row.conversation_id, sender_id: row.message_sender_id!, body: row.message_body!, created_at: row.message_created_at! }) : null,
+      updatedAt: row.updated_at,
+    }))
+  }
+
   async searchUsers(userId: string, query: string): Promise<SocialPerson[]> {
     const term = query.trim().replace(/[,%*()]/g, '').slice(0, 50)
     if (term.length < 2) return []
+    const searchResult = await this.database.rpc('search_profiles', {
+      p_user_id: userId,
+      p_query: term,
+      p_limit: 20,
+    })
+    if (!searchResult.error) {
+      const profiles = (searchResult.data ?? []) as Array<{ id: string; username: string | null; display_name: string | null; avatar_url: string | null }>
+      return profiles.map((profile) => this.personFromProfile(profile))
+    }
+
+    // Keep older deployments functional until migration 013 is applied.
     const pattern = `%${term}%`
-    const { data: matchingProfiles, error: matchingError } = await this.database.from('profiles')
+    const { data, error } = await this.database.from('profiles')
       .select('id, username, display_name, avatar_url')
       .neq('id', userId)
       .or(`username.ilike.${pattern},display_name.ilike.${pattern}`)
-      .limit(100)
-    if (matchingError) throw matchingError
-    const profiles = new Map((matchingProfiles ?? []).map((profile) => [profile.id, profile]))
-    const { data: candidates, error } = await this.database.from('profiles')
-      .select('id, username, display_name, avatar_url')
-      .neq('id', userId)
-      .limit(1000)
+      .limit(20)
     if (error) throw error
-    const rank = (profile: { username: string | null; display_name: string | null }) => Math.min(
-      ...[profile.username, profile.display_name].filter((value): value is string => Boolean(value))
-        .map((value) => nameMatchScore(value, term)),
-    )
-    for (const profile of candidates ?? []) {
-      if (rank(profile) <= Math.max(2, Math.floor(term.length * 0.4))) profiles.set(profile.id, profile)
-    }
-    const data = [...profiles.values()].sort((left, right) => rank(left) - rank(right)).slice(0, 20)
-    const ids = data.map((profile) => profile.id)
+    const ids = (data ?? []).map((profile) => profile.id)
     if (!ids.length) return []
     const { data: identities, error: identityError } = await this.database.from('user_identities').select('database_user_id').in('database_user_id', ids)
     if (identityError) throw identityError
@@ -139,6 +171,20 @@ export class SocialService {
     if (error?.code === '23505') throw new SocialError('You are already friends.', 409)
     if (error) throw error
     return { updated: true }
+  }
+
+  async removeFriend(userId: string, friendId: string) {
+    const [forward, reverse] = await Promise.all([
+      this.database.from('friend_requests').select('id').eq('sender_id', userId).eq('recipient_id', friendId).eq('status', 'accepted').maybeSingle(),
+      this.database.from('friend_requests').select('id').eq('sender_id', friendId).eq('recipient_id', userId).eq('status', 'accepted').maybeSingle(),
+    ])
+    if (forward.error) throw forward.error
+    if (reverse.error) throw reverse.error
+    const ids = [forward.data?.id, reverse.data?.id].filter((id): id is string => Boolean(id))
+    if (!ids.length) throw new SocialError('Friend not found.', 404)
+    const { error } = await this.database.from('friend_requests').delete().in('id', ids)
+    if (error) throw error
+    return { removed: true }
   }
 
   async createConversation(userId: string, friendId: string) {
@@ -195,6 +241,7 @@ export class SocialService {
     ])
     if (conversationResult.error) throw conversationResult.error
     if (memberResult.error) throw memberResult.error
+    await this.pushNotifications.notifyMessage(conversationId, userId, text)
     return { message: this.messageFromRow(data) }
   }
 
@@ -211,19 +258,42 @@ export class SocialService {
       .select('conversation_id, user_id').in('conversation_id', conversationIds).neq('user_id', userId)
     if (membersError) throw membersError
     const people = await this.peopleById((otherMembers ?? []).map((member) => member.user_id))
-    return Promise.all((conversations ?? []).map(async (conversation) => {
-      const { data: lastMessages, error: messageError } = await this.database.from('messages')
-        .select('id, conversation_id, sender_id, body, created_at').eq('conversation_id', conversation.id)
-        .order('created_at', { ascending: false }).limit(1)
-      if (messageError) throw messageError
+    // Prefer the database-side DISTINCT ON function so only one preview row
+    // per conversation crosses the network. The fallback keeps older
+    // deployments working until migration 012 has been applied.
+    const previewResult = await this.database.rpc('list_conversation_previews', { p_user_id: userId })
+    let recentMessages: Array<{ id: string; conversation_id: string; sender_id: string; body: string; created_at: string }>
+    if (!previewResult.error) {
+      const previews = (previewResult.data ?? []) as Array<{ message_id: string; conversation_id: string; sender_id: string; body: string; created_at: string }>
+      recentMessages = previews.map((message) => ({
+        id: message.message_id,
+        conversation_id: message.conversation_id,
+        sender_id: message.sender_id,
+        body: message.body,
+        created_at: message.created_at,
+      }))
+    } else {
+      const fallback = await this.database.from('messages')
+        .select('id, conversation_id, sender_id, body, created_at')
+        .in('conversation_id', conversationIds)
+        .order('created_at', { ascending: false })
+      if (fallback.error) throw fallback.error
+      recentMessages = fallback.data ?? []
+    }
+    const latestByConversation = new Map<string, { id: string; conversation_id: string; sender_id: string; body: string; created_at: string }>()
+    for (const message of recentMessages ?? []) {
+      if (!latestByConversation.has(message.conversation_id)) latestByConversation.set(message.conversation_id, message)
+    }
+    return (conversations ?? []).map((conversation) => {
       const member = (otherMembers ?? []).find((candidate) => candidate.conversation_id === conversation.id)
+      const lastMessage = latestByConversation.get(conversation.id)
       return {
         id: conversation.id,
         person: member ? people.get(member.user_id) ?? this.personFallback(member.user_id) : this.personFallback(''),
-        lastMessage: lastMessages?.[0] ? this.messageFromRow(lastMessages[0]) : null,
+        lastMessage: lastMessage ? this.messageFromRow(lastMessage) : null,
         updatedAt: conversation.updated_at,
       }
-    }))
+    })
   }
 
   private async areFriends(firstId: string, secondId: string) {
@@ -273,31 +343,6 @@ export class SocialService {
   private messageFromRow(row: { id: string; conversation_id: string; sender_id: string; body: string; created_at: string }): SocialMessage {
     return { id: row.id, conversationId: row.conversation_id, senderId: row.sender_id, body: row.body, createdAt: row.created_at }
   }
-}
-
-function nameMatchScore(value: string, query: string) {
-  const normalizedValue = value.toLocaleLowerCase().trim()
-  const normalizedQuery = query.toLocaleLowerCase().trim()
-  if (normalizedValue === normalizedQuery) return 0
-  if (normalizedValue.startsWith(normalizedQuery)) return 0.25
-  if (normalizedValue.includes(normalizedQuery)) return 0.5
-  const distance = (left: string, right: string) => {
-    let previous = Array.from({ length: right.length + 1 }, (_, index) => index)
-    for (let row = 1; row <= left.length; row++) {
-      const current = [row]
-      for (let column = 1; column <= right.length; column++) {
-        current[column] = Math.min(
-          current[column - 1] + 1,
-          previous[column] + 1,
-          previous[column - 1] + (left[row - 1] === right[column - 1] ? 0 : 1),
-        )
-      }
-      previous = current
-    }
-    return previous[right.length]
-  }
-  const words = normalizedValue.split(/\s+/)
-  return Math.min(distance(normalizedValue, normalizedQuery), ...words.map((word) => distance(word, normalizedQuery)))
 }
 
 export function createSocialService() {

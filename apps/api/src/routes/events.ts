@@ -36,7 +36,8 @@ export async function eventsRoutes(
 ) {
   const { repository } = options
 
-  app.get('/events', async () => {
+  app.get('/events', async (_request, reply) => {
+    reply.header('Cache-Control', 'public, s-maxage=15, stale-while-revalidate=30')
     const events = await repository.list()
 
     return {
@@ -65,6 +66,7 @@ export async function eventsRoutes(
   })
 
   app.get<{ Params: { id: string } }>('/events/:id', async (request, reply) => {
+    reply.header('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60')
     const event = await repository.getById(request.params.id)
 
     if (!event) {

@@ -1,18 +1,183 @@
 # Went To Event — Session Handoff
 
-**Updated:** September 30, 2026
+**Updated:** October 6, 2026
 
 **Branch:** `develop`
 
-**Latest code commit:** the current working tree contains the latest uncommitted product, auth, event-catalog, and domain-related changes; do not assume `HEAD` contains all current work
+**Latest code commit:** `8ef024c` (`fix(ios)`), committed October 5, 2026; working tree was clean when this handoff was updated
 
-This document explains the active architecture, local setup, application flows, API contracts, testing process, known limitations, and recommended next steps.
+> **Read this first.** The sections below this current snapshot include older
+> notes from September 30–October 1, 2026. They are useful as product history,
+> but some URLs, auth descriptions, and setup instructions are obsolete. This
+> October 6 snapshot is authoritative wherever the notes conflict.
 
-## Current snapshot — September 30, 2026
+## Current session handoff — October 6, 2026
 
-This is the authoritative handoff for the latest session. The repository has a
-large set of intentional uncommitted changes from the product work described
-below. Preserve those changes when switching branches or preparing a commit.
+### Where we left off
+
+The user is testing the native iOS app on a physical iPhone. Clerk was removed
+from the iOS target to avoid the Associated Domains provisioning requirement.
+The iOS app is now a guest preview: public event browsing is enabled, while
+booking and all other authenticated operations are intentionally unavailable.
+The iOS Debug and Release configurations now use the deployed HTTPS API, so a
+physical phone does not need to reach a Mac-hosted API to load events.
+
+The backend connection itself is working: a direct request to
+`https://api-orcin-one-49.vercel.app/events` returned HTTP 200 and six events
+on October 6. An unsigned iPhoneOS build also succeeded and its built Info.plist
+contains `https://api-orcin-one-49.vercel.app` as `WTE_API_BASE_URL`.
+
+**Current remaining iPhone blocker:** the latest signed build attempt reports
+that the installed Apple development provisioning profile does not include the
+currently selected iPhone UDID. This is a device-registration/provisioning
+issue, not an Associated Domains error and not an API connectivity problem. Add
+that iPhone to the Apple development team/profile in Xcode or the Apple
+Developer account, refresh signing assets, then run the app again. A prior
+signed build in this session succeeded, but the latest attempt after the API
+config change did not; trust the latest build result.
+
+### Current repository state
+
+- Branch: `develop`.
+- HEAD: `8ef024c` — `fix(ios)` (October 5, 2026).
+- The worktree was clean before this handoff edit. `SESSION_HANDOFF.md` is the
+  only expected modification now; do not recreate or revert the committed app
+  changes.
+- Recent preceding commit: `026b269` — `Chat system, admin logins, CSV for
+  events and login page`.
+- Do not commit, push, or deploy production unless the user explicitly asks.
+  The user previously said not to push to production before being told; their
+  later explicit deploy requests applied to those individual changes.
+
+### Current architecture and capabilities
+
+- `apps/web` is the React/Vite site; `apps/api` is the Fastify API deployed as
+  a separate Vercel project; Supabase holds persistent event, social, profile,
+  verification, booking, and business-lead data.
+- Web authentication uses Clerk. The API verifies Clerk bearer tokens. Do not
+  confuse the current iOS guest-preview state with the web/API auth setup.
+- Web supports signup usernames, profile editing/picture upload, chat and
+  friend requests, account verification, delegated admins, and event creation
+  for verified accounts.
+- `wte-join-main/` contains the separate business/organizer landing-page source
+  used for the landing page. Its inquiry form submits to the API and persists
+  company leads in Supabase using migration
+  `infra/supabase/migrations/010_business_leads.sql` (already applied to the
+  linked production Supabase project in the prior session).
+- Company inquiries export is admin-only. The authenticated API route is
+  `/admin-business-leads/export.csv`; it accepts the primary
+  `ADMIN_CLERK_USER_IDS` admin and admins granted through the admin table. The
+  web admin panel exposes **Company inquiries → Download CSV** in the profile's
+  admin/verification area. Export is downloaded by the browser; it is not saved
+  automatically to a server folder.
+- iOS public event data flows through `EventStore` → `APIClient.getEvents()` →
+  `GET /events`. `Config/Debug.xcconfig` and `Config/Release.xcconfig` currently
+  both set the deployed HTTPS API URL. `apps/ios/WentToEvent/AuthStore.swift`
+  deliberately provides no session/token in preview mode.
+
+### Recent iOS changes and implications
+
+- Removed `ClerkKit` and `ClerkKitUI` package dependencies from
+  `apps/ios/WentToEvent.xcodeproj/project.pbxproj`.
+- Removed Clerk setup/environment, callback URL scheme, publishable-key
+  setting, and `Config/WentToEvent.entitlements` (which carried the
+  `webcredentials:` associated-domain entitlement). Associated Domains is no
+  longer enabled in the Xcode project.
+- `MyApp.swift` now has no Clerk initialization. `ContentView.swift` presents
+  a guest-mode alert when a sign-in-only action is attempted. `AuthStore` stays
+  signed out and throws a clear preview-mode message if protected code requests
+  an access token.
+- `apps/ios/README.md` documents the deployed API and guest-preview limitation.
+- Public event reads do not require Clerk and have been verified against the
+  production `/events` endpoint. Authenticated booking/profile/chat operations
+  cannot work from iOS until auth is implemented again.
+- Do not restore only the Associated Domains entitlement to work around the
+  build. If native sign-in is brought back later, plan and provision the Clerk
+  callback/associated-domain capabilities deliberately and update this note.
+
+### Production deployment state
+
+- Web production alias: `https://wenttoevent.com` (HTTP 200 checked October 5).
+- API production alias: `https://api-orcin-one-49.vercel.app`.
+- The October 5 API deployment includes the CSV export endpoint and explicit
+  Vercel route wiring. Unauthenticated export check returned the expected
+  HTTP 401, proving it is routed and protected (not a 404).
+- October 5 API production deployment: `dpl_ErJFQ66JfAQU4ugLuYmUPfiwMyw5`.
+- October 5 web production deployment: `dpl_HiJNqsDjBdfgQYREtsiUmAPmxtmc`.
+- To deploy through CLI, use explicit account scope. From `apps/api` or
+  `apps/web`, the working command was
+  `vercel deploy --prod --yes --scope samshahverdi78-3858`. A deploy without
+  `--scope` initially returned `Not authorized` despite being logged in.
+- Vercel account/CLI identity checked as `samshahverdi78-3858`; project names
+  are `api` and `web`, aliases above.
+- The Vercel Hobby plan limits a deployment to 12 serverless functions. Adding
+  a separate export function exceeded the limit, so the export route rewrites
+  to the existing `api/admin-user` function. That wrapper dispatches the
+  `businessLeadsExport=1` query to the Fastify export route; preserve this
+  routing unless the function budget is deliberately reworked.
+- The web UI and API CSV implementation were deployed in the production
+  version at that time. Do not redeploy unless asked.
+
+### Validation at last handoff
+
+- API: `npm test` passed (7 files, 20 tests); `npm run build` passed.
+- Web: `npm run build` passed (TypeScript and Vite).
+- iOS Simulator build passed with Clerk removed.
+- iPhoneOS compile passed with `CODE_SIGNING_ALLOWED=NO` after switching the
+  API URL; built `WTE_API_BASE_URL` was verified as the production API URL.
+- Latest signed physical-device build attempt failed only because the current
+  provisioning profile did not include the selected iPhone. No app install or
+  launch was completed in that final attempt.
+- Live checks: production `/events` HTTP 200 with six events; production
+  export route HTTP 401 without auth; `wenttoevent.com` HTTP 200.
+
+### Next actions
+
+1. If the user wants to install/test now, add the iPhone UDID to the Apple
+   development team/profile, refresh profiles in Xcode, and build/run the
+   `WentToEvent` scheme on that iPhone. Keep Clerk and Associated Domains out
+   for this guest-preview build.
+2. Verify the events appear on the phone. If they do not, inspect the device
+   build's embedded `WTE_API_BASE_URL`, confirm the phone has internet access,
+   and retest `GET https://api-orcin-one-49.vercel.app/events`.
+3. Ask before implementing auth again. If user wants booking/profile/social
+   features in iOS, design an auth provider/session flow compatible with API
+   bearer-token verification; do not fake a signed-in state.
+4. Only deploy production after a direct user request. If asked, test/build
+   first and include `--scope samshahverdi78-3858` for Vercel.
+
+### Useful commands
+
+```bash
+# Check current worktree and recent commits
+git status --short
+git log -5 --oneline
+
+# Verify production events without credentials
+curl -i https://api-orcin-one-49.vercel.app/events
+
+# Build iOS for Simulator
+xcodebuild -project apps/ios/WentToEvent.xcodeproj \
+  -scheme WentToEvent -sdk iphonesimulator -configuration Debug \
+  -derivedDataPath /tmp/wte-ios-derived CODE_SIGNING_ALLOWED=NO build
+
+# Build iOS for a physical phone (requires valid device provisioning)
+xcodebuild -project apps/ios/WentToEvent.xcodeproj \
+  -scheme WentToEvent -destination 'generic/platform=iOS' \
+  -configuration Debug -derivedDataPath /tmp/wte-ios-device-derived build
+
+# Validate API and web locally
+(cd apps/api && npm test && npm run build)
+(cd apps/web && npm run build)
+```
+
+The following sections are retained as product history and older setup
+reference. Use the October 6 snapshot above for current state.
+
+## Historical snapshot — September 30, 2026 (superseded)
+
+This section described the September 30 working state. Its working-tree and
+deployment details have since changed; use the October 6 snapshot above.
 
 ### What is currently working
 
@@ -1146,7 +1311,7 @@ After Phase 2:
 10. Create real staging/production environments and TestFlight/App Store
     release configuration.
 
-## 15. End-to-end product summary
+## 15. Historical end-to-end product summary (superseded)
 
 The current working vertical slice is:
 
@@ -1169,7 +1334,7 @@ protected server behavior and booking rules. The iOS client still uses its old
 Supabase AuthStore until the native Clerk SDK work in section 16 is completed.
 ZarinPal is planned but not yet connected.
 
-## 16. Clerk migration status — October 1, 2026
+## 16. Historical Clerk migration status — October 1, 2026 (superseded for iOS)
 
 The authentication migration from Supabase Auth to Clerk was started after the
 Clerk CLI was authenticated as `sam.shahverdi78@gmail.com`. The linked Clerk

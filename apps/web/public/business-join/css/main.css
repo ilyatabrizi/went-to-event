@@ -113,6 +113,7 @@ a { color: inherit; }
   pointer-events: none;
 }
 .bar > * { pointer-events: auto; }
+.bar__actions { display: flex; align-items: center; gap: 8px; pointer-events: auto; }
 .cap {
   height: var(--bar-h); display: inline-flex; align-items: center; gap: 9px;
   padding: 0 16px; border: 0; border-radius: 999px;
@@ -125,6 +126,7 @@ a { color: inherit; }
 .mark__dot { fill: var(--orange); }
 .cap__name { font-family: var(--font-lat); font-weight: 750; letter-spacing: -.01em; }
 .cap--progress { padding: 0 14px 0 16px; gap: 8px; font-size: 14px; font-weight: 650; }
+.cap--demo { padding-inline: 15px; color: var(--bone); font-size: 13px; white-space: nowrap; }
 .cap__text { white-space: nowrap; }
 .ring { width: 22px; height: 22px; flex: none; }
 .ring circle { fill: none; stroke-width: 2.6; }
@@ -163,6 +165,7 @@ a { color: inherit; }
 .hero__lede { margin-top: 10px; max-width: 24em; font-size: 16px; line-height: 1.85; color: var(--text-2); text-wrap: balance; }
 
 @media (max-width: 380px) {
+  .cap--demo { padding-inline: 11px; font-size: 12px; }
   .cap--brand { gap: 6px; padding-inline: 9px; }
   .cap--brand .mark { width: 20px; }
   .cap--brand .cap__name { display: none; }

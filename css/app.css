@@ -25,6 +25,11 @@
  * relied on, and shouting is what made them look cheap. */
 @font-face{font-family:InterVar;src:url(../assets/fonts/inter.woff2)format("woff2");
   font-weight:300 800;font-display:swap;font-style:normal}
+@font-face{font-family:YekanX;src:url(../wte-join-main/assets/fonts/iranyekanx-fanum-vf.woff2)format("woff2");
+  font-weight:100 1000;font-display:swap;font-style:normal}
+@font-face{font-family:YekanXLatin;src:url(../wte-join-main/assets/fonts/iranyekanx-latin-vf.woff2)format("woff2");
+  font-weight:100 1000;font-display:swap;font-style:normal;
+  unicode-range:U+0020-007E,U+00A0,U+2013-2014,U+2026}
 
 /* ----------------------------------------------------------------- tokens */
 :root{
@@ -101,6 +106,11 @@
      the toast line up with each other and with the page gutter. */
   --group-w:min(calc(100vw - 24px),calc(var(--shell) - 24px));
 }
+html[lang="fa"] body{font-family:YekanX,-apple-system,BlinkMacSystemFont,"Segoe UI",Tahoma,sans-serif;
+  font-variation-settings:"dots" 4}
+html[lang="fa"] .brand,html[lang="fa"] [dir="ltr"]{font-family:YekanXLatin,YekanX,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+html[lang="fa"] .title,html[lang="fa"] .display,html[lang="fa"] .bar-title,html[lang="fa"] .hero-title,
+html[lang="fa"] .pass-t,html[lang="fa"] .empty-t,html[lang="fa"] .sheet-t,html[lang="fa"] .place-city{font-family:YekanX,-apple-system,BlinkMacSystemFont,"Segoe UI",Tahoma,sans-serif}
 
 /* ------------------------------------------------------------------ reset */
 *,*::before,*::after{box-sizing:border-box}

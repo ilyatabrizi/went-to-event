@@ -109,7 +109,7 @@ export function createBusinessLeadService() {
 
   const apiKey = process.env.RESEND_API_KEY
   const to = process.env.BUSINESS_LEADS_TO_EMAIL
-  const from = process.env.BUSINESS_LEADS_FROM_EMAIL
+  const from = process.env.BUSINESS_LEADS_FROM_EMAIL ?? process.env.RESEND_FROM_EMAIL ?? process.env.INFO_FROM_EMAIL
   const emailConfig = apiKey && to && from ? { apiKey, to, from } : null
   return new SupabaseBusinessLeadService(createClient(url, serviceRoleKey), emailConfig)
 }

@@ -32,3 +32,25 @@ self.addEventListener('fetch', (event) => {
       .catch(() => caches.match(event.request).then((cached) => cached ?? caches.match('/'))),
   )
 })
+
+self.addEventListener('push', (event) => {
+  let data = { title: 'Went To Event', body: 'You have a new notification.', url: '/' }
+  try {
+    data = { ...data, ...(event.data ? event.data.json() : {}) }
+  } catch {}
+  event.waitUntil(self.registration.showNotification(data.title, {
+    body: data.body,
+    icon: '/assets/icons/favicon_192.png',
+    badge: '/assets/icons/favicon_192.png',
+    data: { url: data.url },
+  }))
+})
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close()
+  const target = new URL(event.notification.data?.url ?? '/', self.location.origin).href
+  event.waitUntil(clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windows) => {
+    const existing = windows.find((client) => 'focus' in client)
+    return existing ? existing.focus() : clients.openWindow(target)
+  }))
+})

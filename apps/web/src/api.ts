@@ -1,5 +1,6 @@
 import type { AccountUpdate, ProfileUpdate, UserProfile } from './contracts/auth'
-import type { Booking, CreateBookingInput } from './contracts/bookings'
+import type { Booking, CreateBookingInput, TicketCheckInResult } from './contracts/bookings'
+export type { TicketCheckInResult } from './contracts/bookings'
 import type { Event, EventResponse, EventsResponse } from './contracts/events'
 export type { Event } from './contracts/events'
 export type { Booking } from './contracts/bookings'
@@ -75,6 +76,13 @@ export async function getBookings(getToken: AuthTokenProvider) {
   return response.json() as Promise<{ data: Booking[] }>
 }
 
+export function verifyTicket(getToken: AuthTokenProvider, qrCode: string) {
+  return authenticatedRequest<{ data: TicketCheckInResult }>(getToken, '/ticket-checkins', {
+    method: 'POST',
+    body: JSON.stringify({ qrCode }),
+  })
+}
+
 async function authenticatedRequest<T>(getToken: AuthTokenProvider, path: string, options: RequestInit = {}) {
   const token = await getToken()
   if (!token) throw new Error('Authentication required')
@@ -118,6 +126,10 @@ export function uploadProfilePicture(getToken: AuthTokenProvider, data: string, 
 
 export function getSocialOverview(getToken: AuthTokenProvider) {
   return authenticatedRequest<SocialOverview>(getToken, '/social')
+}
+
+export function getSocialConversations(getToken: AuthTokenProvider) {
+  return authenticatedRequest<{ conversations: SocialConversation[] }>(getToken, '/social/conversations')
 }
 
 export function getVerificationStatus(getToken: AuthTokenProvider) {
@@ -183,6 +195,10 @@ export function respondToFriendRequest(getToken: AuthTokenProvider, id: string, 
   return authenticatedRequest<{ updated: boolean }>(getToken, `/social/requests/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify({ action }) })
 }
 
+export function removeFriend(getToken: AuthTokenProvider, friendId: string) {
+  return authenticatedRequest<{ removed: boolean }>(getToken, `/social/friends/${encodeURIComponent(friendId)}`, { method: 'DELETE' })
+}
+
 export function createDirectConversation(getToken: AuthTokenProvider, friendId: string) {
   return authenticatedRequest<{ id: string }>(getToken, '/social/conversations', { method: 'POST', body: JSON.stringify({ friendId }) })
 }
@@ -194,4 +210,30 @@ export function getConversationMessages(getToken: AuthTokenProvider, conversatio
 
 export function postConversationMessage(getToken: AuthTokenProvider, conversationId: string, body: string) {
   return authenticatedRequest<{ message: SocialMessage }>(getToken, `/social/conversations/${encodeURIComponent(conversationId)}/messages`, { method: 'POST', body: JSON.stringify({ body }) })
+}
+
+export function enablePushNotifications(getToken: AuthTokenProvider) {
+  return subscribeToPush(getToken)
+}
+
+async function subscribeToPush(getToken: AuthTokenProvider) {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) throw new Error('Notifications are not supported on this device.')
+  const publicKey = import.meta.env.VITE_VAPID_PUBLIC_KEY as string | undefined
+  if (!publicKey) throw new Error('Notifications are not configured yet.')
+  const permission = Notification.permission === 'default' ? await Notification.requestPermission() : Notification.permission
+  if (permission !== 'granted') throw new Error('Notifications are disabled. Enable them in your device settings.')
+  const registration = await navigator.serviceWorker.ready
+  const existing = await registration.pushManager.getSubscription()
+  const subscription = existing ?? await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: decodeVapidKey(publicKey) })
+  return authenticatedRequest<{ subscribed: boolean }>(getToken, '/notifications/push-subscription', {
+    method: 'POST',
+    body: JSON.stringify(subscription.toJSON()),
+  })
+}
+
+function decodeVapidKey(value: string) {
+  const padding = '='.repeat((4 - value.length % 4) % 4)
+  const base64 = (value + padding).replace(/-/g, '+').replace(/_/g, '/')
+  const raw = window.atob(base64)
+  return Uint8Array.from(raw, (character) => character.charCodeAt(0))
 }
