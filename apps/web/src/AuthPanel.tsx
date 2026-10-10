@@ -60,7 +60,7 @@ export function AuthPanel({ language }: { language: Language }) {
             autoComplete="username"
             value={username}
             onChange={(event) => setUsername(event.target.value.toLowerCase())}
-            placeholder="your_username"
+            placeholder={t('your_username')}
             minLength={3}
             maxLength={24}
             pattern="[a-z0-9_]{3,24}"
@@ -69,7 +69,7 @@ export function AuthPanel({ language }: { language: Language }) {
           <small>{t('3–24 lowercase letters, numbers, or underscores. Friends can search this to find you.')}</small>
         </label>
         <label className="auth-username-field">{t('Phone number')} <span className="auth-optional">{t('Optional')}</span>
-          <input type="tel" inputMode="tel" autoComplete="tel" value={phoneNumber} onChange={(event) => setPhoneNumber(event.target.value)} placeholder="+98 912 345 6789" />
+          <input type="tel" inputMode="tel" autoComplete="tel" value={phoneNumber} onChange={(event) => setPhoneNumber(event.target.value)} placeholder={t('+98 912 345 6789')} />
           <small>{t('Useful for event reminders and account recovery.')}</small>
         </label>
         <fieldset className="auth-hobbies">

@@ -109,14 +109,14 @@ export function EventCreationPanel({ getToken, onCreated, language }: { getToken
 
             {step === 0 && <>
               <label>{t('What is it called?')}
-                <input required minLength={4} maxLength={120} value={form.title} onChange={(event) => update('title', event.target.value)} placeholder="Warehouse Sessions Vol. 10" />
+              <input required minLength={4} maxLength={120} value={form.title} onChange={(event) => update('title', event.target.value)} placeholder={t('Warehouse Sessions Vol. 10')} />
               </label>
               <fieldset className="event-category-field">
                 <legend>{t('What kind of event?')}</legend>
-                <div className="event-category-options">{categories.map((category) => <button className={form.category === category ? 'event-category-selected' : ''} key={category} type="button" aria-pressed={form.category === category} onClick={() => update('category', category)}>{category}</button>)}</div>
+                <div className="event-category-options">{categories.map((category) => <button className={form.category === category ? 'event-category-selected' : ''} key={category} type="button" aria-pressed={form.category === category} onClick={() => update('category', category)}>{t(category)}</button>)}</div>
               </fieldset>
               <label>{t('Tell people what to expect')}
-                <textarea required minLength={20} maxLength={2000} rows={4} value={form.description} onChange={(event) => update('description', event.target.value)} placeholder="Give people a feel for the event, the atmosphere, and what to expect." />
+                <textarea required minLength={20} maxLength={2000} rows={4} value={form.description} onChange={(event) => update('description', event.target.value)} placeholder={t('Give people a feel for the event, the atmosphere, and what to expect.')} />
                 <small>{t('At least 20 characters. A clear description helps guests decide if it’s for them.')}</small>
               </label>
             </>}
@@ -129,8 +129,8 @@ export function EventCreationPanel({ getToken, onCreated, language }: { getToken
             </>}
 
             {step === 2 && <>
-              <label>{t('Venue name')}<input required minLength={2} maxLength={120} value={form.venueName} onChange={(event) => update('venueName', event.target.value)} placeholder="Pier 70" /></label>
-              <label>{t('Street address and city')}<input required minLength={4} maxLength={240} value={form.venueAddress} onChange={(event) => update('venueAddress', event.target.value)} placeholder="Pier 70, San Francisco, CA" /></label>
+              <label>{t('Venue name')}<input required minLength={2} maxLength={120} value={form.venueName} onChange={(event) => update('venueName', event.target.value)} placeholder={t('Pier 70')} /></label>
+              <label>{t('Street address and city')}<input required minLength={4} maxLength={240} value={form.venueAddress} onChange={(event) => update('venueAddress', event.target.value)} placeholder={t('Pier 70, San Francisco, CA')} /></label>
               <p className="event-step-copy">{t('Use a public venue address so guests can find the event.')}</p>
             </>}
 
@@ -143,8 +143,8 @@ export function EventCreationPanel({ getToken, onCreated, language }: { getToken
                 </div>
               </fieldset>
               {form.paid && <label>{t('Price per ticket (USD)')}<input type="number" min="0.01" max="100000" step="0.01" required value={form.price} onChange={(event) => update('price', event.target.value)} placeholder="25" /></label>}
-              <label>{t('Ticket name')}<input required minLength={2} maxLength={60} value={form.ticketName} onChange={(event) => update('ticketName', event.target.value)} placeholder="General admission" /></label>
-              <label>{t('Ticket details')}<input required minLength={2} maxLength={240} value={form.ticketDescription} onChange={(event) => update('ticketDescription', event.target.value)} placeholder="Entry to the event" /></label>
+              <label>{t('Ticket name')}<input required minLength={2} maxLength={60} value={form.ticketName} onChange={(event) => update('ticketName', event.target.value)} placeholder={t('General admission')} /></label>
+              <label>{t('Ticket details')}<input required minLength={2} maxLength={240} value={form.ticketDescription} onChange={(event) => update('ticketDescription', event.target.value)} placeholder={t('Entry to the event')} /></label>
             </>}
 
             {error && <p className="error" role="alert">{error}</p>}

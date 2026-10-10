@@ -18,6 +18,8 @@ import {
 } from './api'
 import { translate, type Language } from './i18n'
 
+const pushReadyStorageKey = 'wte.push.notifications.enabled'
+
 export function SocialPanel({ getToken, onBack, navigation, language }: { getToken: AuthTokenProvider; onBack: () => void; navigation: ReactNode; language: Language }) {
   const t = (text: string) => translate(language, text)
   const [overview, setOverview] = useState<SocialOverview | null>(null)
@@ -31,7 +33,14 @@ export function SocialPanel({ getToken, onBack, navigation, language }: { getTok
   const [busyId, setBusyId] = useState<string | null>(null)
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [pushReady, setPushReady] = useState(false)
+  const [pushReady, setPushReady] = useState(() => {
+    if (typeof window === 'undefined') return false
+    try {
+      return window.localStorage.getItem(pushReadyStorageKey) === 'true'
+    } catch {
+      return false
+    }
+  })
   const [pushBusy, setPushBusy] = useState(false)
   const [friendsLoaded, setFriendsLoaded] = useState(false)
   const messageList = useRef<HTMLDivElement>(null)
@@ -117,7 +126,28 @@ export function SocialPanel({ getToken, onBack, navigation, language }: { getTok
 
   useEffect(() => {
     if (!installed || !('Notification' in window) || Notification.permission !== 'granted') return
-    enablePushNotifications(getToken).then(() => setPushReady(true)).catch(() => {})
+    let cancelled = false
+    const restorePushState = async () => {
+      try {
+        const registration = await navigator.serviceWorker.ready
+        const subscription = await registration.pushManager.getSubscription()
+        if (!subscription) {
+          window.localStorage.removeItem(pushReadyStorageKey)
+          if (!cancelled) setPushReady(false)
+          return
+        }
+        await enablePushNotifications(getToken)
+        if (!cancelled) {
+          window.localStorage.setItem(pushReadyStorageKey, 'true')
+          setPushReady(true)
+        }
+      } catch {
+        window.localStorage.removeItem(pushReadyStorageKey)
+        if (!cancelled) setPushReady(false)
+      }
+    }
+    void restorePushState()
+    return () => { cancelled = true }
   }, [getToken, installed])
 
   async function turnOnNotifications() {
@@ -125,6 +155,7 @@ export function SocialPanel({ getToken, onBack, navigation, language }: { getTok
     setError(null)
     try {
       await enablePushNotifications(getToken)
+      window.localStorage.setItem(pushReadyStorageKey, 'true')
       setPushReady(true)
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : t('Could not enable notifications.'))
@@ -260,7 +291,7 @@ export function SocialPanel({ getToken, onBack, navigation, language }: { getTok
             ))}</section>}
             {socialTab === 'chats' && <section className="social-section social-conversations"><h2>{t('Conversations')}</h2>
               {visibleConversations.length ? visibleConversations.map((conversation) => (
-                <ConversationButton key={conversation.id} conversation={conversation} active={conversation.id === conversationId} onClick={() => setConversationId(conversation.id)} />
+                <ConversationButton key={conversation.id} conversation={conversation} active={conversation.id === conversationId} onClick={() => setConversationId(conversation.id)} language={language} />
               )) : <p className="social-muted">{searchTerm ? t('No conversations match that search.') : t('Your chats with friends will show up here.')}</p>}
             </section>}
             {socialTab === 'friends' && <section className="social-section social-friends"><h2>{t('Friends')}</h2>
@@ -318,11 +349,12 @@ function PersonIdentity({ person }: { person: SocialPerson }) {
   )
 }
 
-function ConversationButton({ conversation, active, onClick }: { conversation: SocialConversation; active: boolean; onClick: () => void }) {
+function ConversationButton({ conversation, active, onClick, language }: { conversation: SocialConversation; active: boolean; onClick: () => void; language: Language }) {
+  const t = (text: string) => translate(language, text)
   return (
     <button className={`social-conversation ${active ? 'social-conversation-active' : ''}`} onClick={onClick}>
       <PersonIdentity person={conversation.person} />
-      <span className="social-conversation-preview">{conversation.lastMessage?.body ?? 'No messages yet'}</span>
+      <span className="social-conversation-preview">{conversation.lastMessage?.body ?? t('No messages yet')}</span>
       <span className="social-conversation-meta"><time dateTime={conversation.lastMessage?.createdAt}>{conversation.lastMessage ? formatTime(conversation.lastMessage.createdAt) : ''}</time><span className="social-conversation-chevron" aria-hidden="true">›</span></span>
     </button>
   )

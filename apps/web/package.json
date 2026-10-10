@@ -10,6 +10,7 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
+    "@clerk/localizations": "^4.23.0",
     "@clerk/react": "^6.17.4",
     "@supabase/supabase-js": "^2.47.0",
     "@types/qrcode": "^1.5.6",

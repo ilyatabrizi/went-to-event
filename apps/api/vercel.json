@@ -2,6 +2,7 @@
   "buildCommand": "echo Vercel will bundle the API function",
   "installCommand": "npm ci",
   "rewrites": [
+    { "source": "/notifications/push-subscription", "destination": "/api/social/conversations?pushSubscription=1" },
     { "source": "/me/profile", "destination": "/api/me/profile" },
     { "source": "/me/account", "destination": "/api/me/account" },
     { "source": "/me/profile-picture", "destination": "/api/me/profile-picture" },

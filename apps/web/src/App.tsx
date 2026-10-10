@@ -121,22 +121,18 @@ function Navigation({ onBookings, onHome, onExplore, onProfile, onChat, active =
   )
 }
 
-export function App() {
+export function App({ language = 'en', onLanguageChange }: { language?: Language; onLanguageChange?: (language: Language) => void }) {
   if (window.location.pathname === '/') {
     return <iframe className="business-landing-frame" src="/business-join/index.html" title="Went To Event business sign-up" />
   }
-  return <ProductApp />
+  return <ProductApp language={language} onLanguageChange={onLanguageChange} />
 }
 
-function ProductApp() {
+function ProductApp({ language, onLanguageChange }: { language: Language; onLanguageChange?: (language: Language) => void }) {
   const { isLoaded: authLoaded, isSignedIn, getToken, signOut } = useAuth()
   const { user } = useUser()
   const session: WebSession | null = isSignedIn ? { user: { email: user?.primaryEmailAddress?.emailAddress ?? null } } : null
   const authToken = useCallback(() => getToken(), [getToken])
-  const [language, setLanguage] = useState<Language>(() => {
-    const savedLanguage = localStorage.getItem('wte.language')
-    return languageOptions.some((option) => option.value === savedLanguage) ? savedLanguage as Language : 'en'
-  })
   const t = (text: string) => translate(language, text)
   const [events, setEvents] = useState<Event[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -253,7 +249,7 @@ function ProductApp() {
       })
       .catch((failure) => {
         if (cancelled) return
-        setProfileError(failure instanceof Error ? failure.message : 'Could not load your profile')
+        setProfileError(failure instanceof Error ? failure.message : t('Could not load your profile'))
         setUsernameSetupStatus('required')
       })
     return () => { cancelled = true }
@@ -297,7 +293,7 @@ function ProductApp() {
         .map((booking) => loadedEvents[booking.eventId] ? [booking.eventId, loadedEvents[booking.eventId]] as const : null)
         .filter((entry): entry is readonly [string, Event] => entry !== null)))
     } catch (bookingFailure) {
-      setBookingsError(bookingFailure instanceof Error ? bookingFailure.message : 'Could not load bookings')
+      setBookingsError(bookingFailure instanceof Error ? bookingFailure.message : t('Could not load bookings'))
     } finally {
       setBookingsLoading(false)
     }
@@ -344,9 +340,9 @@ function ProductApp() {
       const response = await updateProfile(authToken, profileForm)
       setProfile(response.profile)
       setProfileForm({ username: response.profile.username ?? '', displayName: response.profile.displayName ?? '', avatarUrl: response.profile.avatarUrl ?? '' })
-      setProfileNotice('Profile updated.')
+      setProfileNotice(t('Profile updated.'))
     } catch (failure) {
-      setProfileError(failure instanceof Error ? failure.message : 'Could not update profile')
+      setProfileError(failure instanceof Error ? failure.message : t('Could not update profile'))
     } finally {
       setProfileBusy(false)
     }
@@ -356,7 +352,7 @@ function ProductApp() {
     event.preventDefault()
     const username = profileForm.username.trim().toLowerCase()
     if (!/^[a-z0-9_]{3,24}$/.test(username)) {
-      setProfileError('Username must be 3–24 characters using lowercase letters, numbers, or underscores.')
+      setProfileError(t('Username must be 3–24 characters using lowercase letters, numbers, or underscores.'))
       return
     }
     setProfileBusy(true)
@@ -368,7 +364,7 @@ function ProductApp() {
       setUsernameSetupStatus('complete')
       setShowAuth(false)
     } catch (failure) {
-      setProfileError(failure instanceof Error ? failure.message : 'Could not save your username')
+      setProfileError(failure instanceof Error ? failure.message : t('Could not save your username'))
     } finally {
       setProfileBusy(false)
     }
@@ -383,9 +379,9 @@ function ProductApp() {
     try {
       const response = await updateAccount(authToken, { ...(accountForm.email ? { email: accountForm.email } : {}), ...(accountForm.password ? { password: accountForm.password } : {}) })
       setAccountForm({ email: '', password: '' })
-      setProfileNotice(response.user.email ? 'Account updated. Check your email if confirmation is required.' : 'Account updated.')
+      setProfileNotice(response.user.email ? t('Account updated. Check your email if confirmation is required.') : t('Account updated.'))
     } catch (failure) {
-      setProfileError(failure instanceof Error ? failure.message : 'Could not update account')
+      setProfileError(failure instanceof Error ? failure.message : t('Could not update account'))
     } finally {
       setProfileBusy(false)
     }
@@ -396,7 +392,7 @@ function ProductApp() {
     event.target.value = ''
     if (!file || !session) return
     if (!file.type.startsWith('image/')) {
-      setProfileError('Choose an image file.')
+      setProfileError(t('Choose an image file.'))
       return
     }
     setPictureUploading(true)
@@ -407,9 +403,9 @@ function ProductApp() {
       const response = await uploadProfilePicture(authToken, data, 'image/jpeg')
       setProfile(response.profile)
       setProfileForm((current) => ({ ...current, avatarUrl: response.profile.avatarUrl ?? '' }))
-      setProfileNotice('Profile picture updated.')
+      setProfileNotice(t('Profile picture updated.'))
     } catch (failure) {
-      setProfileError(failure instanceof Error ? failure.message : 'Could not upload profile picture')
+      setProfileError(failure instanceof Error ? failure.message : t('Could not upload profile picture'))
     } finally {
       setPictureUploading(false)
     }
@@ -553,7 +549,7 @@ function ProductApp() {
   }
 
   if (session && usernameSetupStatus === 'checking') {
-    return <main className="shell auth-shell username-setup-page"><p>{t('Finishing your account setup…')}</p></main>
+    return <LoadingScreen />
   }
 
   if (session && usernameSetupStatus === 'required') {
@@ -565,7 +561,7 @@ function ProductApp() {
           <p className="lede">{t('Friends can search this username to find and add you.')}</p>
           <form className="profile-form" onSubmit={saveSignupUsername}>
             <label>{t('Username')}
-              <input autoComplete="username" required minLength={3} maxLength={24} pattern="[a-z0-9_]{3,24}" value={profileForm.username} onChange={(event) => setProfileForm((current) => ({ ...current, username: event.target.value.toLowerCase() }))} placeholder="your_username" />
+              <input autoComplete="username" required minLength={3} maxLength={24} pattern="[a-z0-9_]{3,24}" value={profileForm.username} onChange={(event) => setProfileForm((current) => ({ ...current, username: event.target.value.toLowerCase() }))} placeholder={t('your_username')} />
               <small>{t('3–24 lowercase letters, numbers, or underscores.')}</small>
             </label>
             {profileError && <p className="error" role="alert">{profileError}</p>}
@@ -577,6 +573,7 @@ function ProductApp() {
   }
 
   if (showAuth) {
+    if (!authLoaded) return <LoadingScreen />
     return (
       <main className="shell auth-shell">
         <button className="back" data-testid="back-from-auth" onClick={() => setShowAuth(false)}>
@@ -588,9 +585,7 @@ function ProductApp() {
             <h1 id="booking-auth-title">{t('Sign in to book.')}</h1>
             <p className="lede">{t('Create an account or sign in to keep your tickets and passes together.')}</p>
           </header>
-          {authLoaded
-            ? <AuthPanel language={language} />
-            : <p className="error" role="status">{t('Sign-in is unavailable right now. You can still browse events; try again later to book.')}</p>}
+          <AuthPanel language={language} />
         </section>
       </main>
     )
@@ -701,7 +696,7 @@ function ProductApp() {
           <section className="profile-settings" aria-label={t('Account language')}>
           <div className="settings-heading"><span className="label">{t('Account language')}</span></div>
           <label className="language-setting">{t('Choose the language used across Went To Event.')}
-            <select value={language} onChange={(event) => setLanguage(event.target.value as Language)} aria-label={t('Account language')}>
+            <select value={language} onChange={(event) => onLanguageChange?.(event.target.value as Language)} aria-label={t('Account language')}>
               {languageOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
             </select>
           </label>
@@ -710,7 +705,7 @@ function ProductApp() {
           <div className="settings-heading"><span className="label">{t('Your identity')}</span><span>{t('Public profile')}</span></div>
           <form className="profile-form" onSubmit={saveProfile}>
             <label>{t('Display name')}<input value={profileForm.displayName} onChange={(event) => setProfileForm({ ...profileForm, displayName: event.target.value })} placeholder={t('Your name')} maxLength={80} /></label>
-            <label>{t('Username')}<input value={profileForm.username} onChange={(event) => setProfileForm({ ...profileForm, username: event.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '') })} placeholder="your_username" maxLength={24} /></label>
+            <label>{t('Username')}<input value={profileForm.username} onChange={(event) => setProfileForm({ ...profileForm, username: event.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '') })} placeholder={t('your_username')} maxLength={24} /></label>
             <label className="profile-picture-label">{t('Profile photo')}
               <span className="profile-picture-picker">
                 <input className="profile-picture-input" type="file" accept="image/png,image/jpeg,image/webp" onChange={handlePictureUpload} disabled={pictureUploading} aria-label={t('Choose a profile photo')} />
@@ -794,7 +789,7 @@ function ProductApp() {
           />
           <div className="filter-grid">
             <label><span>{t('Category')}</span><select aria-label={t('Category')} value={category} onChange={(event) => setCategory(event.target.value)}>
-              <option>All categories</option>
+              <option value="All categories">{t('All categories')}</option>
               {[...new Set(events.map((event) => event.category))].map((value) => <option key={value} value={value}>{t(value)}</option>)}
             </select></label>
             <label><span>{t('Date')}</span><select aria-label={t('Date')} value={dateFilter} onChange={(event) => setDateFilter(event.target.value)}>
@@ -811,7 +806,7 @@ function ProductApp() {
         <div className="explore-results-heading">
           <h2>{filteredEvents.length} {t(filteredEvents.length === 1 ? 'event' : 'events')}</h2>
           {(query || category !== 'All categories' || dateFilter !== 'Any date' || priceFilter !== 'Any price' || sort !== 'Recommended') && (
-            <button className="quiet-button" onClick={() => { setQuery(''); setCategory('All categories'); setDateFilter('Any date'); setPriceFilter('Any price'); setSort('Recommended') }}>Clear filters</button>
+          <button className="quiet-button" onClick={() => { setQuery(''); setCategory('All categories'); setDateFilter('Any date'); setPriceFilter('Any price'); setSort('Recommended') }}>{t('Clear filters')}</button>
           )}
         </div>
         {filteredEvents.length ? (
@@ -949,7 +944,7 @@ function ProductApp() {
             <span aria-hidden="true">←</span> {t('Back to Went')}
           </button>
           <section className="pass-card" data-testid="booking-pass">
-            <div className="pass-topline"><div className="pass-mark">e.</div><span className="pass-status">{passBooking.status}</span></div>
+            <div className="pass-topline"><div className="pass-mark">e.</div><span className="pass-status">{t(passBooking.status === 'confirmed' ? 'Confirmed' : passBooking.status)}</span></div>
             <span className="eyebrow">{t('Your event pass')}</span>
             <h1>{passEvent?.title ?? t('Your event pass')}</h1>
             {passEvent && (
@@ -1078,6 +1073,15 @@ function ProductApp() {
           ))}
         </section>
       )}
+    </main>
+  )
+}
+
+function LoadingScreen() {
+  return (
+    <main className="app-loading" aria-busy="true" aria-live="polite">
+      <span className="loading-spinner" aria-hidden="true" />
+      <span className="sr-only">Loading</span>
     </main>
   )
 }

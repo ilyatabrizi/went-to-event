@@ -172,7 +172,7 @@ export function VerificationPanel({ getToken, onEventCreated, language }: { getT
           <p>{t('Tell us about your events and share a public link an admin can use to review your account. Please don’t submit identity documents here.')}</p>
           <form className="profile-form" onSubmit={submitRequest}>
             <label>{t('Why should your account be verified?')}<textarea required minLength={20} maxLength={1000} rows={4} value={message} onChange={(event) => setMessage(event.target.value)} placeholder={t('Tell us what kinds of events you plan to host.')} /></label>
-            <label>{t('Website or public reference link (optional)')}<input type="url" maxLength={500} value={referenceUrl} onChange={(event) => setReferenceUrl(event.target.value)} placeholder="https://…" /></label>
+            <label>{t('Website or public reference link (optional)')}<input type="url" maxLength={500} value={referenceUrl} onChange={(event) => setReferenceUrl(event.target.value)} placeholder={t('https://…')} /></label>
             <button className="primary-button" disabled={busy}>{busy ? t('Submitting…') : state?.status === 'rejected' ? t('Request another review') : t('Request verification')}</button>
           </form>
         </>}

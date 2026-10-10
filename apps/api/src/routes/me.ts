@@ -83,7 +83,7 @@ export async function meRoutes(
     const password = normalizeOptional(body.password)
     if (!email && !password) return reply.code(400).send({ error: 'Provide an email or password to update.' })
     if (email && !/^\S+@\S+\.\S+$/.test(email)) return reply.code(400).send({ error: 'Enter a valid email address.' })
-    if (password && password.length < 6) return reply.code(400).send({ error: 'Password must be at least 6 characters.' })
+    if (password && password.length < 8) return reply.code(400).send({ error: 'Password must be at least 8 characters.' })
 
     try {
       return { user: await options.authService.updateAccount(user.id, { ...(email ? { email } : {}), ...(password ? { password } : {}) }) }

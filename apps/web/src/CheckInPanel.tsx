@@ -106,7 +106,7 @@ export function CheckInPanel({ getToken, onBack, navigation, language }: { getTo
         </div>
         <div className="checkin-divider"><span>{t('or enter a QR value')}</span></div>
         <form className="checkin-manual" onSubmit={(event) => { event.preventDefault(); void check() }}>
-          <input value={value} onChange={(event) => setValue(event.target.value)} placeholder="wte-ticket:v1:…" aria-label={t('Ticket QR value')} autoComplete="off" />
+          <input value={value} onChange={(event) => setValue(event.target.value)} placeholder={t('wte-ticket:v1:…')} aria-label={t('Ticket QR value')} autoComplete="off" />
           <button className="quiet-button" type="submit" disabled={busy || !value.trim()}>{busy ? t('Checking…') : t('Verify')}</button>
         </form>
       </section>
