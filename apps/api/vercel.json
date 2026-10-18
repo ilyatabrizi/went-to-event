@@ -13,6 +13,7 @@
     { "source": "/admin-users/:userId", "destination": "/api/admin-user?userId=:userId" },
     { "source": "/social/conversations", "destination": "/api/social/conversations" },
     { "source": "/social/conversations/:id/messages", "destination": "/api/social/conversation-messages?conversationId=:id" },
+    { "source": "/bookings/:id", "destination": "/api/event?bookingId=:id" },
     { "source": "/admin-business-leads/export.csv", "destination": "/api/admin-user?businessLeadsExport=1" },
     { "source": "/:path*", "destination": "/api/:path*" }
   ]

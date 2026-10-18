@@ -1,27 +1,64 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
-import { createClerkClient, verifyToken } from '@clerk/backend'
 import type { AccountUpdate, CurrentUser, ProfilePictureUpload, ProfileUpdate, UserProfile } from '../contracts/auth.js'
 
 export interface AuthService {
   getUser(accessToken: string): Promise<CurrentUser | null>
   getProfile?(userId: string): Promise<UserProfile>
   updateProfile?(userId: string, input: ProfileUpdate): Promise<UserProfile>
-  updateAccount?(userId: string, input: AccountUpdate): Promise<CurrentUser>
+  updateAccount?(userId: string, input: AccountUpdate, authId?: string): Promise<CurrentUser>
   uploadProfilePicture?(userId: string, input: ProfilePictureUpload): Promise<UserProfile>
 }
 
 export class SupabaseAuthService implements AuthService {
+  private readonly identityCache = new Map<string, { databaseUserId: string; expiresAt: number }>()
+  private readonly identityLookups = new Map<string, Promise<string>>()
+
   constructor(private readonly client: SupabaseClient) {}
 
   async getUser(accessToken: string): Promise<CurrentUser | null> {
-    const { data, error } = await this.client.auth.getUser(accessToken)
+    let claims
+    try {
+      const { data, error } = await this.client.auth.getClaims(accessToken)
+      if (error) return null
+      claims = data?.claims
+    } catch {
+      return null
+    }
+    if (!claims || typeof claims.sub !== 'string' || typeof claims.exp !== 'number' || claims.exp * 1000 <= Date.now()) return null
 
-    if (error || !data.user) return null
+    const appDatabaseUserId = typeof claims.app_metadata === 'object' && claims.app_metadata && typeof claims.app_metadata.database_user_id === 'string'
+      ? claims.app_metadata.database_user_id : null
+    const databaseUserId = appDatabaseUserId ?? await this.resolveDatabaseUserId(claims.sub)
 
     return {
-      id: data.user.id,
-      email: data.user.email ?? null,
+      id: databaseUserId,
+      authId: claims.sub,
+      email: typeof claims.email === 'string' ? claims.email : null,
     }
+  }
+
+  private async resolveDatabaseUserId(authUserId: string) {
+    const cached = this.identityCache.get(authUserId)
+    if (cached && cached.expiresAt > Date.now()) return cached.databaseUserId
+    if (cached) this.identityCache.delete(authUserId)
+    const inFlight = this.identityLookups.get(authUserId)
+    if (inFlight) return inFlight
+
+    const lookup = (async () => {
+      let databaseUserId = authUserId
+      try {
+        const { data, error } = await this.client.from('auth_user_identities').select('database_user_id')
+          .eq('auth_user_id', authUserId).maybeSingle()
+        if (!error && data?.database_user_id) databaseUserId = data.database_user_id
+      } catch {
+        // The signed Auth UUID remains a safe fallback when identity lookup is temporarily unavailable.
+      }
+      if (this.identityCache.size >= 1000) this.identityCache.clear()
+      this.identityCache.set(authUserId, { databaseUserId, expiresAt: Date.now() + 5 * 60_000 })
+      return databaseUserId
+    })().finally(() => this.identityLookups.delete(authUserId))
+    this.identityLookups.set(authUserId, lookup)
+    return lookup
   }
 
   async getProfile(userId: string): Promise<UserProfile> {
@@ -62,8 +99,8 @@ export class SupabaseAuthService implements AuthService {
     }
   }
 
-  async updateAccount(userId: string, input: AccountUpdate): Promise<CurrentUser> {
-    const { data, error } = await this.client.auth.admin.updateUserById(userId, {
+  async updateAccount(userId: string, input: AccountUpdate, authId = userId): Promise<CurrentUser> {
+    const { data, error } = await this.client.auth.admin.updateUserById(authId, {
       ...(input.email ? { email: input.email } : {}),
       ...(input.password ? { password: input.password } : {}),
     })
@@ -87,155 +124,16 @@ export class SupabaseAuthService implements AuthService {
   }
 }
 
-export class ClerkAuthService implements AuthService {
-  private readonly clerk
-  private readonly userCache = new Map<string, { user: CurrentUser; expiresAt: number }>()
-  private readonly inFlight = new Map<string, Promise<CurrentUser | null>>()
-  private readonly cacheTtlMs = (() => {
-    const configured = Number(process.env.AUTH_USER_CACHE_TTL_MS ?? 30_000)
-    return Number.isFinite(configured) ? Math.max(5_000, configured) : 30_000
-  })()
-  private readonly cacheSize = 500
-
-  constructor(private readonly database: SupabaseClient, secretKey: string) {
-    this.clerk = createClerkClient({ secretKey })
-  }
-
-  async getUser(accessToken: string): Promise<CurrentUser | null> {
-    const now = Date.now()
-    const cached = this.userCache.get(accessToken)
-    if (cached) {
-      if (cached.expiresAt > now) return cached.user
-      this.userCache.delete(accessToken)
-    }
-
-    const pending = this.inFlight.get(accessToken)
-    if (pending) return pending
-
-    const request = this.resolveUser(accessToken)
-    this.inFlight.set(accessToken, request)
-    try {
-      return await request
-    } finally {
-      this.inFlight.delete(accessToken)
-    }
-  }
-
-  private async resolveUser(accessToken: string): Promise<CurrentUser | null> {
-    let verified: Awaited<ReturnType<typeof verifyToken>>
-    try {
-      verified = await verifyToken(accessToken, {
-        secretKey: process.env.CLERK_SECRET_KEY,
-        authorizedParties: (process.env.CLERK_AUTHORIZED_PARTIES ?? 'http://localhost:5173,http://127.0.0.1:5173,https://wenttoevent.com,https://www.wenttoevent.com').split(',').map((value) => value.trim()),
-      })
-    } catch {
-      return null
-    }
-
-    if (!verified.sub) return null
-    const clerkUser = await this.clerk.users.getUser(verified.sub)
-    const email = clerkUser.primaryEmailAddress?.emailAddress ?? clerkUser.emailAddresses[0]?.emailAddress ?? null
-    const displayName = [clerkUser.firstName, clerkUser.lastName].filter(Boolean).join(' ') || clerkUser.username || null
-    const signupUsername = typeof clerkUser.unsafeMetadata?.username === 'string'
-      ? clerkUser.unsafeMetadata.username.toLowerCase()
-      : null
-
-    const { data: existing } = await this.database
-      .from('user_identities')
-      .select('database_user_id, email')
-      .eq('clerk_user_id', verified.sub)
-      .maybeSingle()
-
-    if (existing) {
-      await this.ensureProfile(existing.database_user_id, displayName, signupUsername)
-      const user = { id: existing.database_user_id, authId: verified.sub, email: email ?? existing.email ?? null }
-      this.cacheUser(accessToken, user, verified.exp)
-      return user
-    }
-
-    let databaseUserId = verified.sub
-    let legacySupabaseUserId: string | null = null
-    if (email) {
-      const legacy = await this.findLegacyUser(email)
-      if (legacy) {
-        databaseUserId = legacy.id
-        legacySupabaseUserId = legacy.id
-      }
-    }
-
-    await this.database.from('user_identities').upsert({
-      clerk_user_id: verified.sub,
-      database_user_id: databaseUserId,
-      legacy_supabase_user_id: legacySupabaseUserId,
-      email,
-    }, { onConflict: 'clerk_user_id' })
-
-    await this.ensureProfile(databaseUserId, displayName, signupUsername)
-
-    const user = { id: databaseUserId, authId: verified.sub, email }
-    this.cacheUser(accessToken, user, verified.exp)
-    return user
-  }
-
-  private cacheUser(accessToken: string, user: CurrentUser, tokenExpirySeconds?: number) {
-    const tokenExpiry = tokenExpirySeconds ? tokenExpirySeconds * 1000 : Number.POSITIVE_INFINITY
-    const expiresAt = Math.min(Date.now() + this.cacheTtlMs, tokenExpiry)
-    if (expiresAt <= Date.now()) return
-    if (this.userCache.size >= this.cacheSize) {
-      const oldest = this.userCache.keys().next().value
-      if (oldest) this.userCache.delete(oldest)
-    }
-    this.userCache.set(accessToken, { user, expiresAt })
-  }
-
-  private async ensureProfile(userId: string, displayName: string | null, signupUsername: string | null) {
-    const { error } = await this.database.from('profiles').upsert(
-      { id: userId, ...(displayName ? { display_name: displayName } : {}) },
-      { onConflict: 'id', ignoreDuplicates: true },
-    )
-    if (error) throw error
-    if (signupUsername && /^[a-z0-9_]{3,24}$/.test(signupUsername)) {
-      const { error: usernameError } = await this.database.from('profiles').update({ username: signupUsername })
-        .eq('id', userId).is('username', null)
-      if (usernameError && usernameError.code !== '23505') throw usernameError
-    }
-  }
-
-  private async findLegacyUser(email: string) {
-    const result = await this.database.auth.admin.listUsers({ page: 1, perPage: 100 })
-    return result.data.users.find((user) => user.email?.toLowerCase() === email.toLowerCase()) ?? null
-  }
-
-  async getProfile(userId: string) { return new SupabaseAuthService(this.database).getProfile(userId) }
-  async updateProfile(userId: string, input: ProfileUpdate) { return new SupabaseAuthService(this.database).updateProfile(userId, input) }
-  async uploadProfilePicture(userId: string, input: ProfilePictureUpload) { return new SupabaseAuthService(this.database).uploadProfilePicture(userId, input) }
-
-  async updateAccount(userId: string, input: AccountUpdate): Promise<CurrentUser> {
-    const { data: identity } = await this.database.from('user_identities').select('clerk_user_id').eq('database_user_id', userId).maybeSingle()
-    if (!identity) throw new Error('Could not find Clerk identity')
-
-    if (input.password) await this.clerk.users.updateUser(identity.clerk_user_id, { password: input.password })
-    if (input.email) {
-      const email = await this.clerk.emailAddresses.createEmailAddress({ userId: identity.clerk_user_id, emailAddress: input.email, primary: true })
-      await this.clerk.emailAddresses.updateEmailAddress(email.id, { primary: true })
-    }
-    const user = await this.clerk.users.getUser(identity.clerk_user_id)
-    return { id: userId, authId: identity.clerk_user_id, email: user.primaryEmailAddress?.emailAddress ?? null }
-  }
-}
-
 export function createAuthService(): AuthService | null {
   const url = process.env.SUPABASE_URL
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-  const clerkSecretKey = process.env.CLERK_SECRET_KEY
+  if (!url || !serviceRoleKey) return null
 
-  if (!url || !serviceRoleKey || !clerkSecretKey) return null
-
-  return new ClerkAuthService(createClient(url, serviceRoleKey, {
+  return new SupabaseAuthService(createClient(url, serviceRoleKey, {
     auth: {
       autoRefreshToken: false,
       persistSession: false,
       detectSessionInUrl: false,
     },
-  }), clerkSecretKey)
+  }))
 }

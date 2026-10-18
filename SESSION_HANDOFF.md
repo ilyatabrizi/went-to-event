@@ -1,6 +1,6 @@
 # Went To Event — Session Handoff
 
-**Updated:** October 6, 2026
+**Updated:** October 13, 2026
 
 **Branch:** `develop`
 
@@ -8,8 +8,35 @@
 
 > **Read this first.** The sections below this current snapshot include older
 > notes from September 30–October 1, 2026. They are useful as product history,
-> but some URLs, auth descriptions, and setup instructions are obsolete. This
-> October 6 snapshot is authoritative wherever the notes conflict.
+> but some URLs, auth descriptions, and setup instructions are obsolete. The
+> October 13 notes below supersede the October 6 snapshot where they conflict.
+
+## Current session handoff — October 13, 2026
+
+### Cookie consent and authentication decision
+
+- Web authentication remains on Clerk. The web client uses Clerk's session and
+  sends a Clerk bearer token to the API; the API verifies it. Do not replace
+  this with a custom login/session system just to address cookie consent.
+- A repository scan found no analytics or advertising tracker integrations in
+  the app. Clerk's sign-in storage and app functional preferences/cache are the
+  current storage uses identified. Based on this scan, no consent pop-up is
+  planned solely for authentication; explain necessary storage in the privacy
+  notice and check obligations for the actual launch markets.
+- Revisit consent before adding analytics, advertising, or other optional
+  tracking. Where consent is required, block optional scripts until consent
+  and provide a clear way to reject and later change the choice.
+- The user asked whether to handle logins in-house; recommendation was to keep
+  Clerk for launch. Owning authentication would also mean owning password
+  handling, recovery, verification, abuse prevention, and session security. A
+  cookie-session migration would require API changes and CSRF protections.
+- Hosting/server purchasing is deferred for now; no infrastructure changes
+  were requested or made in this conversation.
+
+### Current session scope
+
+The user asked to update this handoff and close the conversation. No code,
+deployment, account settings, or consent UI changes were requested or made.
 
 ## Current session handoff — October 6, 2026
 

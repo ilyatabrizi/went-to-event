@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { createEvent, type AuthTokenProvider, type Event } from './api'
 import { translate, type Language } from './i18n'
+import { LocationMap, type Coordinates } from './LocationMap'
 
 const steps = ['The basics', 'When', 'Where', 'Entry']
 const categories = ['Arts', 'Community', 'Food', 'Music', 'Nightlife', 'Wellness', 'Other']
@@ -21,6 +22,8 @@ function initialForm() {
     endsAt: localDateTime(ends),
     venueName: '',
     venueAddress: '',
+    latitude: null as number | null,
+    longitude: null as number | null,
     ticketName: 'General admission',
     ticketDescription: 'Entry to the event',
     paid: false,
@@ -28,9 +31,8 @@ function initialForm() {
   }
 }
 
-export function EventCreationPanel({ getToken, onCreated, language }: { getToken: AuthTokenProvider; onCreated: (event: Event) => void; language: Language }) {
+export function EventCreationPanel({ getToken, onCreated, onCancel, language }: { getToken: AuthTokenProvider; onCreated: (event: Event) => void; onCancel: () => void; language: Language }) {
   const t = (text: string) => translate(language, text)
-  const [open, setOpen] = useState(false)
   const [step, setStep] = useState(0)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -41,13 +43,13 @@ export function EventCreationPanel({ getToken, onCreated, language }: { getToken
   }
 
   function stepIsValid(currentStep: number) {
-    if (currentStep === 0) return form.title.trim().length >= 4 && form.description.trim().length >= 20
+    if (currentStep === 0) return form.title.trim().length >= 4 && form.description.trim().length >= 1
     if (currentStep === 1) {
       const startsAt = new Date(form.startsAt).getTime()
       const endsAt = new Date(form.endsAt).getTime()
       return Number.isFinite(startsAt) && Number.isFinite(endsAt) && startsAt > Date.now() && endsAt > startsAt
     }
-    if (currentStep === 2) return form.venueName.trim().length >= 2 && form.venueAddress.trim().length >= 4
+    if (currentStep === 2) return form.venueName.trim().length >= 2 && form.venueAddress.trim().length >= 4 && form.latitude !== null && form.longitude !== null
     const price = Number(form.price)
     return form.ticketName.trim().length >= 2 && form.ticketDescription.trim().length >= 2
       && (!form.paid || (Number.isFinite(price) && price > 0 && price <= 100000))
@@ -75,6 +77,8 @@ export function EventCreationPanel({ getToken, onCreated, language }: { getToken
         endsAt: new Date(form.endsAt).toISOString(),
         venueName: form.venueName.trim(),
         venueAddress: form.venueAddress.trim(),
+        latitude: form.latitude!,
+        longitude: form.longitude!,
         ticketTiers: [{
           name: form.ticketName.trim(),
           description: form.ticketDescription.trim(),
@@ -82,7 +86,6 @@ export function EventCreationPanel({ getToken, onCreated, language }: { getToken
         }],
       })
       onCreated(data)
-      setOpen(false)
       setStep(0)
       setForm(initialForm())
     } catch (failure) {
@@ -97,9 +100,14 @@ export function EventCreationPanel({ getToken, onCreated, language }: { getToken
     : t('Date to be decided')
 
   return (
-    <section className="profile-settings verification-event-section" aria-label={t('Create an event')}>
-      <div className="settings-heading"><span className="label">{t('Verified account')}</span><span>{t('Event access enabled')}</span></div>
-      {!open ? <button className="primary-button" onClick={() => { setOpen(true); setError(null) }}>{t('Publish an event')}</button> : (
+    <main className="shell event-creation-page">
+      <button className="back" onClick={onCancel}><span aria-hidden="true">←</span> {t('Back to profile')}</button>
+      <header className="event-creation-header">
+        <p className="eyebrow">{t('Verified account')}</p>
+        <h1>{t('Create an event')}</h1>
+        <p className="lede">{t('Event access enabled')}</p>
+      </header>
+      <section className="profile-settings verification-event-section" aria-label={t('Create an event')}>
         <div className="event-create-layout">
           <form className="profile-form event-create-form" onSubmit={submit}>
             <div className="event-stepper" aria-label={`${t('Step')} ${step + 1} ${t('of')} ${steps.length}`}>
@@ -116,8 +124,8 @@ export function EventCreationPanel({ getToken, onCreated, language }: { getToken
                 <div className="event-category-options">{categories.map((category) => <button className={form.category === category ? 'event-category-selected' : ''} key={category} type="button" aria-pressed={form.category === category} onClick={() => update('category', category)}>{t(category)}</button>)}</div>
               </fieldset>
               <label>{t('Tell people what to expect')}
-                <textarea required minLength={20} maxLength={2000} rows={4} value={form.description} onChange={(event) => update('description', event.target.value)} placeholder={t('Give people a feel for the event, the atmosphere, and what to expect.')} />
-                <small>{t('At least 20 characters. A clear description helps guests decide if it’s for them.')}</small>
+                <textarea required minLength={1} maxLength={2000} rows={4} value={form.description} onChange={(event) => update('description', event.target.value)} placeholder={t('Give people a feel for the event, the atmosphere, and what to expect.')} />
+                <small>{t('A clear description helps guests decide if it’s for them.')}</small>
               </label>
             </>}
 
@@ -130,8 +138,10 @@ export function EventCreationPanel({ getToken, onCreated, language }: { getToken
 
             {step === 2 && <>
               <label>{t('Venue name')}<input required minLength={2} maxLength={120} value={form.venueName} onChange={(event) => update('venueName', event.target.value)} placeholder={t('Pier 70')} /></label>
-              <label>{t('Street address and city')}<input required minLength={4} maxLength={240} value={form.venueAddress} onChange={(event) => update('venueAddress', event.target.value)} placeholder={t('Pier 70, San Francisco, CA')} /></label>
-              <p className="event-step-copy">{t('Use a public venue address so guests can find the event.')}</p>
+              <p className="event-step-copy">{t('Tap the map to place the event. We will fill in the address automatically.')}</p>
+              <LocationMap value={form.latitude !== null && form.longitude !== null ? { latitude: form.latitude, longitude: form.longitude } : null} onSelect={(coordinates: Coordinates, address) => { update('latitude', coordinates.latitude); update('longitude', coordinates.longitude); if (address) update('venueAddress', address) }} label={t('Choose event location')} />
+              <label>{t('Address')}<input required readOnly minLength={4} maxLength={240} value={form.venueAddress} placeholder={t('Select a point on the map')} /></label>
+              {form.latitude === null && <small className="event-field-hint">{t('Choose a point on the map to continue.')}</small>}
             </>}
 
             {step === 3 && <>
@@ -151,7 +161,7 @@ export function EventCreationPanel({ getToken, onCreated, language }: { getToken
             <div className="event-create-actions">
               {step > 0 && <button className="quiet-button" type="button" disabled={busy} onClick={() => { setError(null); setStep((current) => current - 1) }}>{t('Back')}</button>}
               <button className="primary-button" type="submit" disabled={busy || !stepIsValid(step)}>{busy ? t('Publishing…') : step === steps.length - 1 ? t('Publish event') : t('Continue')}</button>
-              <button className="quiet-button" type="button" disabled={busy} onClick={() => { setOpen(false); setStep(0); setError(null) }}>{t('Cancel')}</button>
+              <button className="quiet-button" type="button" disabled={busy} onClick={onCancel}>{t('Cancel')}</button>
             </div>
           </form>
 
@@ -172,7 +182,7 @@ export function EventCreationPanel({ getToken, onCreated, language }: { getToken
             <p className="event-preview-note">{t('Your event will appear in Explore after publishing.')}</p>
           </aside>
         </div>
-      )}
-    </section>
+      </section>
+    </main>
   )
 }

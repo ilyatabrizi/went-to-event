@@ -13,15 +13,18 @@ async function currentUser(request: FastifyRequest, authService: AuthService | n
 }
 
 function primaryAdminIds() {
-  return (process.env.ADMIN_CLERK_USER_IDS ?? '').split(',').map((value) => value.trim()).filter(Boolean)
+  return (process.env.ADMIN_AUTH_USER_IDS ?? process.env.ADMIN_CLERK_USER_IDS ?? '').split(',').map((value) => value.trim()).filter(Boolean)
 }
 
-function canManageAdmins(userId: string | undefined) {
-  return Boolean(userId && primaryAdminIds().includes(userId))
+async function canManageAdmins(userId: string | undefined, service: AccountVerificationService | null) {
+  if (!userId) return false
+  const configuredIds = primaryAdminIds()
+  if (configuredIds.includes(userId)) return true
+  return Boolean(service?.isPrimaryAdmin && await service.isPrimaryAdmin(userId, configuredIds))
 }
 
 async function canReviewVerifications(userId: string | undefined, service: AccountVerificationService) {
-  return Boolean(userId && (canManageAdmins(userId) || await service.isAdmin(userId)))
+  return Boolean(userId && (await canManageAdmins(userId, service) || await service.isAdmin(userId)))
 }
 
 export async function verificationRoutes(
@@ -45,7 +48,7 @@ export async function verificationRoutes(
     if (!options.verificationService) return reply.code(503).send({ error: 'Verification is not configured' })
     const message = typeof request.body?.message === 'string' ? request.body.message.trim() : ''
     const referenceUrl = typeof request.body?.referenceUrl === 'string' ? request.body.referenceUrl.trim() : ''
-    if (message.length < 20 || message.length > 1000) return reply.code(400).send({ error: 'Tell us about your event-hosting plans in 20–1,000 characters.' })
+    if (message.length < 1 || message.length > 1000) return reply.code(400).send({ error: 'Tell us about your event-hosting plans in 1–1,000 characters.' })
     if (referenceUrl && (referenceUrl.length > 500 || !isHttpUrl(referenceUrl))) return reply.code(400).send({ error: 'Provide a valid http(s) reference link.' })
     try {
       return await options.verificationService.submit(user.id, { message, referenceUrl: referenceUrl || null })
@@ -62,7 +65,7 @@ export async function verificationRoutes(
       if (!await canReviewVerifications(user.authId, options.verificationService)) return reply.code(403).send({ error: 'Admin access required' })
       return {
         requests: await options.verificationService.pendingRequests(),
-        canManageAdmins: canManageAdmins(user.authId),
+        canManageAdmins: await canManageAdmins(user.authId, options.verificationService),
       }
     } catch {
       return reply.code(500).send({ error: 'Could not load verification requests' })
@@ -94,7 +97,7 @@ export async function verificationRoutes(
   app.get<{ Querystring: { q?: string } }>('/admin-users/search', async (request, reply) => {
     const user = await currentUser(request, options.authService)
     if (!user) return reply.code(401).send({ error: 'Authentication required' })
-    if (!canManageAdmins(user.authId)) return reply.code(403).send({ error: 'Primary admin access required' })
+    if (!await canManageAdmins(user.authId, options.verificationService)) return reply.code(403).send({ error: 'Primary admin access required' })
     if (!options.verificationService) return reply.code(503).send({ error: 'Verification is not configured' })
     try {
       return { users: await options.verificationService.searchAdminCandidates(request.query.q ?? '') }
@@ -106,7 +109,7 @@ export async function verificationRoutes(
   app.get('/admin-users', async (request, reply) => {
     const user = await currentUser(request, options.authService)
     if (!user) return reply.code(401).send({ error: 'Authentication required' })
-    if (!canManageAdmins(user.authId)) return reply.code(403).send({ error: 'Primary admin access required' })
+    if (!await canManageAdmins(user.authId, options.verificationService)) return reply.code(403).send({ error: 'Primary admin access required' })
     if (!options.verificationService) return reply.code(503).send({ error: 'Verification is not configured' })
     try {
       return { admins: await options.verificationService.listAdmins() }
@@ -118,7 +121,7 @@ export async function verificationRoutes(
   app.post<{ Body: { userId?: string } }>('/admin-users', async (request, reply) => {
     const user = await currentUser(request, options.authService)
     if (!user) return reply.code(401).send({ error: 'Authentication required' })
-    if (!canManageAdmins(user.authId)) return reply.code(403).send({ error: 'Primary admin access required' })
+    if (!await canManageAdmins(user.authId, options.verificationService)) return reply.code(403).send({ error: 'Primary admin access required' })
     if (!options.verificationService) return reply.code(503).send({ error: 'Verification is not configured' })
     if (typeof request.body?.userId !== 'string' || request.body.userId.length > 200) return reply.code(400).send({ error: 'A valid userId is required.' })
     try {
@@ -131,7 +134,7 @@ export async function verificationRoutes(
   app.delete<{ Params: { userId: string } }>('/admin-users/:userId', async (request, reply) => {
     const user = await currentUser(request, options.authService)
     if (!user) return reply.code(401).send({ error: 'Authentication required' })
-    if (!canManageAdmins(user.authId)) return reply.code(403).send({ error: 'Primary admin access required' })
+    if (!await canManageAdmins(user.authId, options.verificationService)) return reply.code(403).send({ error: 'Primary admin access required' })
     if (!options.verificationService) return reply.code(503).send({ error: 'Verification is not configured' })
     if (request.params.userId.length > 200) return reply.code(400).send({ error: 'A valid userId is required.' })
     try {

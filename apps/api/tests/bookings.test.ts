@@ -21,10 +21,13 @@ const bookingService: BookingService = {
       status: 'confirmed',
       totalCents: input.quantity * 2500,
       createdAt: '2026-09-24T00:00:00.000Z',
+      showAttendance: input.showAttendance,
     }
   },
+  async friendsAttending() { return [] },
   async list() { return [] },
   async get() { return null },
+  async cancel() { return true },
   async verifyTicket() {
     return {
       status: 'checked_in' as const,
@@ -61,7 +64,7 @@ describe('booking routes', () => {
       method: 'POST',
       url: '/bookings',
       headers: { authorization: 'Bearer valid-token' },
-      payload: { eventId: 'event-1', ticketTierId: 'tier-1', quantity: 2 },
+      payload: { eventId: 'event-1', ticketTierId: 'tier-1', quantity: 2, showAttendance: true },
     })
 
     expect(response.statusCode).toBe(200)
@@ -94,6 +97,17 @@ describe('booking routes', () => {
     })
 
     expect(response.statusCode).toBe(401)
+  })
+
+  it('removes a booking for its authenticated owner', async () => {
+    const response = await app.inject({
+      method: 'DELETE',
+      url: '/bookings/booking-1',
+      headers: { authorization: 'Bearer valid-token' },
+    })
+
+    expect(response.statusCode).toBe(200)
+    expect(response.json()).toEqual({ removed: true })
   })
 
   it('verifies a ticket for an authenticated host', async () => {

@@ -13,13 +13,14 @@ function validCreateInput(value: unknown): value is CreateEventInput {
   const input = value as Record<string, unknown>
   if (typeof input.category !== 'string' || input.category.trim().length < 2 || input.category.length > 40) return false
   if (typeof input.title !== 'string' || input.title.trim().length < 4 || input.title.length > 120) return false
-  if (typeof input.description !== 'string' || input.description.trim().length < 20 || input.description.length > 2000) return false
+  if (typeof input.description !== 'string' || input.description.trim().length < 1 || input.description.length > 2000) return false
   if (typeof input.startsAt !== 'string' || typeof input.endsAt !== 'string') return false
   const startsAt = Date.parse(input.startsAt)
   const endsAt = Date.parse(input.endsAt)
   if (!Number.isFinite(startsAt) || !Number.isFinite(endsAt) || startsAt <= Date.now() || endsAt <= startsAt) return false
   if (typeof input.venueName !== 'string' || input.venueName.trim().length < 2 || input.venueName.length > 120) return false
   if (typeof input.venueAddress !== 'string' || input.venueAddress.trim().length < 4 || input.venueAddress.length > 240) return false
+  if (typeof input.latitude !== 'number' || typeof input.longitude !== 'number' || !Number.isFinite(input.latitude) || input.latitude < -90 || input.latitude > 90 || !Number.isFinite(input.longitude) || input.longitude < -180 || input.longitude > 180) return false
   if (!Array.isArray(input.ticketTiers) || input.ticketTiers.length < 1 || input.ticketTiers.length > 8) return false
   return input.ticketTiers.every((tier) => {
     if (!tier || typeof tier !== 'object') return false
@@ -37,7 +38,10 @@ export async function eventsRoutes(
   const { repository } = options
 
   app.get('/events', async (_request, reply) => {
-    reply.header('Cache-Control', 'public, s-maxage=15, stale-while-revalidate=30')
+    // Public discovery data can tolerate a short delay after publication.
+    // A longer edge cache window keeps list reads off the function/database
+    // during bursts; stale responses remain available while Vercel refreshes.
+    reply.header('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300')
     const events = await repository.list()
 
     return {

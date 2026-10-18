@@ -75,7 +75,7 @@ export class AccountVerificationService {
     if (error) throw error
     const userIds = (data ?? []).map((row) => row.user_id)
     const { data: identities, error: identityError } = userIds.length
-      ? await this.database.from('user_identities').select('database_user_id, email').in('database_user_id', userIds)
+      ? await this.database.from('auth_user_identities').select('database_user_id, email').in('database_user_id', userIds)
       : { data: [], error: null }
     if (identityError) throw identityError
     const emailByUserId = new Map((identities ?? []).map((identity) => [identity.database_user_id, identity.email]))
@@ -112,31 +112,71 @@ export class AccountVerificationService {
     return data?.verification_status === 'verified'
   }
 
-  async isAdmin(clerkUserId: string) {
+  async isAdmin(authUserId: string) {
     const { data, error } = await this.database.from('app_admins').select('clerk_user_id')
-      .eq('clerk_user_id', clerkUserId).maybeSingle()
+      .eq('clerk_user_id', authUserId).maybeSingle()
     if (error) throw error
-    return Boolean(data)
+    if (data) return true
+    const databaseUserId = await this.databaseUserIdForAuthUser(authUserId)
+    if (!databaseUserId) return false
+    const legacyIds = await this.legacyAuthIdsForDatabaseUser(databaseUserId)
+    if (!legacyIds.length) return false
+    const legacyAdmin = await this.database.from('app_admins').select('clerk_user_id')
+      .in('clerk_user_id', legacyIds).limit(1).maybeSingle()
+    if (legacyAdmin.error) throw legacyAdmin.error
+    return Boolean(legacyAdmin.data)
+  }
+
+  async isPrimaryAdmin(authUserId: string, configuredIds: string[]) {
+    if (configuredIds.includes(authUserId)) return true
+    const databaseUserId = await this.databaseUserIdForAuthUser(authUserId)
+    if (!databaseUserId) return false
+    const legacyIds = await this.legacyAuthIdsForDatabaseUser(databaseUserId)
+    return legacyIds.some((id) => configuredIds.includes(id))
+  }
+
+  private async databaseUserIdForAuthUser(authUserId: string) {
+    if (!/^[0-9a-f-]{36}$/i.test(authUserId)) return null
+    const { data, error } = await this.database.from('auth_user_identities').select('database_user_id')
+      .eq('auth_user_id', authUserId).maybeSingle()
+    if (error) throw error
+    return data?.database_user_id ?? authUserId
+  }
+
+  private async legacyAuthIdsForDatabaseUser(databaseUserId: string) {
+    const { data, error } = await this.database.from('user_identities').select('clerk_user_id')
+      .eq('database_user_id', databaseUserId)
+    if (error) throw error
+    return (data ?? []).map((identity) => identity.clerk_user_id)
   }
 
   async listAdmins(): Promise<AdminAccount[]> {
     const { data, error } = await this.database.from('app_admins')
       .select('clerk_user_id, created_at').order('created_at', { ascending: true })
     if (error) throw error
-    const clerkIds = (data ?? []).map((row) => row.clerk_user_id)
-    if (!clerkIds.length) return []
-    const { data: identities, error: identityError } = await this.database.from('user_identities')
-      .select('clerk_user_id, database_user_id').in('clerk_user_id', clerkIds)
+    const authIds = (data ?? []).map((row) => row.clerk_user_id)
+    if (!authIds.length) return []
+    const uuidIds = authIds.filter((id) => /^[0-9a-f-]{36}$/i.test(id))
+    const { data: identities, error: identityError } = uuidIds.length
+      ? await this.database.from('auth_user_identities').select('auth_user_id, database_user_id').in('auth_user_id', uuidIds)
+      : { data: [], error: null }
     if (identityError) throw identityError
-    const databaseIds = (identities ?? []).map((identity) => identity.database_user_id)
+    const { data: legacyIdentities, error: legacyError } = await this.database.from('user_identities')
+      .select('clerk_user_id, database_user_id').in('clerk_user_id', authIds)
+    if (legacyError) throw legacyError
+    const databaseIdByAuthId = new Map<string, string>([
+      ...(identities ?? []).map((identity) => [identity.auth_user_id, identity.database_user_id] as [string, string]),
+      ...(legacyIdentities ?? []).map((identity) => [identity.clerk_user_id, identity.database_user_id] as [string, string]),
+    ])
+    for (const id of authIds) if (!databaseIdByAuthId.has(id)) databaseIdByAuthId.set(id, id)
+    const databaseIds = [...new Set(databaseIdByAuthId.values())]
     const { data: profiles, error: profileError } = databaseIds.length
       ? await this.database.from('profiles').select('id, username, display_name').in('id', databaseIds)
       : { data: [], error: null }
     if (profileError) throw profileError
     const profileById = new Map((profiles ?? []).map((profile) => [profile.id, profile]))
-    const databaseIdByClerkId = new Map((identities ?? []).map((identity) => [identity.clerk_user_id, identity.database_user_id]))
     return (data ?? []).flatMap((row) => {
-      const databaseUserId = databaseIdByClerkId.get(row.clerk_user_id)
+      const databaseUserId = databaseIdByAuthId.get(row.clerk_user_id)
       if (!databaseUserId) return []
       const profile = profileById.get(databaseUserId)
       return {
@@ -157,13 +197,7 @@ export class AccountVerificationService {
       .or(`username.ilike.${pattern},display_name.ilike.${pattern}`)
       .limit(20)
     if (error) throw error
-    const databaseIds = (profiles ?? []).map((profile) => profile.id)
-    if (!databaseIds.length) return []
-    const { data: identities, error: identityError } = await this.database.from('user_identities')
-      .select('database_user_id').in('database_user_id', databaseIds)
-    if (identityError) throw identityError
-    const activeIds = new Set((identities ?? []).map((identity) => identity.database_user_id))
-    return (profiles ?? []).filter((profile) => activeIds.has(profile.id)).map((profile) => ({
+    return (profiles ?? []).map((profile) => ({
       userId: profile.id,
       username: profile.username,
       displayName: profile.display_name,
@@ -171,21 +205,23 @@ export class AccountVerificationService {
   }
 
   async grantAdmin(databaseUserId: string, actorId: string) {
-    const { data: identity, error: identityError } = await this.database.from('user_identities')
-      .select('clerk_user_id').eq('database_user_id', databaseUserId).maybeSingle()
+    const { data: identity, error: identityError } = await this.database.from('auth_user_identities')
+      .select('auth_user_id').eq('database_user_id', databaseUserId).maybeSingle()
     if (identityError) throw identityError
-    if (!identity) throw new VerificationError('User not found.', 404)
-    const { error } = await this.database.from('app_admins').upsert({ clerk_user_id: identity.clerk_user_id, added_by: actorId }, { onConflict: 'clerk_user_id', ignoreDuplicates: true })
+    const authUserId = identity?.auth_user_id ?? (/^[0-9a-f-]{36}$/i.test(databaseUserId) ? databaseUserId : null)
+    if (!authUserId) throw new VerificationError('User must be linked to a Supabase Auth account before admin access can be granted.', 409)
+    const { error } = await this.database.from('app_admins').upsert({ clerk_user_id: authUserId, added_by: actorId }, { onConflict: 'clerk_user_id', ignoreDuplicates: true })
     if (error) throw error
     return { added: true }
   }
 
   async revokeAdmin(databaseUserId: string) {
-    const { data: identity, error: identityError } = await this.database.from('user_identities')
-      .select('clerk_user_id').eq('database_user_id', databaseUserId).maybeSingle()
+    const { data: identity, error: identityError } = await this.database.from('auth_user_identities')
+      .select('auth_user_id').eq('database_user_id', databaseUserId).maybeSingle()
     if (identityError) throw identityError
-    if (!identity) throw new VerificationError('User not found.', 404)
-    const { error } = await this.database.from('app_admins').delete().eq('clerk_user_id', identity.clerk_user_id)
+    const authUserId = identity?.auth_user_id ?? (/^[0-9a-f-]{36}$/i.test(databaseUserId) ? databaseUserId : null)
+    if (!authUserId) throw new VerificationError('User must be linked to a Supabase Auth account before admin access can be changed.', 409)
+    const { error } = await this.database.from('app_admins').delete().eq('clerk_user_id', authUserId)
     if (error) throw error
     return { removed: true }
   }

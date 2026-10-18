@@ -1,9 +1,9 @@
-const CACHE = 'wte-web-v1'
+const CACHE = 'wte-web-v2'
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE).then((cache) => cache.addAll([
-      '/',
+      '/demo',
       '/manifest.webmanifest',
       '/assets/icons/favicon_192.png',
       '/assets/icons/favicon_512.png',
@@ -14,7 +14,7 @@ self.addEventListener('install', (event) => {
 })
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(self.clients.claim())
+  event.waitUntil(caches.keys().then((keys) => Promise.all(keys.filter((key) => key.startsWith('wte-web-') && key !== CACHE).map((key) => caches.delete(key)))).then(() => self.clients.claim()))
 })
 
 self.addEventListener('fetch', (event) => {
@@ -34,7 +34,7 @@ self.addEventListener('fetch', (event) => {
 })
 
 self.addEventListener('push', (event) => {
-  let data = { title: 'Went To Event', body: 'You have a new notification.', url: '/' }
+    let data = { title: 'Went To Event', body: 'You have a new notification.', url: '/demo' }
   try {
     data = { ...data, ...(event.data ? event.data.json() : {}) }
   } catch {}
@@ -48,7 +48,7 @@ self.addEventListener('push', (event) => {
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close()
-  const target = new URL(event.notification.data?.url ?? '/', self.location.origin).href
+  const target = new URL(event.notification.data?.url ?? '/demo', self.location.origin).href
   event.waitUntil(clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windows) => {
     const existing = windows.find((client) => 'focus' in client)
     return existing ? existing.focus() : clients.openWindow(target)

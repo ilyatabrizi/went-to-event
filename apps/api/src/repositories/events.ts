@@ -3,7 +3,7 @@ import { events } from '../data/events.js'
 
 export class InMemoryEventRepository implements EventRepository {
   async list(): Promise<Event[]> {
-    return events
+    return events.filter((event) => new Date(event.endsAt).getTime() > Date.now())
   }
 
   async getById(id: string): Promise<Event | null> {

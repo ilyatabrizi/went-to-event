@@ -15,6 +15,8 @@ export type Event = {
   venue: {
     name: string
     address: string
+    latitude?: number | null
+    longitude?: number | null
   }
   host: {
     name: string
@@ -36,6 +38,8 @@ export type CreateEventInput = {
   endsAt: string
   venueName: string
   venueAddress: string
+  latitude: number
+  longitude: number
   ticketTiers: Array<Pick<TicketTier, 'name' | 'description' | 'priceCents'>>
 }
 

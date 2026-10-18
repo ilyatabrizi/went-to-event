@@ -10,7 +10,7 @@ type EventRow = {
   ends_at: string
   host_name: string
   going_count: number
-  venue: { name: string; address: string } | Array<{ name: string; address: string }>
+  venue: { name: string; address: string; latitude: number | null; longitude: number | null } | Array<{ name: string; address: string; latitude: number | null; longitude: number | null }>
   ticketTiers: Array<{
     id: string
     name: string
@@ -75,7 +75,7 @@ export class SupabaseEventRepository implements EventRepository {
   private async loadList(): Promise<Event[]> {
     const { data, error } = await this.client
       .from('events')
-      .select('id, category, title, description, starts_at, ends_at, host_name, going_count, venue:venues(name, address), ticketTiers:ticket_tiers(id, name, description, price_cents)')
+      .select('id, category, title, description, starts_at, ends_at, host_name, going_count, venue:venues(name, address, latitude, longitude), ticketTiers:ticket_tiers(id, name, description, price_cents)')
       // Discovery contains only live events from verified hosts. Keep ended
       // events addressable through getById so existing passes remain usable.
       .gt('ends_at', new Date().toISOString())
@@ -106,7 +106,7 @@ export class SupabaseEventRepository implements EventRepository {
   private async loadById(id: string): Promise<Event | null> {
     const { data, error } = await this.client
       .from('events')
-      .select('id, category, title, description, starts_at, ends_at, host_name, going_count, venue:venues(name, address), ticketTiers:ticket_tiers(id, name, description, price_cents)')
+      .select('id, category, title, description, starts_at, ends_at, host_name, going_count, venue:venues(name, address, latitude, longitude), ticketTiers:ticket_tiers(id, name, description, price_cents)')
       .eq('id', id)
       .maybeSingle()
 
@@ -124,6 +124,8 @@ export class SupabaseEventRepository implements EventRepository {
       p_ends_at: input.endsAt,
       p_venue_name: input.venueName,
       p_venue_address: input.venueAddress,
+      p_latitude: input.latitude,
+      p_longitude: input.longitude,
       p_ticket_tiers: input.ticketTiers.map((tier) => ({
         name: tier.name,
         description: tier.description,

@@ -2,6 +2,7 @@ export type CreateBookingInput = {
   eventId: string
   ticketTierId: string
   quantity: number
+  showAttendance: boolean
 }
 
 export type Booking = {
@@ -12,6 +13,7 @@ export type Booking = {
   status: 'pending' | 'confirmed' | 'cancelled'
   totalCents: number
   createdAt: string
+  showAttendance: boolean
   tickets?: Ticket[]
 }
 

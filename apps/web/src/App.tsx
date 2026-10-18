@@ -1,12 +1,57 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useAuth, useUser } from '@clerk/react'
+import { supabase, useAuth } from './auth'
 import QRCode from 'qrcode'
-import { createBooking, getBookings, getEvent, getEvents, getProfile, updateAccount, updateProfile, uploadProfilePicture, type Booking, type Event, type UserProfile } from './api'
+import { cancelBooking, createBooking, getBookings, getCachedEvents, getEvent, getEventAttendees, getEvents, getProfile, updateAccount, updateProfile, uploadProfilePicture, type Booking, type Event, type EventAttendee, type UserProfile, type VerificationStatus } from './api'
 import { AuthPanel } from './AuthPanel'
-import { SocialPanel } from './SocialPanel'
+import { ChatPreviewPanel, SocialPanel } from './SocialPanel'
 import { CheckInPanel } from './CheckInPanel'
 import { VerificationPanel } from './VerificationPanel'
+import { EventCreationPanel } from './EventCreationPanel'
 import { languageOptions, translate, type Language } from './i18n'
+import { LocationMap } from './LocationMap'
+
+type InstallPrompt = globalThis.Event & {
+  prompt: () => Promise<void>
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>
+}
+
+const installGuideStorageKey = 'wte.install-guide-dismissed.v1'
+
+function isStandaloneApp() {
+  return window.matchMedia('(display-mode: standalone)').matches
+    || Boolean((navigator as Navigator & { standalone?: boolean }).standalone)
+}
+
+function InstallGuide({ language, canInstall, onInstall, onContinue }: { language: Language; canInstall: boolean; onInstall: () => void; onContinue: () => void }) {
+  const t = (text: string) => translate(language, text)
+  const userAgent = navigator.userAgent.toLowerCase()
+  const isAppleMobile = /iphone|ipad|ipod/.test(userAgent)
+  const isAndroid = /android/.test(userAgent)
+
+  return (
+    <main className="install-guide shell" dir={language === 'fa' ? 'rtl' : 'ltr'}>
+      <div className="install-guide-mark" aria-hidden="true">W</div>
+      <p className="eyebrow">{t('Install Went To Event')}</p>
+      <h1>{t('Keep the app one tap away.')}</h1>
+      <p className="lede">{t('Add Went To Event to your home screen. Your sign-in and saved activity stay on this device.')}</p>
+      <section className="install-guide-card" aria-labelledby="install-guide-title">
+        <h2 id="install-guide-title">{t('Add it to your home screen')}</h2>
+        {isAppleMobile ? (
+          <ol><li>{t('Tap the Share button in Safari.')}</li><li>{t('Choose Add to Home Screen, then tap Add.')}</li></ol>
+        ) : isAndroid ? (
+          <ol><li>{t('Open the browser menu.')}</li><li>{t('Choose Install app or Add to Home screen.')}</li></ol>
+        ) : (
+          <ol><li>{t('Open your browser menu or the install icon in the address bar.')}</li><li>{t('Choose Install Went To Event or Add to Home screen.')}</li></ol>
+        )}
+      </section>
+      <div className="install-guide-actions">
+        {canInstall && <button className="primary-button" onClick={onInstall}>{t('Install app')}</button>}
+        <button className={canInstall ? 'secondary-button' : 'primary-button'} onClick={onContinue}>{t('Open the app')}</button>
+      </div>
+      <small className="install-guide-note">{t('Installed app launches open directly to events.')}</small>
+    </main>
+  )
+}
 
 type WebSession = { user: { email: string | null } }
 
@@ -36,6 +81,31 @@ function priceLabel(event: Event, language: Language = 'en') {
 
 function isUpcoming(event: Event | undefined) {
   return event ? new Date(event.endsAt).getTime() >= Date.now() : false
+}
+
+function visibleEvents(events: Event[]) {
+  return events.filter((event) => new Date(event.endsAt).getTime() > Date.now())
+}
+
+function isTonightEvent(event: Event, now = new Date()) {
+  const startsAt = new Date(event.startsAt)
+  const endsAt = new Date(event.endsAt)
+  if (!Number.isFinite(startsAt.getTime()) || endsAt.getTime() <= now.getTime()) return false
+
+  const sameDay = startsAt.getFullYear() === now.getFullYear()
+    && startsAt.getMonth() === now.getMonth()
+    && startsAt.getDate() === now.getDate()
+  const afterMidnightTonight = startsAt.getDate() !== now.getDate()
+    && startsAt.getTime() > now.getTime()
+    && startsAt.getTime() - now.getTime() < 10 * 60 * 60 * 1000
+    && startsAt.getHours() < 5
+  const lateNightToday = sameDay && now.getHours() < 5 && startsAt.getHours() < 5
+  const overnightEvent = startsAt.getTime() <= now.getTime()
+    && now.getHours() < 5
+    && now.getTime() - startsAt.getTime() < 10 * 60 * 60 * 1000
+    && startsAt.getHours() >= 17
+
+  return (sameDay && startsAt.getHours() >= 17) || afterMidnightTonight || lateNightToday || overnightEvent
 }
 
 type BrowserReminder = {
@@ -68,11 +138,12 @@ async function cropProfilePicture(file: File) {
   }
 }
 
-function Cover({ event }: { event: Event }) {
+function Cover({ event, tonight = isTonightEvent(event) }: { event: Event; tonight?: boolean }) {
   return (
     <div className="cover-art" data-category={event.category} aria-hidden="true">
       <span className="cover-glow" />
       <span className="cover-grid" />
+      {tonight && <span className="tonight-badge"><i aria-hidden="true" />Tonight</span>}
     </div>
   )
 }
@@ -121,18 +192,64 @@ function Navigation({ onBookings, onHome, onExplore, onProfile, onChat, active =
   )
 }
 
-export function App({ language = 'en', onLanguageChange }: { language?: Language; onLanguageChange?: (language: Language) => void }) {
-  if (window.location.pathname === '/') {
-    return <iframe className="business-landing-frame" src="/business-join/index.html" title="Went To Event business sign-up" />
+export function App({ language = 'en', onLanguageChange, theme = 'dark', onThemeChange }: { language?: Language; onLanguageChange?: (language: Language) => void; theme?: 'dark' | 'light'; onThemeChange?: (theme: 'dark' | 'light') => void }) {
+  const [installPrompt, setInstallPrompt] = useState<InstallPrompt | null>(null)
+  const [guideVisible, setGuideVisible] = useState(() => !isStandaloneApp() && window.location.pathname === '/' && localStorage.getItem(installGuideStorageKey) !== '1')
+  const isRoot = window.location.pathname === '/'
+
+  useEffect(() => {
+    document.documentElement.lang = language
+    document.documentElement.dir = language === 'fa' ? 'rtl' : 'ltr'
+  }, [language])
+
+  useEffect(() => {
+    const onBeforeInstallPrompt = (event: globalThis.Event) => {
+      event.preventDefault()
+      setInstallPrompt(event as InstallPrompt)
+    }
+    const onInstalled = () => {
+      localStorage.setItem(installGuideStorageKey, '1')
+      setInstallPrompt(null)
+      setGuideVisible(false)
+      if (window.location.pathname === '/') window.location.assign('/demo')
+    }
+    window.addEventListener('beforeinstallprompt', onBeforeInstallPrompt)
+    window.addEventListener('appinstalled', onInstalled)
+    return () => {
+      window.removeEventListener('beforeinstallprompt', onBeforeInstallPrompt)
+      window.removeEventListener('appinstalled', onInstalled)
+    }
+  }, [])
+
+  async function installApp() {
+    if (!installPrompt) return
+    await installPrompt.prompt()
+    const choice = await installPrompt.userChoice
+    setInstallPrompt(null)
+    if (choice.outcome === 'accepted') {
+      localStorage.setItem(installGuideStorageKey, '1')
+      setGuideVisible(false)
+      if (isRoot) window.location.assign('/demo')
+    }
   }
-  return <ProductApp language={language} onLanguageChange={onLanguageChange} />
+
+  function continueToApp() {
+    localStorage.setItem(installGuideStorageKey, '1')
+    setGuideVisible(false)
+    if (isRoot) window.location.assign('/demo')
+  }
+
+  if (!isStandaloneApp() && guideVisible) {
+    return <InstallGuide language={language} canInstall={Boolean(installPrompt)} onInstall={() => { void installApp() }} onContinue={continueToApp} />
+  }
+  return <ProductApp language={language} onLanguageChange={onLanguageChange} theme={theme} onThemeChange={onThemeChange} />
 }
 
-function ProductApp({ language, onLanguageChange }: { language: Language; onLanguageChange?: (language: Language) => void }) {
-  const { isLoaded: authLoaded, isSignedIn, getToken, signOut } = useAuth()
-  const { user } = useUser()
-  const session: WebSession | null = isSignedIn ? { user: { email: user?.primaryEmailAddress?.emailAddress ?? null } } : null
-  const authToken = useCallback(() => getToken(), [getToken])
+function ProductApp({ language, onLanguageChange, theme, onThemeChange }: { language: Language; onLanguageChange?: (language: Language) => void; theme: 'dark' | 'light'; onThemeChange?: (theme: 'dark' | 'light') => void }) {
+  const { loaded: authLoaded, session: supabaseSession, getToken, signOut } = useAuth()
+  const session: WebSession | null = supabaseSession ? { user: { email: supabaseSession.user.email ?? null } } : null
+  const isSignedIn = Boolean(supabaseSession)
+  const authToken = useCallback(getToken, [getToken])
   const t = (text: string) => translate(language, text)
   const [events, setEvents] = useState<Event[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -143,7 +260,10 @@ function ProductApp({ language, onLanguageChange }: { language: Language; onLang
   const [quantity, setQuantity] = useState(1)
   const [booking, setBooking] = useState<Booking | null>(null)
   const [bookingBusy, setBookingBusy] = useState(false)
+  const [bookingRemoveBusy, setBookingRemoveBusy] = useState<string | null>(null)
   const [bookingError, setBookingError] = useState<string | null>(null)
+  const [showAttendance, setShowAttendance] = useState(true)
+  const [friendsAttending, setFriendsAttending] = useState<EventAttendee[]>([])
   const [showBookings, setShowBookings] = useState(false)
   const [showExplore, setShowExplore] = useState(false)
   const [query, setQuery] = useState('')
@@ -158,17 +278,24 @@ function ProductApp({ language, onLanguageChange }: { language: Language; onLang
   const [passBooking, setPassBooking] = useState<Booking | null>(null)
   const [passEvent, setPassEvent] = useState<Event | null>(null)
   const [showAuth, setShowAuth] = useState(false)
+  const [authReturn, setAuthReturn] = useState<'profile' | 'booking'>('booking')
   const [showProfile, setShowProfile] = useState(false)
+  const [showEventCreation, setShowEventCreation] = useState(false)
+  const [verificationStatus, setVerificationStatus] = useState<VerificationStatus | null>(null)
   const [profileTab, setProfileTab] = useState<'saved' | 'going' | 'account'>('saved')
   const [showSocial, setShowSocial] = useState(false)
+  const isLocalChatPreview = typeof window !== 'undefined'
+    && ['localhost', '127.0.0.1'].includes(window.location.hostname)
+    && new URLSearchParams(window.location.search).get('preview') === 'chat'
   const [showCheckIn, setShowCheckIn] = useState(false)
   const [savedIds, setSavedIds] = useState<string[]>([])
   const [profile, setProfile] = useState<UserProfile | null>(null)
-  const [usernameSetupStatus, setUsernameSetupStatus] = useState<'idle' | 'checking' | 'required' | 'complete'>('idle')
+  const [usernameSetupStatus, setUsernameSetupStatus] = useState<'idle' | 'checking' | 'required' | 'complete' | 'error'>('idle')
   const [profileLoading, setProfileLoading] = useState(false)
   const [profileBusy, setProfileBusy] = useState(false)
   const [pictureUploading, setPictureUploading] = useState(false)
   const [profileError, setProfileError] = useState<string | null>(null)
+  const [profileRetry, setProfileRetry] = useState(0)
   const [profileNotice, setProfileNotice] = useState<string | null>(null)
   const [profileForm, setProfileForm] = useState({ username: '', displayName: '', avatarUrl: '' })
   const [accountForm, setAccountForm] = useState({ email: '', password: '' })
@@ -179,7 +306,7 @@ function ProductApp({ language, onLanguageChange }: { language: Language; onLang
   useEffect(() => {
     document.documentElement.lang = language
     document.documentElement.dir = language === 'fa' ? 'rtl' : 'ltr'
-    localStorage.setItem('wte.language', language)
+    localStorage.setItem('wte.language.v2', language)
   }, [language])
 
   useEffect(() => {
@@ -227,10 +354,24 @@ function ProductApp({ language, onLanguageChange }: { language: Language; onLang
   }, [reminders])
 
   useEffect(() => {
-    getEvents()
-      .then((response) => setEvents(response.data))
-      .catch(() => setError(t('Could not load events. Is the API running?')))
-      .finally(() => setLoading(false))
+    let cancelled = false
+    void (async () => {
+      const cached = await getCachedEvents()
+      if (cancelled) return
+      if (cached) { setEvents(visibleEvents(cached)); setLoading(false) }
+      try {
+        const response = await getEvents()
+        if (!cancelled) { setEvents(visibleEvents(response.data)); setError(null) }
+      } catch {
+        if (!cancelled && !cached) setError(t('Could not load events. Is the API running?'))
+      } finally { if (!cancelled) setLoading(false) }
+    })()
+    return () => { cancelled = true }
+  }, [])
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setEvents((current) => visibleEvents(current)), 60_000)
+    return () => window.clearInterval(timer)
   }, [])
 
   useEffect(() => {
@@ -240,20 +381,48 @@ function ProductApp({ language, onLanguageChange }: { language: Language; onLang
     }
     let cancelled = false
     setUsernameSetupStatus('checking')
+    setProfileLoading(true)
     getProfile(authToken)
       .then(({ profile: nextProfile }) => {
         if (cancelled) return
+        setProfileError(null)
         setProfile(nextProfile)
-        setProfileForm({ username: nextProfile.username ?? '', displayName: nextProfile.displayName ?? '', avatarUrl: nextProfile.avatarUrl ?? '' })
+        const signupUsername = typeof supabaseSession?.user.user_metadata?.username === 'string' ? supabaseSession.user.user_metadata.username : ''
+        setProfileForm({ username: nextProfile.username ?? signupUsername, displayName: nextProfile.displayName ?? '', avatarUrl: nextProfile.avatarUrl ?? '' })
         setUsernameSetupStatus(nextProfile.username ? 'complete' : 'required')
       })
       .catch((failure) => {
         if (cancelled) return
         setProfileError(failure instanceof Error ? failure.message : t('Could not load your profile'))
-        setUsernameSetupStatus('required')
+        setUsernameSetupStatus('error')
       })
+      .finally(() => { if (!cancelled) setProfileLoading(false) })
     return () => { cancelled = true }
-  }, [authToken, isSignedIn])
+  }, [authToken, isSignedIn, profileRetry])
+
+  useEffect(() => {
+    if (!showProfile || !isSignedIn) return
+    let cancelled = false
+    setBookingsLoading(true)
+    setBookingsError(null)
+    getBookings(authToken)
+      .then(async (response) => {
+        const loadedEvents: Record<string, Event> = Object.fromEntries(events.map((event) => [event.id, event]))
+        const missingEventIds = [...new Set(response.data.map((booking) => booking.eventId).filter((id) => !loadedEvents[id]))]
+        const missingEvents = await Promise.all(missingEventIds.map(async (id) => {
+          try { return (await getEvent(id)).data } catch { return null }
+        }))
+        if (cancelled) return
+        missingEvents.forEach((event) => { if (event) loadedEvents[event.id] = event })
+        setBookings(response.data)
+        setBookingEvents(loadedEvents)
+      })
+      .catch((failure) => {
+        if (!cancelled) setBookingsError(failure instanceof Error ? failure.message : t('Could not load bookings'))
+      })
+      .finally(() => { if (!cancelled) setBookingsLoading(false) })
+    return () => { cancelled = true }
+  }, [authToken, events, isSignedIn, showProfile])
 
   useEffect(() => {
     if (!selectedId) {
@@ -268,9 +437,18 @@ function ProductApp({ language, onLanguageChange }: { language: Language; onLang
         setQuantity(1)
         setBooking(null)
         setBookingError(null)
+        setShowAttendance(true)
       })
       .catch(() => setError(t('Could not load that event.')))
   }, [selectedId])
+
+  useEffect(() => {
+    setFriendsAttending([])
+    if (!selectedId || !session) return
+    let cancelled = false
+    void getEventAttendees(authToken, selectedId).then((response) => { if (!cancelled) setFriendsAttending(response.data) }).catch(() => { if (!cancelled) setFriendsAttending([]) })
+    return () => { cancelled = true }
+  }, [authToken, selectedId, session])
 
   async function openBookings() {
     if (!session) return
@@ -300,6 +478,7 @@ function ProductApp({ language, onLanguageChange }: { language: Language; onLang
   }
 
   function openProfile() {
+    setShowEventCreation(false)
     setSelectedId(null)
     setShowBookings(false)
     setShowExplore(false)
@@ -309,25 +488,19 @@ function ProductApp({ language, onLanguageChange }: { language: Language; onLang
     setPassEvent(null)
     setProfileError(null)
     setProfileNotice(null)
-    if (session) {
-      setProfileLoading(true)
-      setBookingsLoading(true)
-      Promise.all([getProfile(authToken), getBookings(authToken)])
-        .then(async ([{ profile: nextProfile }, bookingResponse]) => {
-          setProfile(nextProfile)
-          setProfileForm({ username: nextProfile.username ?? '', displayName: nextProfile.displayName ?? '', avatarUrl: nextProfile.avatarUrl ?? '' })
-          setBookings(bookingResponse.data)
-          const loadedEvents: Record<string, Event> = Object.fromEntries(events.map((event) => [event.id, event]))
-          const missingEventIds = [...new Set(bookingResponse.data.map((booking) => booking.eventId).filter((id) => !loadedEvents[id]))]
-          const missingEvents = await Promise.all(missingEventIds.map(async (id) => {
-            try { return (await getEvent(id)).data } catch { return null }
-          }))
-          missingEvents.forEach((event) => { if (event) loadedEvents[event.id] = event })
-          setBookingEvents(loadedEvents)
-        })
-        .catch((failure) => setProfileError(failure instanceof Error ? failure.message : t('Could not load your profile')))
-        .finally(() => { setProfileLoading(false); setBookingsLoading(false) })
-    }
+  }
+
+  function openEventPublisher() {
+    if (!session || verificationStatus !== 'verified') return
+    setSelectedId(null)
+    setShowBookings(false)
+    setShowExplore(false)
+    setShowSocial(false)
+    setShowCheckIn(false)
+    setShowProfile(false)
+    setShowEventCreation(true)
+    setPassBooking(null)
+    setPassEvent(null)
   }
 
   async function saveProfile(event: React.FormEvent<HTMLFormElement>) {
@@ -528,6 +701,33 @@ function ProductApp({ language, onLanguageChange }: { language: Language; onLang
     }
   }
 
+  async function removeBooking(bookingToRemove: Booking) {
+    const event = bookingEvents[bookingToRemove.eventId]
+    const eventName = event?.title ?? t('this event')
+    if (!window.confirm(`${t('Are you sure you want to remove')} “${eventName}”?`)) return
+    setBookingRemoveBusy(bookingToRemove.id)
+    setBookingsError(null)
+    try {
+      await cancelBooking(authToken, bookingToRemove.id)
+      setBookings((current) => current.filter((booking) => booking.id !== bookingToRemove.id))
+      setReminders((current) => {
+        if (!current[bookingToRemove.id]) return current
+        const next = { ...current }
+        delete next[bookingToRemove.id]
+        localStorage.setItem(reminderStorageKey, JSON.stringify(next))
+        return next
+      })
+      if (passBooking?.id === bookingToRemove.id) {
+        setPassBooking(null)
+        setPassEvent(null)
+      }
+    } catch (failure) {
+      setBookingsError(failure instanceof Error ? failure.message : t('Could not remove this booking.'))
+    } finally {
+      setBookingRemoveBusy(null)
+    }
+  }
+
   async function submitBooking() {
     if (!selected || !session || !selectedTierId) return
 
@@ -539,6 +739,7 @@ function ProductApp({ language, onLanguageChange }: { language: Language; onLang
         eventId: selected.id,
         ticketTierId: selectedTierId,
         quantity,
+        showAttendance,
       })
       setBooking(response.data)
     } catch (bookingFailure) {
@@ -546,10 +747,6 @@ function ProductApp({ language, onLanguageChange }: { language: Language; onLang
     } finally {
       setBookingBusy(false)
     }
-  }
-
-  if (session && usernameSetupStatus === 'checking') {
-    return <LoadingScreen />
   }
 
   if (session && usernameSetupStatus === 'required') {
@@ -572,6 +769,14 @@ function ProductApp({ language, onLanguageChange }: { language: Language; onLang
     )
   }
 
+  if (isLocalChatPreview) {
+    const exitChatPreview = () => { window.location.href = window.location.pathname }
+    return <ChatPreviewPanel
+      language={language}
+      navigation={<Navigation onHome={exitChatPreview} onBookings={exitChatPreview} onExplore={exitChatPreview} onProfile={exitChatPreview} onChat={() => {}} active="chat" language={language} />}
+    />
+  }
+
   if (showAuth) {
     if (!authLoaded) return <LoadingScreen />
     return (
@@ -585,7 +790,10 @@ function ProductApp({ language, onLanguageChange }: { language: Language; onLang
             <h1 id="booking-auth-title">{t('Sign in to book.')}</h1>
             <p className="lede">{t('Create an account or sign in to keep your tickets and passes together.')}</p>
           </header>
-          <AuthPanel language={language} />
+          <AuthPanel language={language} onAuthenticated={() => {
+            setShowAuth(false)
+            if (authReturn === 'profile') setShowProfile(true)
+          }} />
         </section>
       </main>
     )
@@ -606,6 +814,19 @@ function ProductApp({ language, onLanguageChange }: { language: Language; onLang
     return <CheckInPanel getToken={authToken} onBack={() => { setShowCheckIn(false); setShowProfile(true) }} language={language} navigation={<Navigation onHome={() => { setShowCheckIn(false); setSelectedId(null) }} onBookings={openBookings} onExplore={openExplore} onProfile={openProfile} onChat={openSocial} active="profile" language={language} />} />
   }
 
+  if (showEventCreation && session) {
+    return <EventCreationPanel
+      getToken={authToken}
+      language={language}
+      onCancel={() => { setShowEventCreation(false); setShowProfile(true) }}
+      onCreated={(createdEvent) => {
+        setEvents((current) => [createdEvent, ...current.filter((event) => event.id !== createdEvent.id)].sort((left, right) => left.startsAt.localeCompare(right.startsAt)))
+        setShowEventCreation(false)
+        setSelectedId(createdEvent.id)
+      }}
+    />
+  }
+
   if (showProfile) {
     if (!session) {
       return (
@@ -619,7 +840,7 @@ function ProductApp({ language, onLanguageChange }: { language: Language; onLang
               <h1 id="profile-auth-title">{t('Sign in to see your profile.')}</h1>
               <p className="lede">{t('Your profile and bookings live here once you have an account.')}</p>
             </header>
-            <button className="primary-button booking-button" data-testid="profile-sign-in" onClick={() => { setShowProfile(false); setShowAuth(true) }}>
+            <button className="primary-button booking-button" data-testid="profile-sign-in" onClick={() => { setAuthReturn('profile'); setShowProfile(false); setShowAuth(true) }}>
               {t('Sign in or create account')}
             </button>
           </section>
@@ -635,6 +856,7 @@ function ProductApp({ language, onLanguageChange }: { language: Language; onLang
           <div className="profile-identity">
             <strong>{profile?.displayName || 'Your name'}</strong>
             <span>{profile?.username ? `@${profile.username}` : session.user.email}</span>
+            {verificationStatus === 'verified' ? <span className="verification-badge verification-badge-verified"><span aria-hidden="true">✓</span>{t('Verified')}</span> : verificationStatus && <span className="verification-badge">{t(verificationStatus === 'pending' ? 'Verification pending' : verificationStatus === 'rejected' ? 'Verification rejected' : verificationStatus === 'suspended' ? 'Verification suspended' : 'Not verified')}</span>}
           </div>
         </section>
         {profileLoading && <p className="profile-loading">{t('Loading your profile…')}</p>}
@@ -644,15 +866,20 @@ function ProductApp({ language, onLanguageChange }: { language: Language; onLang
           <div><strong>{Object.keys(reminders).length}</strong><span>{t('reminders')}</span></div>
         </section>
         <section className="profile-dock-actions" aria-label={t('Profile')}>
-          <button className="profile-publish-button" onClick={() => { setProfileTab('account'); window.setTimeout(() => document.getElementById('account-verification-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80) }}><span aria-hidden="true">＋</span>{t('Publish an event')}</button>
-          <button className="profile-utility-button" aria-label={t('Account settings')} onClick={() => setProfileTab('account')}>⚙</button>
+          {verificationStatus === 'verified' ? <button className="profile-publish-button" onClick={openEventPublisher}><span aria-hidden="true">＋</span>{t('Publish an event')}</button> : verificationStatus === 'unverified' || verificationStatus === 'rejected' ? <button className="profile-publish-button" onClick={() => { setProfileTab('account'); window.setTimeout(() => document.getElementById('account-verification-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80) }}><span aria-hidden="true">＋</span>{t('Get verified to host')}</button> : null}
+          <button className="profile-utility-button" aria-label={t('Account settings')} onClick={() => setProfileTab('account')}>
+            <svg className="profile-settings-gear" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915Z" />
+              <circle cx="12" cy="12" r="3" />
+            </svg>
+          </button>
         </section>
         <button className="checkin-entry-button" onClick={openCheckIn}><span aria-hidden="true">⌾</span><span><strong>{t('Check in guests')}</strong><small>{t('Scan tickets for an event you host')}</small></span><span aria-hidden="true">→</span></button>
-        <button className="profile-membership-card" onClick={() => setProfileTab('account')}>
+        {verificationStatus && verificationStatus !== 'verified' && <button className="profile-membership-card" onClick={() => setProfileTab('account')}>
           <span className="profile-membership-icon" aria-hidden="true">✦</span>
           <span><strong>{t('Host with Went To Event')}</strong><small>{t('Verification and event tools live in your account.')}</small></span>
           <span className="profile-membership-arrow" aria-hidden="true">→</span>
-        </button>
+        </button>}
         <div className="profile-segmented" role="tablist" aria-label={t('Profile sections')}>
           <button role="tab" aria-selected={profileTab === 'saved'} className={profileTab === 'saved' ? 'profile-segment-active' : ''} onClick={() => setProfileTab('saved')}>{t('Saved')}{savedIds.length ? ` · ${savedIds.length}` : ''}</button>
           <button role="tab" aria-selected={profileTab === 'going'} className={profileTab === 'going' ? 'profile-segment-active' : ''} onClick={() => setProfileTab('going')}>{t('Going')}{bookings.length ? ` · ${bookings.length}` : ''}</button>
@@ -685,10 +912,13 @@ function ProductApp({ language, onLanguageChange }: { language: Language; onLang
           ) : <div className="booking-list">
             {bookings.map((booking) => {
               const event = bookingEvents[booking.eventId]
-              return <button className="booking-list-item" key={booking.id} onClick={() => { setProfileTab('saved'); void openPass(booking); setShowProfile(false); setShowBookings(true) }}>
-                <span><span className="label">{t(event && isUpcoming(event) ? 'Upcoming' : 'Past')} · {t(booking.status === 'confirmed' ? 'Confirmed' : booking.status)}</span><strong>{event?.title ?? booking.eventId}</strong>{event && <small>{formatDate(event.startsAt)} · {event.venue.name}</small>}</span>
-                <span><strong>{booking.quantity} ×</strong><span>${(booking.totalCents / 100).toFixed(2)} →</span></span>
-              </button>
+              return <div className="booking-list-item" key={booking.id}>
+                <button className="booking-list-item-main" onClick={() => { setProfileTab('saved'); void openPass(booking); setShowProfile(false); setShowBookings(true) }}>
+                  <span><span className="label">{t(event && isUpcoming(event) ? 'Upcoming' : 'Past')} · {t(booking.status === 'confirmed' ? 'Confirmed' : booking.status)}</span><strong>{event?.title ?? booking.eventId}</strong>{event && <small>{formatDate(event.startsAt)} · {event.venue.name}</small>}</span>
+                  <span><strong>{booking.quantity} ×</strong><span>${(booking.totalCents / 100).toFixed(2)} →</span></span>
+                </button>
+                <button className="booking-remove" disabled={bookingRemoveBusy === booking.id} onClick={() => { void removeBooking(booking) }}>{bookingRemoveBusy === booking.id ? t('Removing…') : t('Remove')}</button>
+              </div>
             })}
           </div>}
         </section>}
@@ -698,6 +928,12 @@ function ProductApp({ language, onLanguageChange }: { language: Language; onLang
           <label className="language-setting">{t('Choose the language used across Went To Event.')}
             <select value={language} onChange={(event) => onLanguageChange?.(event.target.value as Language)} aria-label={t('Account language')}>
               {languageOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+            </select>
+          </label>
+          <label className="language-setting">{t('Theme')}
+            <select value={theme} onChange={(event) => onThemeChange?.(event.target.value as 'dark' | 'light')} aria-label={t('Theme')}>
+              <option value="dark">{t('Dark theme')}</option>
+              <option value="light">{t('Light theme')}</option>
             </select>
           </label>
         </section>
@@ -720,13 +956,11 @@ function ProductApp({ language, onLanguageChange }: { language: Language; onLang
         <VerificationPanel
           getToken={authToken}
           language={language}
-          onEventCreated={(createdEvent) => {
-            setEvents((current) => [createdEvent, ...current.filter((event) => event.id !== createdEvent.id)].sort((left, right) => left.startsAt.localeCompare(right.startsAt)))
-            setShowProfile(false)
-            setSelectedId(createdEvent.id)
-          }}
+          onPublishEvent={openEventPublisher}
+          onStatusChange={setVerificationStatus}
         />
-        {(profileError || profileNotice) && <p className={profileError ? 'error' : 'profile-notice'}>{profileError ?? profileNotice}</p>}
+        {profileError && <p className="error" role="alert">{profileError} <button className="quiet-button" onClick={() => { setProfileError(null); setUsernameSetupStatus('checking'); setProfileRetry((value) => value + 1) }}>{t('Try again')}</button></p>}
+        {!profileError && profileNotice && <p className="profile-notice">{profileNotice}</p>}
         <section className="profile-settings" aria-label={t('Account security')}>
           <div className="settings-heading"><span className="label">{t('Account security')}</span><span>{t('Private')}</span></div>
           <form className="profile-form" onSubmit={saveAccount}>
@@ -734,9 +968,16 @@ function ProductApp({ language, onLanguageChange }: { language: Language; onLang
             <label>{t('New password')}<input type="password" value={accountForm.password} onChange={(event) => setAccountForm({ ...accountForm, password: event.target.value })} placeholder={t('At least 8 characters')} minLength={8} /></label>
             <button className="quiet-button settings-submit" disabled={profileBusy || (!accountForm.email && !accountForm.password)}>{t('Update account')}</button>
           </form>
+          <button className="quiet-button settings-submit" type="button" onClick={async () => {
+            if (!supabase) return
+            try {
+              const { error } = await supabase.auth.registerPasskey()
+              setProfileNotice(error ? error.message : t('Passkey added to this device.'))
+            } catch (error) { setProfileError(error instanceof Error ? error.message : t('Passkey sign-in is unavailable')) }
+          }}>{t('Add a passkey')}</button>
         </section>
         <section className="account-note" aria-label={t('Account settings')}>
-          <div><span className="label">{t('Account')}</span><strong>{t('Your account is secured by Clerk.')}</strong></div>
+          <div><span className="label">{t('Account')}</span><strong>{t('Your account is secured by Supabase Auth.')}</strong></div>
           <small>{t('Profile data and bookings remain stored securely in Went To Event.')}</small>
         </section>
         <button className="logout-button profile-logout" data-testid="logout" onClick={logout}>{t('Log out')}</button>
@@ -768,7 +1009,9 @@ function ProductApp({ language, onLanguageChange }: { language: Language; onLang
         if (sort === 'Soonest') return new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime()
         if (sort === 'Most going') return b.goingCount - a.goingCount
         if (sort === 'Price: low to high') return Math.min(...a.ticketTiers.map((tier) => tier.priceCents)) - Math.min(...b.ticketTiers.map((tier) => tier.priceCents))
-        return 0
+        const tonightOrder = Number(isTonightEvent(b)) - Number(isTonightEvent(a))
+        if (tonightOrder) return tonightOrder
+        return new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime()
       })
 
     return (
@@ -812,8 +1055,8 @@ function ProductApp({ language, onLanguageChange }: { language: Language; onLang
         {filteredEvents.length ? (
         <section className="events" aria-label={t('Explore results')}>
             {filteredEvents.map((event) => (
-              <button className="event-card" key={event.id} onClick={() => { setShowExplore(false); setSelectedId(event.id) }}>
-                <Cover event={event} />
+              <button className="event-card" key={event.id} aria-label={`${isTonightEvent(event) ? `${t('Tonight')}: ` : ''}${event.title}`} onClick={() => { setShowExplore(false); setSelectedId(event.id) }}>
+                <Cover event={event} tonight={isTonightEvent(event)} />
                 <span className="card-copy" data-testid="event-card">
                   <span className="category">{event.category}</span>
                   <h2>{event.title}</h2>
@@ -863,10 +1106,15 @@ function ProductApp({ language, onLanguageChange }: { language: Language; onLang
             <span>{selected.venue.address}</span>
           </div>
           <div>
-            <span className="label">{t('Hosted by')}</span>
+            <span className="label">{t('Published by')}</span>
             <strong>{selected.host.name}</strong>
           </div>
         </section>
+        {session && friendsAttending.length > 0 && <section className="friends-attending" aria-label={t('Friends attending')}>
+          <div><span className="label">{t('Friends attending')}</span><strong>{friendsAttending.length} {t(friendsAttending.length === 1 ? 'friend' : 'friends')} {t('are going')}</strong></div>
+          <div className="friend-attendee-list">{friendsAttending.map((friend) => <span className="friend-attendee" key={friend.id} title={friend.displayName}>{friend.avatarUrl ? <img src={friend.avatarUrl} alt="" /> : <span>{friend.displayName.slice(0, 1).toUpperCase()}</span>}</span>)}</div>
+        </section>}
+        {typeof selected.venue.latitude === 'number' && typeof selected.venue.longitude === 'number' && <LocationMap value={{ latitude: selected.venue.latitude, longitude: selected.venue.longitude }} readOnly label={t('Event map')} />}
         <div className="section-heading">
           <h2>{t('Tickets')}</h2>
           <span>{selected.goingCount} {t('going')}</span>
@@ -920,12 +1168,13 @@ function ProductApp({ language, onLanguageChange }: { language: Language; onLang
                 <button className="quantity-button" aria-label={t('Increase quantity')} disabled={quantity === 10} onClick={() => setQuantity((value) => Math.min(10, value + 1))}>+</button>
               </div>
             </div>
+            <label className="attendance-visibility"><input type="checkbox" checked={showAttendance} onChange={(event) => setShowAttendance(event.target.checked)} /><span><strong>{t('Show that I’m going')}</strong><small>{t('Friends can see you in the attending list.')}</small></span></label>
             {session ? (
               <button className="primary-button booking-button" disabled={bookingBusy || !selectedTierId} onClick={submitBooking}>
                 {bookingBusy ? t('Confirming…') : t('Confirm booking')}
               </button>
             ) : (
-              <button className="primary-button booking-button" data-testid="sign-in-to-book" onClick={() => setShowAuth(true)}>
+              <button className="primary-button booking-button" data-testid="sign-in-to-book" onClick={() => { setAuthReturn('booking'); setShowAuth(true) }}>
                 {t('Sign in to book')}
               </button>
             )}
@@ -1021,14 +1270,17 @@ function ProductApp({ language, onLanguageChange }: { language: Language; onLang
                     {items.map((booking) => {
                       const event = bookingEvents[booking.eventId]
                       return (
-                        <button className="booking-list-item" key={booking.id} onClick={() => openPass(booking)}>
-                          <span>
-                            <span className="label">{booking.status === 'confirmed' ? 'Confirmed' : booking.status}</span>
-                            <strong>{event?.title ?? booking.eventId}</strong>
-                            {event && <small>{formatDate(event.startsAt)} · {event.venue.name}</small>}
-                          </span>
-                          <span><strong>{booking.quantity} ×</strong><span>${(booking.totalCents / 100).toFixed(2)} →</span></span>
-                        </button>
+                        <div className="booking-list-item" key={booking.id}>
+                          <button className="booking-list-item-main" onClick={() => openPass(booking)}>
+                            <span>
+                              <span className="label">{t(booking.status === 'confirmed' ? 'Confirmed' : booking.status)}</span>
+                              <strong>{event?.title ?? booking.eventId}</strong>
+                              {event && <small>{formatDate(event.startsAt)} · {event.venue.name}</small>}
+                            </span>
+                            <span><strong>{booking.quantity} ×</strong><span>${(booking.totalCents / 100).toFixed(2)} →</span></span>
+                          </button>
+                          <button className="booking-remove" disabled={bookingRemoveBusy === booking.id} onClick={() => { void removeBooking(booking) }}>{bookingRemoveBusy === booking.id ? t('Removing…') : t('Remove')}</button>
+                        </div>
                       )
                     })}
                   </div>
@@ -1040,6 +1292,13 @@ function ProductApp({ language, onLanguageChange }: { language: Language; onLang
       </main>
     )
   }
+
+  const orderedHomeEvents = events
+    .filter((event) => isUpcoming(event))
+    .slice()
+    .sort((left, right) => new Date(left.startsAt).getTime() - new Date(right.startsAt).getTime())
+  const tonightEvents = orderedHomeEvents.filter((event) => isTonightEvent(event))
+  const otherUpcomingEvents = orderedHomeEvents.filter((event) => !isTonightEvent(event))
 
   return (
     <main className="shell">
@@ -1056,22 +1315,44 @@ function ProductApp({ language, onLanguageChange }: { language: Language; onLang
       ) : events.length === 0 ? (
         <section className="empty-state" data-testid="events-empty"><h2>{t('No upcoming events yet.')}</h2><p>{t('Approved events from verified hosts will appear here.')}</p></section>
       ) : (
-        <section className="events" aria-label={t('Events')}>
-          {events.map((event) => (
-            <button className="event-card" key={event.id} onClick={() => setSelectedId(event.id)}>
-              <Cover event={event} />
-              <span className="card-copy" data-testid="event-card">
-                <span className="category">{t(event.category)}</span>
-                <h2>{event.title}</h2>
-                <span className="meta">{formatDate(event.startsAt)} · {event.venue.name}</span>
-                <span className="card-footer">
-                  <strong>{priceLabel(event, language)}</strong>
-                  <span>{event.goingCount} {t('going')} <span aria-hidden="true">→</span></span>
+        <>
+          {tonightEvents.length > 0 && <section className="tonight-section" aria-label={t('Happening tonight')}>
+            <div className="tonight-section-heading">
+              <span className="tonight-heading-glow" aria-hidden="true"><i /></span>
+              <div><p className="eyebrow">{t('Tonight')}</p><h2>{t('Happening tonight')}</h2></div>
+              <span className="tonight-event-count">{tonightEvents.length}</span>
+            </div>
+            <div className="tonight-event-rail">
+              {tonightEvents.map((event) => <button className="tonight-event-card" key={event.id} aria-label={`${t('Tonight')}: ${event.title}`} onClick={() => setSelectedId(event.id)}>
+                <Cover event={event} tonight />
+                <span className="tonight-event-copy">
+                  <strong>{event.title}</strong>
+                  <span>{formatDate(event.startsAt)} · {event.venue.name}</span>
+                  <small>{priceLabel(event, language)} · {event.goingCount} {t('going')}</small>
                 </span>
-              </span>
-            </button>
-          ))}
-        </section>
+              </button>)}
+            </div>
+          </section>}
+          {otherUpcomingEvents.length > 0 && <>
+            {tonightEvents.length > 0 && <div className="home-events-heading"><h2>{t('Coming up')}</h2></div>}
+            <section className="events" aria-label={t('Events')}>
+              {otherUpcomingEvents.map((event) => (
+                <button className="event-card" key={event.id} aria-label={event.title} onClick={() => setSelectedId(event.id)}>
+                  <Cover event={event} tonight={false} />
+                  <span className="card-copy" data-testid="event-card">
+                    <span className="category">{t(event.category)}</span>
+                    <h2>{event.title}</h2>
+                    <span className="meta">{formatDate(event.startsAt)} · {event.venue.name}</span>
+                    <span className="card-footer">
+                      <strong>{priceLabel(event, language)}</strong>
+                      <span>{event.goingCount} {t('going')} <span aria-hidden="true">→</span></span>
+                    </span>
+                  </span>
+                </button>
+              ))}
+            </section>
+          </>}
+        </>
       )}
     </main>
   )

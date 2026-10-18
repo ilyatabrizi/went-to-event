@@ -89,7 +89,7 @@ infra/supabase/seed.sql
 Account verification and verified-user event publishing use migrations
 `007_account_verification.sql`, `008_verified_event_creation.sql`, and
 `009_admin_delegation.sql`. Apply these migrations before enabling the flow.
-Set `ADMIN_CLERK_USER_IDS` to the primary admin Clerk user ID(s). Those primary
+Set `ADMIN_AUTH_USER_IDS` to the primary Supabase Auth user UUID(s). Those primary
 admins can manage additional admins from the profile screen; delegated admins
 are stored in `app_admins` and can review verification requests but cannot
 delegate admin access. Every event create request is checked against the
@@ -100,6 +100,32 @@ Copy `.env.example` to `.env`, fill in the Supabase project URL and server-only
 service-role key, then restart the API. The development server loads this file
 automatically. The API will use Supabase automatically.
 Never expose `SUPABASE_SERVICE_ROLE_KEY` to the web app or iOS app.
+
+### Supabase Auth and session verification
+
+The browser and iOS clients keep refreshable Supabase Auth sessions locally.
+The API verifies access-token claims with Supabase `getClaims()` and its cached
+JWKS, then uses the token subject as the auth ID; ordinary requests do not call
+the Auth user endpoint or look up `user_identities`. Use asymmetric JWT signing
+keys (such as ES256) on the Auth server so verification can use JWKS locally.
+For accounts that must keep a different existing profile/booking ID, provision
+the trusted `app_metadata.database_user_id` claim on that Auth user. Never put
+that mapping in user-editable metadata, and insert its auth UUID and database ID
+into `auth_user_identities` (migration `017_supabase_auth_identity_map.sql`) so
+admin tools can resolve it.
+
+Existing Clerk accounts are not transferred by this code. Provision those
+users in Supabase Auth and preserve their old database identity by setting the
+trusted mapping claim; users will need a password reset or new credential
+because Clerk passwords cannot be copied. Before production, point web, iOS,
+and API configuration at the same Auth server that is reachable for the target
+users, and configure its allowed origins, email confirmation/recovery, and
+WebAuthn relying-party origin. Passkeys are enabled in the web client through
+Supabase's experimental passkey API and require a compatible Auth server.
+The current xcconfig defaults still name the existing `*.supabase.co` project;
+they must be changed if that endpoint is unreachable from Iran. This code change
+does not migrate or provision production accounts and does not deploy migration
+017.
 
 ## Business inquiries
 

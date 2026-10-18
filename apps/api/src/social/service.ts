@@ -131,12 +131,7 @@ export class SocialService {
       .or(`username.ilike.${pattern},display_name.ilike.${pattern}`)
       .limit(20)
     if (error) throw error
-    const ids = (data ?? []).map((profile) => profile.id)
-    if (!ids.length) return []
-    const { data: identities, error: identityError } = await this.database.from('user_identities').select('database_user_id').in('database_user_id', ids)
-    if (identityError) throw identityError
-    const activeIds = new Set((identities ?? []).map((identity) => identity.database_user_id))
-    return (data ?? []).filter((profile) => activeIds.has(profile.id)).map((profile) => this.personFromProfile(profile))
+    return (data ?? []).map((profile) => this.personFromProfile(profile))
   }
 
   async sendRequest(senderId: string, recipientId: string) {
@@ -327,6 +322,9 @@ export class SocialService {
     const { data, error } = await this.database.from('profiles').select('id, username, display_name, avatar_url').eq('id', userId).maybeSingle()
     if (error) throw error
     if (data) return this.personFromProfile(data)
+    const { data: authIdentity, error: authIdentityError } = await this.database.from('auth_user_identities').select('database_user_id').eq('database_user_id', userId).maybeSingle()
+    if (authIdentityError) throw authIdentityError
+    if (authIdentity) return this.personFallback(userId)
     const { data: identity, error: identityError } = await this.database.from('user_identities').select('database_user_id').eq('database_user_id', userId).maybeSingle()
     if (identityError) throw identityError
     return identity ? this.personFallback(userId) : null

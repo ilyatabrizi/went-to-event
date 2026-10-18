@@ -1,4 +1,4 @@
-import type { FastifyInstance, FastifyRequest } from 'fastify'
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import type { CreateBookingInput } from '../contracts/bookings.js'
 import type { AuthService } from '../auth/service.js'
 import type { BookingService } from '../bookings/service.js'
@@ -20,6 +20,7 @@ function validInput(body: unknown): body is CreateBookingInput {
   return typeof input.eventId === 'string'
     && typeof input.ticketTierId === 'string'
     && Number.isInteger(input.quantity)
+    && typeof input.showAttendance === 'boolean'
 }
 
 export async function bookingRoutes(
@@ -34,7 +35,7 @@ export async function bookingRoutes(
     const user = await currentUser(request, options.authService)
     if (!user) return reply.code(401).send({ error: 'Authentication required' })
     if (!validInput(request.body)) {
-      return reply.code(400).send({ error: 'eventId, ticketTierId, and integer quantity are required' })
+      return reply.code(400).send({ error: 'eventId, ticketTierId, quantity, and attendance visibility are required' })
     }
 
     try {
@@ -51,6 +52,13 @@ export async function bookingRoutes(
       request.log.warn({ error }, 'booking creation failed')
       return reply.code(400).send({ error: 'Could not create booking' })
     }
+  })
+
+  app.get<{ Params: { eventId: string } }>('/events/:eventId/attendees', async (request, reply) => {
+    if (!options.authService || !options.bookingService) return reply.code(503).send({ error: 'Attendance is not configured' })
+    const user = await currentUser(request, options.authService)
+    if (!user) return reply.code(401).send({ error: 'Authentication required' })
+    return { data: await options.bookingService.friendsAttending(user.id, request.params.eventId) }
   })
 
   app.get('/me/bookings', async (request, reply) => {
@@ -76,6 +84,20 @@ export async function bookingRoutes(
 
     return { data: await options.bookingService.list(user.id) }
   })
+
+  async function removeBooking(request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) {
+    if (!options.authService || !options.bookingService) {
+      return reply.code(503).send({ error: 'Bookings are not configured' })
+    }
+    const user = await currentUser(request, options.authService)
+    if (!user) return reply.code(401).send({ error: 'Authentication required' })
+    const removed = await options.bookingService.cancel(user.id, request.params.id)
+    if (!removed) return reply.code(404).send({ error: 'Booking not found or already removed' })
+    return { removed: true }
+  }
+
+  app.delete<{ Params: { id: string } }>('/bookings/:id', removeBooking)
+  app.delete<{ Params: { id: string } }>('/me/bookings/:id', removeBooking)
 
   app.get<{ Params: { id: string } }>('/me/bookings/:id', async (request, reply) => {
     if (!options.authService || !options.bookingService) {

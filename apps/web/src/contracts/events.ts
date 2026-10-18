@@ -15,6 +15,8 @@ export type Event = {
   venue: {
     name: string
     address: string
+    latitude?: number | null
+    longitude?: number | null
   }
   host: {
     name: string

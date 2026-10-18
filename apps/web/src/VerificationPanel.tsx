@@ -16,14 +16,13 @@ import {
   type VerificationReviewRequest,
   type VerificationState,
 } from './api'
-import { EventCreationPanel } from './EventCreationPanel'
 import { translate, type Language } from './i18n'
 
 function verificationLabel(status: VerificationState['status'], t: (text: string) => string) {
   return status === 'verified' ? t('Verified') : status === 'pending' ? t('Under review') : status === 'rejected' ? t('Not approved') : status === 'suspended' ? t('Suspended') : t('Not verified')
 }
 
-export function VerificationPanel({ getToken, onEventCreated, language }: { getToken: AuthTokenProvider; onEventCreated: (event: Event) => void; language: Language }) {
+export function VerificationPanel({ getToken, onPublishEvent, onStatusChange, language }: { getToken: AuthTokenProvider; onPublishEvent: () => void; onStatusChange: (status: VerificationState['status']) => void; language: Language }) {
   const t = (text: string) => translate(language, text)
   const [state, setState] = useState<VerificationState | null>(null)
   const [loading, setLoading] = useState(true)
@@ -45,7 +44,7 @@ export function VerificationPanel({ getToken, onEventCreated, language }: { getT
   useEffect(() => {
     let cancelled = false
     getVerificationStatus(getToken)
-      .then((next) => { if (!cancelled) setState(next) })
+      .then((next) => { if (!cancelled) { setState(next); onStatusChange(next.status) } })
       .catch((failure) => { if (!cancelled) setError(failure instanceof Error ? failure.message : t('Could not load verification status.')) })
       .finally(() => { if (!cancelled) setLoading(false) })
     getAdminVerificationRequests(getToken)
@@ -59,7 +58,11 @@ export function VerificationPanel({ getToken, onEventCreated, language }: { getT
           if (!cancelled) setAdmins(currentAdmins)
         }
       })
-      .catch(() => {})
+    .catch((failure) => {
+      // Every signed-in user loads this panel, but only admins can see the review queue.
+      // A normal permission denial is expected and should not appear under the verified card.
+      if (failure instanceof Error && failure.message !== 'Admin access required') setError(failure.message)
+    })
     return () => { cancelled = true }
   }, [getToken])
 
@@ -71,6 +74,7 @@ export function VerificationPanel({ getToken, onEventCreated, language }: { getT
       await requestAccountVerification(getToken, { message: message.trim(), ...(referenceUrl.trim() ? { referenceUrl: referenceUrl.trim() } : {}) })
       const next = await getVerificationStatus(getToken)
       setState(next)
+      onStatusChange(next.status)
       setMessage('')
       setReferenceUrl('')
     } catch (failure) {
@@ -163,7 +167,7 @@ export function VerificationPanel({ getToken, onEventCreated, language }: { getT
         <div className="settings-heading"><span className="label">{t('Account verification')}</span><span>{state ? verificationLabel(state.status, t) : t('Unavailable')}</span></div>
         {state?.status === 'verified' ? <>
           <p>{t('Your account has been verified. You can add events.')}</p>
-          <EventCreationPanel getToken={getToken} onCreated={onEventCreated} language={language} />
+          <button className="primary-button" type="button" onClick={onPublishEvent}>{t('Publish an event')}</button>
         </> : state?.status === 'pending' ? <>
           <p>{t('Your request is waiting for a manual review. We’ll update this page when it’s reviewed.')}</p>
           {state.request?.referenceUrl && <a href={state.request.referenceUrl} target="_blank" rel="noreferrer">{t('Submitted reference')}</a>}
@@ -171,7 +175,7 @@ export function VerificationPanel({ getToken, onEventCreated, language }: { getT
           {state?.request?.reviewNote && <p className="verification-review-note">{t('Admin note')}: {state.request.reviewNote}</p>}
           <p>{t('Tell us about your events and share a public link an admin can use to review your account. Please don’t submit identity documents here.')}</p>
           <form className="profile-form" onSubmit={submitRequest}>
-            <label>{t('Why should your account be verified?')}<textarea required minLength={20} maxLength={1000} rows={4} value={message} onChange={(event) => setMessage(event.target.value)} placeholder={t('Tell us what kinds of events you plan to host.')} /></label>
+            <label>{t('Why should your account be verified?')}<textarea required minLength={1} maxLength={1000} rows={4} value={message} onChange={(event) => setMessage(event.target.value)} placeholder={t('Tell us what kinds of events you plan to host.')} /></label>
             <label>{t('Website or public reference link (optional)')}<input type="url" maxLength={500} value={referenceUrl} onChange={(event) => setReferenceUrl(event.target.value)} placeholder={t('https://…')} /></label>
             <button className="primary-button" disabled={busy}>{busy ? t('Submitting…') : state?.status === 'rejected' ? t('Request another review') : t('Request verification')}</button>
           </form>

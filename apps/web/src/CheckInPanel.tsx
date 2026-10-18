@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import type { BrowserQRCodeReader, IScannerControls } from '@zxing/browser'
 import { verifyTicket, type AuthTokenProvider, type TicketCheckInResult } from './api'
 import { translate, type Language } from './i18n'
-
-type Detector = new () => { detect(video: HTMLVideoElement): Promise<Array<{ rawValue: string }>> }
 
 export function CheckInPanel({ getToken, onBack, navigation, language }: { getToken: AuthTokenProvider; onBack: () => void; navigation: ReactNode; language: Language }) {
   const t = (text: string) => translate(language, text)
@@ -11,13 +10,15 @@ export function CheckInPanel({ getToken, onBack, navigation, language }: { getTo
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [scanning, setScanning] = useState(false)
+  const [scannerReady, setScannerReady] = useState(false)
   const video = useRef<HTMLVideoElement>(null)
   const stream = useRef<MediaStream | null>(null)
-  const frame = useRef<number | null>(null)
+  const scanner = useRef<IScannerControls | null>(null)
+  const reader = useRef<BrowserQRCodeReader | null>(null)
 
   const stopScanner = useCallback(() => {
-    if (frame.current !== null) cancelAnimationFrame(frame.current)
-    frame.current = null
+    scanner.current?.stop()
+    scanner.current = null
     stream.current?.getTracks().forEach((track) => track.stop())
     stream.current = null
     if (video.current) video.current.srcObject = null
@@ -25,6 +26,18 @@ export function CheckInPanel({ getToken, onBack, navigation, language }: { getTo
   }, [])
 
   useEffect(() => stopScanner, [stopScanner])
+
+  useEffect(() => {
+    let active = true
+    void import('@zxing/browser').then(({ BrowserQRCodeReader }) => {
+      if (!active) return
+      reader.current = new BrowserQRCodeReader()
+      setScannerReady(true)
+    }).catch(() => {
+      if (active) setError(t('Camera scanning is not supported here. Paste the QR value below instead.'))
+    })
+    return () => { active = false }
+  }, [])
 
   async function check(valueToVerify = value) {
     const qrCode = valueToVerify.trim()
@@ -44,41 +57,27 @@ export function CheckInPanel({ getToken, onBack, navigation, language }: { getTo
   }
 
   async function startScanner() {
-    const DetectorClass = (window as typeof window & { BarcodeDetector?: Detector }).BarcodeDetector
-    if (!DetectorClass) {
-      setError(t('Camera scanning is not supported here. Paste the QR value below instead.'))
-      return
-    }
     if (!navigator.mediaDevices?.getUserMedia) {
       setError(t('Camera access is not available. Paste the QR value below instead.'))
       return
     }
     setError(null)
     try {
-      const nextStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false })
-      stream.current = nextStream
       if (!video.current) return
-      video.current.srcObject = nextStream
-      await video.current.play()
+      if (!reader.current) return
+      scanner.current = await reader.current.decodeFromConstraints(
+        { video: { facingMode: { ideal: 'environment' } }, audio: false },
+        video.current,
+        (result) => {
+          if (!result) return
+          const scanned = result.getText()
+          stopScanner()
+          setValue(scanned)
+          void check(scanned)
+        },
+      )
+      stream.current = video.current.srcObject as MediaStream | null
       setScanning(true)
-      const detector = new DetectorClass()
-      const scan = async () => {
-        if (!video.current || !stream.current) return
-        try {
-          const codes = await detector.detect(video.current)
-          const scanned = codes[0]?.rawValue
-          if (scanned) {
-            stopScanner()
-            setValue(scanned)
-            void check(scanned)
-            return
-          }
-        } catch {
-          // Keep the camera open while a frame is not readable yet.
-        }
-        frame.current = requestAnimationFrame(() => { void scan() })
-      }
-      void scan()
     } catch {
       setError(t('Camera access was denied or unavailable. Paste the QR value below instead.'))
       stopScanner()
@@ -101,7 +100,7 @@ export function CheckInPanel({ getToken, onBack, navigation, language }: { getTo
           {scanning && <span className="checkin-frame" aria-hidden="true" />}
         </div>
         <div className="checkin-actions">
-          <button className="primary-button" type="button" onClick={startScanner} disabled={scanning || busy}>{scanning ? t('Scanning…') : t('Open camera')}</button>
+          <button className="primary-button" type="button" onClick={startScanner} disabled={!scannerReady || scanning || busy}>{scanning ? t('Scanning…') : scannerReady ? t('Open camera') : t('Preparing camera…')}</button>
           {scanning && <button className="secondary-button" type="button" onClick={stopScanner}>{t('Stop camera')}</button>}
         </div>
         <div className="checkin-divider"><span>{t('or enter a QR value')}</span></div>

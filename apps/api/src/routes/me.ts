@@ -86,7 +86,7 @@ export async function meRoutes(
     if (password && password.length < 8) return reply.code(400).send({ error: 'Password must be at least 8 characters.' })
 
     try {
-      return { user: await options.authService.updateAccount(user.id, { ...(email ? { email } : {}), ...(password ? { password } : {}) }) }
+      return { user: await options.authService.updateAccount(user.id, { ...(email ? { email } : {}), ...(password ? { password } : {}) }, user.authId) }
     } catch {
       return reply.code(400).send({ error: 'Could not update account. Check the values and try again.' })
     }

@@ -15,12 +15,20 @@ export async function leadRoutes(app: FastifyInstance, options: {
     const token = bearerToken(request.headers.authorization)
     const user = token && options.authService ? await options.authService.getUser(token) : null
     if (!user) return reply.code(401).send({ error: 'Authentication required.' })
-    const clerkUserId = user.authId
-    const isPrimaryAdmin = Boolean(clerkUserId && primaryAdminIds().includes(clerkUserId))
-    let isAdmin = isPrimaryAdmin
-    if (!isAdmin && clerkUserId && options.verificationService) {
+    const authUserId = user.authId
+    const configuredAdminIds = primaryAdminIds()
+    let isPrimaryAdmin = Boolean(authUserId && configuredAdminIds.includes(authUserId))
+    if (!isPrimaryAdmin && authUserId && options.verificationService?.isPrimaryAdmin) {
       try {
-        isAdmin = await options.verificationService.isAdmin(clerkUserId)
+        isPrimaryAdmin = await options.verificationService.isPrimaryAdmin(authUserId, configuredAdminIds)
+      } catch {
+        return reply.code(500).send({ error: 'Could not verify admin access.' })
+      }
+    }
+    let isAdmin = isPrimaryAdmin
+    if (!isAdmin && authUserId && options.verificationService) {
+      try {
+        isAdmin = await options.verificationService.isAdmin(authUserId)
       } catch {
         return reply.code(500).send({ error: 'Could not verify admin access.' })
       }
@@ -91,7 +99,7 @@ function bearerToken(value: string | undefined) {
 }
 
 function primaryAdminIds() {
-  return (process.env.ADMIN_CLERK_USER_IDS ?? '').split(',').map((value) => value.trim()).filter(Boolean)
+  return (process.env.ADMIN_AUTH_USER_IDS ?? process.env.ADMIN_CLERK_USER_IDS ?? '').split(',').map((value) => value.trim()).filter(Boolean)
 }
 
 function businessLeadsCsv(rows: BusinessLeadExportRow[]) {

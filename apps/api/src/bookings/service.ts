@@ -4,8 +4,10 @@ import type { Booking, CreateBookingInput, Ticket, TicketCheckInResult } from '.
 
 export interface BookingService {
   create(userId: string, input: CreateBookingInput): Promise<Booking>
+  friendsAttending(userId: string, eventId: string): Promise<Array<{ id: string; displayName: string; username: string | null; avatarUrl: string | null }>>
   list(userId: string): Promise<Booking[]>
   get(userId: string, id: string): Promise<Booking | null>
+  cancel(userId: string, id: string): Promise<boolean>
   verifyTicket(userId: string, qrCode: string): Promise<TicketCheckInResult>
 }
 
@@ -15,6 +17,7 @@ type BookingRow = {
   status: Booking['status']
   total_cents: number
   created_at: string
+  show_attendance: boolean
   booking_items: Array<{
     ticket_tier_id: string
     quantity: number
@@ -55,6 +58,7 @@ function toBooking(row: BookingRow): Booking {
     status: row.status,
     totalCents: row.total_cents,
     createdAt: row.created_at,
+    showAttendance: row.show_attendance,
   }
 }
 
@@ -76,6 +80,7 @@ export class SupabaseBookingService implements BookingService {
       p_event_id: input.eventId,
       p_ticket_tier_id: input.ticketTierId,
       p_quantity: input.quantity,
+      p_show_attendance: input.showAttendance,
     })
 
     if (error) throw error
@@ -101,6 +106,7 @@ export class SupabaseBookingService implements BookingService {
       status: data.status,
       totalCents: data.total_cents,
       createdAt: new Date().toISOString(),
+      showAttendance: data.show_attendance,
       tickets: toTickets(ticketRows),
     }
   }
@@ -108,8 +114,9 @@ export class SupabaseBookingService implements BookingService {
   async list(userId: string): Promise<Booking[]> {
     const { data, error } = await this.client
       .from('bookings')
-      .select('id, event_id, status, total_cents, created_at, booking_items(ticket_tier_id, quantity, unit_price_cents)')
+      .select('id, event_id, status, total_cents, created_at, show_attendance, booking_items(ticket_tier_id, quantity, unit_price_cents)')
       .eq('user_id', userId)
+      .neq('status', 'cancelled')
       .order('created_at', { ascending: false })
 
     if (error) throw error
@@ -133,7 +140,7 @@ export class SupabaseBookingService implements BookingService {
   async get(userId: string, id: string): Promise<Booking | null> {
     const { data, error } = await this.client
       .from('bookings')
-      .select('id, event_id, status, total_cents, created_at, booking_items(ticket_tier_id, quantity, unit_price_cents)')
+      .select('id, event_id, status, total_cents, created_at, show_attendance, booking_items(ticket_tier_id, quantity, unit_price_cents)')
       .eq('user_id', userId)
       .eq('id', id)
       .maybeSingle()
@@ -148,6 +155,37 @@ export class SupabaseBookingService implements BookingService {
       .order('ticket_number', { ascending: true })
     if (ticketError) throw ticketError
     return { ...booking, tickets: toTickets((tickets ?? []) as TicketRow[]) }
+  }
+
+  async friendsAttending(userId: string, eventId: string) {
+    const [from, to] = await Promise.all([
+      this.client.from('friend_requests').select('sender_id').eq('recipient_id', userId).eq('status', 'accepted'),
+      this.client.from('friend_requests').select('recipient_id').eq('sender_id', userId).eq('status', 'accepted'),
+    ])
+    if (from.error) throw from.error
+    if (to.error) throw to.error
+    const friendIds = [...new Set([...(from.data ?? []).map((row) => row.sender_id), ...(to.data ?? []).map((row) => row.recipient_id)])]
+    if (!friendIds.length) return []
+    const { data: bookings, error: bookingError } = await this.client.from('bookings').select('user_id').eq('event_id', eventId).eq('status', 'confirmed').eq('show_attendance', true).in('user_id', friendIds)
+    if (bookingError) throw bookingError
+    const attendeeIds = [...new Set((bookings ?? []).map((row) => row.user_id))]
+    if (!attendeeIds.length) return []
+    const { data: profiles, error: profileError } = await this.client.from('profiles').select('id, display_name, username, avatar_url').in('id', attendeeIds)
+    if (profileError) throw profileError
+    return (profiles ?? []).map((profile) => ({ id: profile.id, displayName: profile.display_name ?? profile.username ?? 'Went To Event member', username: profile.username, avatarUrl: profile.avatar_url }))
+  }
+
+  async cancel(userId: string, id: string): Promise<boolean> {
+    const { data, error } = await this.client
+      .from('bookings')
+      .update({ status: 'cancelled' })
+      .eq('id', id)
+      .eq('user_id', userId)
+      .in('status', ['pending', 'confirmed'])
+      .select('id')
+      .maybeSingle()
+    if (error) throw error
+    return Boolean(data)
   }
 
   async verifyTicket(userId: string, value: string): Promise<TicketCheckInResult> {

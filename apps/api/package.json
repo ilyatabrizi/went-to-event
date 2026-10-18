@@ -14,7 +14,6 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@clerk/backend": "^3.21.1",
     "@fastify/cors": "^11.3.0",
     "@supabase/supabase-js": "^2.47.0",
     "@types/web-push": "^3.6.4",

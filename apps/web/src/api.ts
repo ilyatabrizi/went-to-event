@@ -17,11 +17,20 @@ export type VerificationState = { status: VerificationStatus; request: { id: str
 export type VerificationReviewRequest = { id: string; userId: string; username: string | null; displayName: string | null; email: string | null; message: string; referenceUrl: string | null; createdAt: string }
 export type AdminAccount = { userId: string; username: string | null; displayName: string | null; addedAt: string }
 export type AdminCandidate = Pick<AdminAccount, 'userId' | 'username' | 'displayName'>
-export type CreateEventInput = { category: string; title: string; description: string; startsAt: string; endsAt: string; venueName: string; venueAddress: string; ticketTiers: Array<{ name: string; description: string; priceCents: number }> }
+export type CreateEventInput = { category: string; title: string; description: string; startsAt: string; endsAt: string; venueName: string; venueAddress: string; latitude: number; longitude: number; ticketTiers: Array<{ name: string; description: string; priceCents: number }> }
+export type EventAttendee = { id: string; displayName: string; username: string | null; avatarUrl: string | null }
 
 const apiBaseUrl = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '') ?? ''
 const apiPath = (path: string) => apiBaseUrl ? `${apiBaseUrl}${path}` : `/api${path}`
 export type AuthTokenProvider = () => Promise<string | null>
+const eventsCacheKey = 'wte.events.cache.v1'
+
+export async function getCachedEvents(): Promise<Event[] | null> {
+  try {
+    const cached = JSON.parse(localStorage.getItem(eventsCacheKey) ?? 'null') as { data?: Event[] } | null
+    return Array.isArray(cached?.data) ? cached.data : null
+  } catch { return null }
+}
 
 async function request<T>(path: string): Promise<T> {
   const response = await fetch(apiPath(path))
@@ -34,11 +43,17 @@ async function request<T>(path: string): Promise<T> {
 }
 
 export async function getEvents() {
-  return request<EventsResponse>('/events')
+  const response = await request<EventsResponse>('/events')
+  try { localStorage.setItem(eventsCacheKey, JSON.stringify({ savedAt: Date.now(), data: response.data })) } catch { /* storage may be unavailable */ }
+  return response
 }
 
 export async function getEvent(id: string) {
   return request<EventResponse>(`/events/${encodeURIComponent(id)}`)
+}
+
+export function getEventAttendees(getToken: AuthTokenProvider, eventId: string) {
+  return authenticatedRequest<{ data: EventAttendee[] }>(getToken, `/events/${encodeURIComponent(eventId)}/attendees`)
 }
 
 export async function createBooking(getToken: AuthTokenProvider, input: CreateBookingInput) {
@@ -76,6 +91,10 @@ export async function getBookings(getToken: AuthTokenProvider) {
   return response.json() as Promise<{ data: Booking[] }>
 }
 
+export function cancelBooking(getToken: AuthTokenProvider, bookingId: string) {
+  return authenticatedRequest<{ removed: boolean }>(getToken, `/bookings/${encodeURIComponent(bookingId)}`, { method: 'DELETE' })
+}
+
 export function verifyTicket(getToken: AuthTokenProvider, qrCode: string) {
   return authenticatedRequest<{ data: TicketCheckInResult }>(getToken, '/ticket-checkins', {
     method: 'POST',
@@ -86,13 +105,12 @@ export function verifyTicket(getToken: AuthTokenProvider, qrCode: string) {
 async function authenticatedRequest<T>(getToken: AuthTokenProvider, path: string, options: RequestInit = {}) {
   const token = await getToken()
   if (!token) throw new Error('Authentication required')
+  const headers = new Headers(options.headers)
+  headers.set('Authorization', `Bearer ${token}`)
+  if (options.body != null && !headers.has('content-type')) headers.set('content-type', 'application/json')
   const response = await fetch(apiPath(path), {
     ...options,
-    headers: {
-      'content-type': 'application/json',
-      Authorization: `Bearer ${token}`,
-      ...options.headers,
-    },
+    headers,
   })
   const body = await response.json().catch(() => null) as { error?: string } | T | null
   if (!response.ok) throw new Error((body as { error?: string } | null)?.error ?? `Request failed: ${response.status}`)

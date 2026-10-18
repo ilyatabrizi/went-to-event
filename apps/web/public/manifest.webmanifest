@@ -3,7 +3,7 @@
   "short_name": "Went To Event",
   "description": "Find something worth going to.",
   "id": "/",
-  "start_url": "/",
+  "start_url": "/demo",
   "scope": "/",
   "display": "standalone",
   "display_override": ["standalone", "minimal-ui"],

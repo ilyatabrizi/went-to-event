@@ -2,6 +2,35 @@ import SwiftUI
 import PhotosUI
 import UIKit
 
+private struct ProfileGearMark: View {
+    var body: some View {
+        ZStack {
+            GearOutline().stroke(style: StrokeStyle(lineWidth: 1.7, lineCap: .round, lineJoin: .round))
+            Circle().inset(by: 1).stroke(lineWidth: 1.6)
+                .frame(width: 9, height: 9)
+        }
+        .frame(width: 21, height: 21)
+        .accessibilityHidden(true)
+    }
+}
+
+private struct GearOutline: Shape {
+    func path(in rect: CGRect) -> Path {
+        let center = CGPoint(x: rect.midX, y: rect.midY)
+        let radius = min(rect.width, rect.height) / 2
+        let toothProfile: [CGFloat] = [0.72, 0.72, 0.94, 0.94, 0.94, 0.72, 0.72, 0.72]
+        var path = Path()
+        for index in 0..<64 {
+            let angle = -CGFloat.pi / 2 + CGFloat(index) * 2 * CGFloat.pi / 64
+            let distance = radius * toothProfile[index % toothProfile.count]
+            let point = CGPoint(x: center.x + cos(angle) * distance, y: center.y + sin(angle) * distance)
+            if index == 0 { path.move(to: point) } else { path.addLine(to: point) }
+        }
+        path.closeSubpath()
+        return path
+    }
+}
+
 @MainActor
 struct ContentView: View {
     @StateObject private var store = EventStore()
@@ -391,8 +420,13 @@ private struct ProfileView: View {
                             .foregroundStyle(.primary)
                             Spacer()
                             Button { showSettings = true } label: {
-                                Image(systemName: "gearshape").frame(width: 40, height: 40)
+                                ProfileGearMark()
+                                    .frame(width: 40, height: 40)
+                                    .background(Circle().fill(Color.primary.opacity(0.06)))
+                                    .contentShape(Circle())
                             }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Settings")
                         }
                         .padding(.bottom, 22)
                         HStack(spacing: 15) {
