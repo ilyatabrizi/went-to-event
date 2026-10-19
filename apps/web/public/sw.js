@@ -1,4 +1,4 @@
-const CACHE = 'wte-web-v2'
+const CACHE = 'wte-web-v3'
 
 self.addEventListener('install', (event) => {
   event.waitUntil(

@@ -29,6 +29,7 @@ export class ResendEmailService implements EmailService {
           'Keep this email for your records.',
         ].join('\n'),
       }),
+      signal: AbortSignal.timeout(8_000),
     })
 
     if (!response.ok) throw new Error(`Email provider returned ${response.status}`)

@@ -9,6 +9,7 @@ import { VerificationPanel } from './VerificationPanel'
 import { EventCreationPanel } from './EventCreationPanel'
 import { languageOptions, translate, type Language } from './i18n'
 import { LocationMap } from './LocationMap'
+import { CustomSelect } from './CustomSelect'
 
 type InstallPrompt = globalThis.Event & {
   prompt: () => Promise<void>
@@ -33,22 +34,22 @@ function InstallGuide({ language, canInstall, onInstall, onContinue }: { languag
       <div className="install-guide-mark" aria-hidden="true">W</div>
       <p className="eyebrow">{t('Install Went To Event')}</p>
       <h1>{t('Keep the app one tap away.')}</h1>
-      <p className="lede">{t('Add Went To Event to your home screen. Your sign-in and saved activity stay on this device.')}</p>
+      <p className="lede">{t('Install the app for faster access and a full-screen experience.')}</p>
       <section className="install-guide-card" aria-labelledby="install-guide-title">
-        <h2 id="install-guide-title">{t('Add it to your home screen')}</h2>
+        <div className="install-guide-card-heading"><span className="install-guide-step-count">01</span><div><h2 id="install-guide-title">{t('Add it to your home screen')}</h2><p>{t('It only takes a few taps.')}</p></div></div>
         {isAppleMobile ? (
-          <ol><li>{t('Tap the Share button in Safari.')}</li><li>{t('Choose Add to Home Screen, then tap Add.')}</li></ol>
+          <ol><li>{t('In Safari, tap the Share button.')}</li><li>{t('Scroll down and choose Add to Home Screen.')}</li><li>{t('Tap Add to finish.')}</li></ol>
         ) : isAndroid ? (
-          <ol><li>{t('Open the browser menu.')}</li><li>{t('Choose Install app or Add to Home screen.')}</li></ol>
+          <ol><li>{t('Open the browser menu.')}</li><li>{t('Tap Install app or Add to Home screen.')}</li><li>{t('Confirm by tapping Install or Add.')}</li></ol>
         ) : (
-          <ol><li>{t('Open your browser menu or the install icon in the address bar.')}</li><li>{t('Choose Install Went To Event or Add to Home screen.')}</li></ol>
+          <ol><li>{t('Look for the install icon in the address bar, or open the browser menu.')}</li><li>{t('Choose Install Went To Event.')}</li><li>{t('Confirm the install when your browser asks.')}</li></ol>
         )}
       </section>
       <div className="install-guide-actions">
         {canInstall && <button className="primary-button" onClick={onInstall}>{t('Install app')}</button>}
-        <button className={canInstall ? 'secondary-button' : 'primary-button'} onClick={onContinue}>{t('Open the app')}</button>
+        <button className={canInstall ? 'secondary-button' : 'primary-button'} onClick={onContinue}>{t('Continue in browser')}</button>
       </div>
-      <small className="install-guide-note">{t('Installed app launches open directly to events.')}</small>
+      <small className="install-guide-note">{t('You can install it later from your browser menu.')}</small>
     </main>
   )
 }
@@ -261,6 +262,7 @@ function ProductApp({ language, onLanguageChange, theme, onThemeChange }: { lang
   const [booking, setBooking] = useState<Booking | null>(null)
   const [bookingBusy, setBookingBusy] = useState(false)
   const [bookingRemoveBusy, setBookingRemoveBusy] = useState<string | null>(null)
+  const [bookingPendingRemoval, setBookingPendingRemoval] = useState<Booking | null>(null)
   const [bookingError, setBookingError] = useState<string | null>(null)
   const [showAttendance, setShowAttendance] = useState(true)
   const [friendsAttending, setFriendsAttending] = useState<EventAttendee[]>([])
@@ -430,6 +432,10 @@ function ProductApp({ language, onLanguageChange, theme, onThemeChange }: { lang
       return
     }
 
+    // Cards already carry the complete event payload. Avoid replacing a
+    // freshly selected event with a failing or stale follow-up request.
+    if (selected?.id === selectedId) return
+
     getEvent(selectedId)
       .then((response) => {
         setSelected(response.data)
@@ -440,7 +446,7 @@ function ProductApp({ language, onLanguageChange, theme, onThemeChange }: { lang
         setShowAttendance(true)
       })
       .catch(() => setError(t('Could not load that event.')))
-  }, [selectedId])
+  }, [selectedId, selected])
 
   useEffect(() => {
     setFriendsAttending([])
@@ -448,7 +454,7 @@ function ProductApp({ language, onLanguageChange, theme, onThemeChange }: { lang
     let cancelled = false
     void getEventAttendees(authToken, selectedId).then((response) => { if (!cancelled) setFriendsAttending(response.data) }).catch(() => { if (!cancelled) setFriendsAttending([]) })
     return () => { cancelled = true }
-  }, [authToken, selectedId, session])
+  }, [authToken, isSignedIn, selectedId])
 
   async function openBookings() {
     if (!session) return
@@ -475,6 +481,21 @@ function ProductApp({ language, onLanguageChange, theme, onThemeChange }: { lang
     } finally {
       setBookingsLoading(false)
     }
+  }
+
+  function openEvent(event: Event) {
+    setShowProfile(false)
+    setShowBookings(false)
+    setShowExplore(false)
+    setShowSocial(false)
+    setShowCheckIn(false)
+    setSelected(event)
+    setSelectedId(event.id)
+    setSelectedTierId(event.ticketTiers[0]?.id ?? null)
+    setQuantity(1)
+    setBooking(null)
+    setBookingError(null)
+    setShowAttendance(true)
   }
 
   function openProfile() {
@@ -702,9 +723,13 @@ function ProductApp({ language, onLanguageChange, theme, onThemeChange }: { lang
   }
 
   async function removeBooking(bookingToRemove: Booking) {
-    const event = bookingEvents[bookingToRemove.eventId]
-    const eventName = event?.title ?? t('this event')
-    if (!window.confirm(`${t('Are you sure you want to remove')} “${eventName}”?`)) return
+    setBookingPendingRemoval(bookingToRemove)
+  }
+
+  async function confirmRemoveBooking() {
+    const bookingToRemove = bookingPendingRemoval
+    if (!bookingToRemove) return
+    setBookingPendingRemoval(null)
     setBookingRemoveBusy(bookingToRemove.id)
     setBookingsError(null)
     try {
@@ -822,6 +847,15 @@ function ProductApp({ language, onLanguageChange, theme, onThemeChange }: { lang
       onCreated={(createdEvent) => {
         setEvents((current) => [createdEvent, ...current.filter((event) => event.id !== createdEvent.id)].sort((left, right) => left.startsAt.localeCompare(right.startsAt)))
         setShowEventCreation(false)
+        // The publish response already contains the complete event. Use it
+        // immediately so the host can open and book the new event without
+        // waiting for a public cache or a second GET request to catch up.
+        setSelected(createdEvent)
+        setSelectedTierId(createdEvent.ticketTiers[0]?.id ?? null)
+        setQuantity(1)
+        setBooking(null)
+        setBookingError(null)
+        setShowAttendance(true)
         setSelectedId(createdEvent.id)
       }}
     />
@@ -926,15 +960,10 @@ function ProductApp({ language, onLanguageChange, theme, onThemeChange }: { lang
           <section className="profile-settings" aria-label={t('Account language')}>
           <div className="settings-heading"><span className="label">{t('Account language')}</span></div>
           <label className="language-setting">{t('Choose the language used across Went To Event.')}
-            <select value={language} onChange={(event) => onLanguageChange?.(event.target.value as Language)} aria-label={t('Account language')}>
-              {languageOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-            </select>
+            <CustomSelect value={language} onChange={(value) => onLanguageChange?.(value as Language)} ariaLabel={t('Account language')} options={languageOptions.map((option) => ({ value: option.value, label: option.label }))} />
           </label>
           <label className="language-setting">{t('Theme')}
-            <select value={theme} onChange={(event) => onThemeChange?.(event.target.value as 'dark' | 'light')} aria-label={t('Theme')}>
-              <option value="dark">{t('Dark theme')}</option>
-              <option value="light">{t('Light theme')}</option>
-            </select>
+            <CustomSelect value={theme} onChange={(value) => onThemeChange?.(value as 'dark' | 'light')} ariaLabel={t('Theme')} options={[{ value: 'dark', label: t('Dark theme') }, { value: 'light', label: t('Light theme') }]} />
           </label>
         </section>
         <section className="profile-settings" aria-label={t('Your identity')}>
@@ -976,11 +1005,17 @@ function ProductApp({ language, onLanguageChange, theme, onThemeChange }: { lang
             } catch (error) { setProfileError(error instanceof Error ? error.message : t('Passkey sign-in is unavailable')) }
           }}>{t('Add a passkey')}</button>
         </section>
+        <section className="profile-settings support-settings" aria-label={t('Contact support')}>
+          <div className="settings-heading"><span className="label">{t('Contact support')}</span><span>{t('We are here to help')}</span></div>
+          <p className="settings-copy">{t('Need help with your account, a booking, or an event? Send us a message and our team will get back to you.')}</p>
+          <a className="support-link" href="mailto:info@wenttoevent.com?subject=Went%20To%20Event%20support">info@wenttoevent.com <span aria-hidden="true">↗</span></a>
+        </section>
         <section className="account-note" aria-label={t('Account settings')}>
           <div><span className="label">{t('Account')}</span><strong>{t('Your account is secured by Supabase Auth.')}</strong></div>
           <small>{t('Profile data and bookings remain stored securely in Went To Event.')}</small>
         </section>
         <button className="logout-button profile-logout" data-testid="logout" onClick={logout}>{t('Log out')}</button>
+        {bookingPendingRemoval && <BookingRemovalDialog booking={bookingPendingRemoval} event={bookingEvents[bookingPendingRemoval.eventId]} busy={Boolean(bookingRemoveBusy)} language={language} onCancel={() => setBookingPendingRemoval(null)} onConfirm={() => { void confirmRemoveBooking() }} />}
         </section>}
       </main>
     )
@@ -1031,19 +1066,10 @@ function ProductApp({ language, onLanguageChange, theme, onThemeChange }: { lang
             onChange={(event) => setQuery(event.target.value)}
           />
           <div className="filter-grid">
-            <label><span>{t('Category')}</span><select aria-label={t('Category')} value={category} onChange={(event) => setCategory(event.target.value)}>
-              <option value="All categories">{t('All categories')}</option>
-              {[...new Set(events.map((event) => event.category))].map((value) => <option key={value} value={value}>{t(value)}</option>)}
-            </select></label>
-            <label><span>{t('Date')}</span><select aria-label={t('Date')} value={dateFilter} onChange={(event) => setDateFilter(event.target.value)}>
-              <option value="Any date">{t('Any date')}</option><option value="Today">{t('Today')}</option><option value="This week">{t('This week')}</option>
-            </select></label>
-            <label><span>{t('Price')}</span><select aria-label={t('Price')} value={priceFilter} onChange={(event) => setPriceFilter(event.target.value)}>
-              <option value="Any price">{t('Any price')}</option><option value="Free">{t('Free')}</option><option value="Under $25">{t('Under $25')}</option><option value="Under $50">{t('Under $50')}</option>
-            </select></label>
-            <label><span>{t('Sort')}</span><select aria-label={t('Sort')} value={sort} onChange={(event) => setSort(event.target.value)}>
-              <option value="Recommended">{t('Recommended')}</option><option value="Soonest">{t('Soonest')}</option><option value="Most going">{t('Most going')}</option><option value="Price: low to high">{t('Price: low to high')}</option>
-            </select></label>
+            <label><span>{t('Category')}</span><CustomSelect value={category} onChange={setCategory} ariaLabel={t('Category')} options={[{ value: 'All categories', label: t('All categories') }, ...[...new Set(events.map((event) => event.category))].map((value) => ({ value, label: t(value) }))]} /></label>
+            <label><span>{t('Date')}</span><CustomSelect value={dateFilter} onChange={setDateFilter} ariaLabel={t('Date')} options={[{ value: 'Any date', label: t('Any date') }, { value: 'Today', label: t('Today') }, { value: 'This week', label: t('This week') }]} /></label>
+            <label><span>{t('Price')}</span><CustomSelect value={priceFilter} onChange={setPriceFilter} ariaLabel={t('Price')} options={[{ value: 'Any price', label: t('Any price') }, { value: 'Free', label: t('Free') }, { value: 'Under $25', label: t('Under $25') }, { value: 'Under $50', label: t('Under $50') }]} /></label>
+            <label><span>{t('Sort')}</span><CustomSelect value={sort} onChange={setSort} ariaLabel={t('Sort')} options={[{ value: 'Recommended', label: t('Recommended') }, { value: 'Soonest', label: t('Soonest') }, { value: 'Most going', label: t('Most going') }, { value: 'Price: low to high', label: t('Price: low to high') }]} /></label>
           </div>
         </section>
         <div className="explore-results-heading">
@@ -1055,7 +1081,7 @@ function ProductApp({ language, onLanguageChange, theme, onThemeChange }: { lang
         {filteredEvents.length ? (
         <section className="events" aria-label={t('Explore results')}>
             {filteredEvents.map((event) => (
-              <button className="event-card" key={event.id} aria-label={`${isTonightEvent(event) ? `${t('Tonight')}: ` : ''}${event.title}`} onClick={() => { setShowExplore(false); setSelectedId(event.id) }}>
+              <button className="event-card" key={event.id} aria-label={`${isTonightEvent(event) ? `${t('Tonight')}: ` : ''}${event.title}`} onClick={() => openEvent(event)}>
                 <Cover event={event} tonight={isTonightEvent(event)} />
                 <span className="card-copy" data-testid="event-card">
                   <span className="category">{event.category}</span>
@@ -1078,7 +1104,7 @@ function ProductApp({ language, onLanguageChange, theme, onThemeChange }: { lang
 
   if (selected) {
     return (
-      <main className="shell">
+      <main className="shell event-detail-page">
         <Navigation onHome={() => setSelectedId(null)} onBookings={openBookings} onExplore={() => setSelectedId(null)} onProfile={openProfile} onChat={openSocial} active="explore" language={language} />
         <div className="detail-hero">
           <Cover event={selected} />
@@ -1121,8 +1147,9 @@ function ProductApp({ language, onLanguageChange, theme, onThemeChange }: { lang
         </div>
         <div className="tiers">
           {selected.ticketTiers.map((tier) => (
-            <button
-              className={`tier tier-option ${selectedTierId === tier.id ? 'tier-selected' : ''}`}
+              <button
+                type="button"
+                className={`tier tier-option ${selectedTierId === tier.id ? 'tier-selected' : ''}`}
               key={tier.id}
               aria-pressed={selectedTierId === tier.id}
               onClick={() => {
@@ -1163,14 +1190,14 @@ function ProductApp({ language, onLanguageChange, theme, onThemeChange }: { lang
                 <strong>{quantity} {t(quantity === 1 ? 'ticket' : 'tickets')}</strong>
               </div>
               <div className="quantity-stepper" aria-label={t('Ticket quantity')}>
-                <button className="quantity-button" aria-label={t('Decrease quantity')} disabled={quantity === 1} onClick={() => setQuantity((value) => Math.max(1, value - 1))}>−</button>
+                <button type="button" className="quantity-button" aria-label={t('Decrease quantity')} disabled={quantity === 1} onClick={() => setQuantity((value) => Math.max(1, value - 1))}>−</button>
                 <span>{quantity}</span>
-                <button className="quantity-button" aria-label={t('Increase quantity')} disabled={quantity === 10} onClick={() => setQuantity((value) => Math.min(10, value + 1))}>+</button>
+                <button type="button" className="quantity-button" aria-label={t('Increase quantity')} disabled={quantity === 10} onClick={() => setQuantity((value) => Math.min(10, value + 1))}>+</button>
               </div>
             </div>
             <label className="attendance-visibility"><input type="checkbox" checked={showAttendance} onChange={(event) => setShowAttendance(event.target.checked)} /><span><strong>{t('Show that I’m going')}</strong><small>{t('Friends can see you in the attending list.')}</small></span></label>
             {session ? (
-              <button className="primary-button booking-button" disabled={bookingBusy || !selectedTierId} onClick={submitBooking}>
+              <button type="button" className="primary-button booking-button" disabled={bookingBusy || !selectedTierId} onClick={submitBooking}>
                 {bookingBusy ? t('Confirming…') : t('Confirm booking')}
               </button>
             ) : (
@@ -1289,6 +1316,7 @@ function ProductApp({ language, onLanguageChange, theme, onThemeChange }: { lang
             ))}
           </div>
         )}
+        {bookingPendingRemoval && <BookingRemovalDialog booking={bookingPendingRemoval} event={bookingEvents[bookingPendingRemoval.eventId]} busy={Boolean(bookingRemoveBusy)} language={language} onCancel={() => setBookingPendingRemoval(null)} onConfirm={() => { void confirmRemoveBooking() }} />}
       </main>
     )
   }
@@ -1323,7 +1351,7 @@ function ProductApp({ language, onLanguageChange, theme, onThemeChange }: { lang
               <span className="tonight-event-count">{tonightEvents.length}</span>
             </div>
             <div className="tonight-event-rail">
-              {tonightEvents.map((event) => <button className="tonight-event-card" key={event.id} aria-label={`${t('Tonight')}: ${event.title}`} onClick={() => setSelectedId(event.id)}>
+              {tonightEvents.map((event) => <button className="tonight-event-card" key={event.id} aria-label={`${t('Tonight')}: ${event.title}`} onClick={() => openEvent(event)}>
                 <Cover event={event} tonight />
                 <span className="tonight-event-copy">
                   <strong>{event.title}</strong>
@@ -1337,7 +1365,7 @@ function ProductApp({ language, onLanguageChange, theme, onThemeChange }: { lang
             {tonightEvents.length > 0 && <div className="home-events-heading"><h2>{t('Coming up')}</h2></div>}
             <section className="events" aria-label={t('Events')}>
               {otherUpcomingEvents.map((event) => (
-                <button className="event-card" key={event.id} aria-label={event.title} onClick={() => setSelectedId(event.id)}>
+                <button className="event-card" key={event.id} aria-label={event.title} onClick={() => openEvent(event)}>
                   <Cover event={event} tonight={false} />
                   <span className="card-copy" data-testid="event-card">
                     <span className="category">{t(event.category)}</span>
@@ -1364,5 +1392,23 @@ function LoadingScreen() {
       <span className="loading-spinner" aria-hidden="true" />
       <span className="sr-only">Loading</span>
     </main>
+  )
+}
+
+function BookingRemovalDialog({ booking, event, busy, language, onCancel, onConfirm }: { booking: Booking; event?: Event; busy: boolean; language: Language; onCancel: () => void; onConfirm: () => void }) {
+  const t = (text: string) => translate(language, text)
+  return (
+    <div className="dialog-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !busy) onCancel() }}>
+      <section className="confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby="remove-booking-title" aria-describedby="remove-booking-copy">
+        <span className="confirm-dialog-icon" aria-hidden="true">!</span>
+        <p className="eyebrow">{t('Remove booking')}</p>
+        <h2 id="remove-booking-title">{t('Remove this booking?')}</h2>
+        <p id="remove-booking-copy">{t('You will lose this booking and its event pass.')} {event?.title ? <strong>{event.title}</strong> : null}</p>
+        <div className="confirm-dialog-actions">
+          <button className="secondary-button" type="button" onClick={onCancel} disabled={busy}>{t('Keep booking')}</button>
+          <button className="danger-button" type="button" onClick={onConfirm} disabled={busy}>{busy ? t('Removing…') : t('Remove booking')}</button>
+        </div>
+      </section>
+    </div>
   )
 }

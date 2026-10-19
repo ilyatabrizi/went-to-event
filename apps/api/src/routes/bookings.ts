@@ -14,6 +14,20 @@ async function currentUser(request: FastifyRequest, authService: AuthService) {
   return token ? authService.getUser(token) : null
 }
 
+async function withTimeout<T>(promise: Promise<T>, milliseconds: number, message: string) {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(message)), milliseconds)
+      }),
+    ])
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
+}
+
 function validInput(body: unknown): body is CreateBookingInput {
   if (!body || typeof body !== 'object') return false
   const input = body as Record<string, unknown>
@@ -32,7 +46,14 @@ export async function bookingRoutes(
       return reply.code(503).send({ error: 'Bookings are not configured' })
     }
 
-    const user = await currentUser(request, options.authService)
+    const startedAt = Date.now()
+    let user
+    try {
+      user = await withTimeout(currentUser(request, options.authService), 8_000, 'Authentication service timed out')
+    } catch (error) {
+      request.log.error({ error, elapsedMs: Date.now() - startedAt }, 'booking authentication failed')
+      return reply.code(504).send({ error: 'Could not verify your sign-in. Please try again.' })
+    }
     if (!user) return reply.code(401).send({ error: 'Authentication required' })
     if (!validInput(request.body)) {
       return reply.code(400).send({ error: 'eventId, ticketTierId, quantity, and attendance visibility are required' })
@@ -40,12 +61,14 @@ export async function bookingRoutes(
 
     try {
       const booking = await options.bookingService.create(user.id, request.body)
+      request.log.info({ bookingId: booking.id, elapsedMs: Date.now() - startedAt }, 'booking created')
       if (options.emailService && user.email) {
-        try {
-          await options.emailService.sendBookingConfirmation(user.email, booking)
-        } catch (error) {
+        // Email delivery must not hold the booking response open. A booking
+        // is already confirmed at this point, and the notification is best
+        // effort so a slow provider cannot leave the UI stuck on Confirming.
+        void options.emailService.sendBookingConfirmation(user.email, booking).catch((error) => {
           request.log.error({ error, bookingId: booking.id }, 'booking email notification failed')
-        }
+        })
       }
       return { data: booking }
     } catch (error) {

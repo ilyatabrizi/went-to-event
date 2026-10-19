@@ -22,6 +22,9 @@ export type EventAttendee = { id: string; displayName: string; username: string 
 
 const apiBaseUrl = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '') ?? ''
 const apiPath = (path: string) => apiBaseUrl ? `${apiBaseUrl}${path}` : `/api${path}`
+// Send bookings through the web origin so Safari and privacy-focused browsers
+// don't have to make a cross-origin authenticated POST.
+const bookingApiPath = (path: string) => import.meta.env.PROD ? `/api${path}` : apiPath(path)
 export type AuthTokenProvider = () => Promise<string | null>
 const eventsCacheKey = 'wte.events.cache.v1'
 
@@ -57,16 +60,33 @@ export function getEventAttendees(getToken: AuthTokenProvider, eventId: string) 
 }
 
 export async function createBooking(getToken: AuthTokenProvider, input: CreateBookingInput) {
-  const token = await getToken()
+  let tokenTimeout: number | undefined
+  const token = await Promise.race([
+    getToken(),
+    new Promise<string | null>((_, reject) => {
+      tokenTimeout = window.setTimeout(() => reject(new Error('Could not prepare your booking session. Please sign in again.')), 10_000)
+    }),
+  ]).finally(() => { if (tokenTimeout !== undefined) window.clearTimeout(tokenTimeout) })
   if (!token) throw new Error('Authentication required')
-  const response = await fetch(apiPath('/bookings'), {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify(input),
-  })
+  const controller = new AbortController()
+  const timeout = window.setTimeout(() => controller.abort(), 15_000)
+  let response: Response
+  try {
+    response = await fetch(bookingApiPath('/bookings'), {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(input),
+      signal: controller.signal,
+    })
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') throw new Error('Booking confirmation timed out. Please try again.')
+    throw error
+  } finally {
+    window.clearTimeout(timeout)
+  }
 
   if (!response.ok) {
     const body = await response.json().catch(() => null) as { error?: string } | null

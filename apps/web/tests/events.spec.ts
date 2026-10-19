@@ -52,7 +52,7 @@ test('main site explains home-screen install and opens the app', async ({ page }
   await expect(page.getByRole('heading', { name: 'Add it to your home screen' })).toBeVisible()
   const manifestResponse = await page.request.get('/manifest.webmanifest')
   expect((await manifestResponse.json()).start_url).toBe('/demo')
-  await page.getByRole('button', { name: 'Open the app' }).click()
+  await page.getByRole('button', { name: 'Continue in browser' }).click()
   await expect(page).toHaveURL(/\/demo$/)
   await expect(page.getByRole('heading', { name: 'What’s happening?' })).toBeVisible()
 })
@@ -84,7 +84,7 @@ test('demo page shows Farsi install guidance once, then opens the app', async ({
   await page.goto('/demo')
 
   await expect(page.getByRole('heading', { name: 'برنامه را همیشه در دسترس داشته باشید.' })).toBeVisible()
-  await page.getByRole('button', { name: 'باز کردن برنامه' }).click()
+  await page.getByRole('button', { name: 'ادامه در مرورگر' }).click()
   await expect(page).toHaveURL(/\/demo$/)
   await expect(page.locator('html')).toHaveAttribute('lang', 'fa')
   await expect(page.locator('html')).toHaveAttribute('dir', 'rtl')
@@ -116,6 +116,13 @@ test('browse events and open event detail', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'What’s happening?' })).toBeVisible()
   await expect(page.getByTestId('event-card')).toHaveCount(3)
 
+  await page.getByRole('button', { name: /Warehouse Sessions Vol\. 9/ }).click()
+
+  await expect(page.getByTestId('event-detail-title')).toHaveText('Warehouse Sessions Vol. 9')
+  await page.getByRole('button', { name: 'Home' }).click()
+  await expect(page.getByRole('heading', { name: 'What’s happening?' })).toBeVisible()
+
+  await page.getByRole('button', { name: 'Explore' }).click()
   await page.getByRole('button', { name: /Warehouse Sessions Vol\. 9/ }).click()
 
   await expect(page.getByTestId('event-detail-title')).toHaveText('Warehouse Sessions Vol. 9')
