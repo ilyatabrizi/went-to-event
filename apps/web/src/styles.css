@@ -928,3 +928,8 @@ html[dir='rtl'] .social-send:active, html[dir='rtl'] .social-send:disabled { tra
 @media (min-width: 700px) {
   .social-layout:not(.social-chat-open) { grid-template-columns: minmax(0, 560px); height: auto; min-height: 320px; }
 }
+/* Local-only banner shown by the frontend mock-data preview mode. */
+.frontend-preview-banner { position: fixed; z-index: 10000; inset: 8px 8px auto; display: flex; align-items: center; justify-content: center; gap: 12px; width: fit-content; max-width: calc(100vw - 16px); margin-inline: auto; padding: 7px 10px 7px 14px; border: 1px solid rgba(244, 241, 236, .24); border-radius: 999px; background: #211f23; color: #f4f1ec; box-shadow: 0 5px 24px rgba(0, 0, 0, .28); font: 500 12px/1.2 system-ui, sans-serif; }
+.frontend-preview-banner strong { color: #fff; }
+.frontend-preview-banner button { padding: 5px 9px; border: 0; border-radius: 999px; background: #f4f1ec; color: #0b0a0c; font: 600 11px/1.2 system-ui, sans-serif; cursor: pointer; }
+@media (max-width: 420px) { .frontend-preview-banner { gap: 7px; font-size: 10px; } .frontend-preview-banner button { font-size: 10px; } }

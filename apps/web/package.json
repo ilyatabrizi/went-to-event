@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:preview": "vite --mode preview",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "test:e2e": "playwright test"

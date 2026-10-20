@@ -1,15 +1,41 @@
 # Went To Event — Session Handoff
 
-**Updated:** October 13, 2026
+**Updated:** October 19, 2026
 
 **Branch:** `develop`
 
-**Latest code commit:** `8ef024c` (`fix(ios)`), committed October 5, 2026; working tree was clean when this handoff was updated
+**Latest code commit:** `c696845`; working tree was clean when this handoff was updated
 
 > **Read this first.** The sections below this current snapshot include older
-> notes from September 30–October 1, 2026. They are useful as product history,
+> notes from September 30–October 13, 2026. They are useful as product history,
 > but some URLs, auth descriptions, and setup instructions are obsolete. The
-> October 13 notes below supersede the October 6 snapshot where they conflict.
+> October 19 notes below supersede earlier snapshots where they conflict.
+
+## Current session handoff — October 19, 2026
+
+### Web privacy and test deployment
+
+- The web app has a privacy policy at `/privacy` and `/privacy-policy`, plus a
+  cookie notice with **Essential only** and **Allow optional** choices. The
+  selected choice is saved in browser local storage under
+  `wte.cookie-consent.v1`. The current app does not use optional analytics or
+  advertising cookies; the preference does not activate optional scripts.
+- Production web deployment `dpl_bFjZRKBbvGbQakdB7TXgS8N9U6Ld` is ready at
+  `https://wenttoevent.com`.
+- A test preview is ready at
+  `https://web-o1xgixr0x-samshahverdi78-3858.vercel.app` (deployment
+  `dpl_FUfMVX3bLgCShZH4ArghB16wLgLw`). Details are in `TEST_SERVER.md`.
+- The web Vercel rewrite sends `/api/*` requests to the production API at
+  `api-orcin-one-49.vercel.app`; actions in the test preview may therefore
+  touch production data. Use care when creating test records.
+- Only `SESSION_HANDOFF.md` was found as an existing session handoff file.
+
+### Current session scope
+
+The user asked to record the test-server link and update session handoff files.
+`TEST_SERVER.md` and this current handoff snapshot record the preview URL,
+deployment ID, production alias, and API routing caveat. No deployment was
+performed in this handoff update.
 
 ## Current session handoff — October 13, 2026
 

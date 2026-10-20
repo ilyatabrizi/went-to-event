@@ -3,6 +3,7 @@ import { createClient, type Session, type SupabaseClient } from '@supabase/supab
 
 const url = import.meta.env.VITE_SUPABASE_URL
 const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
+export const frontendPreview = import.meta.env.DEV && import.meta.env.MODE === 'preview'
 export const supabase: SupabaseClient | null = url && anonKey
   ? createClient(url, anonKey, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, flowType: 'pkce', experimental: { passkey: true } } })
   : null
@@ -15,6 +16,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   const sessionRef = useRef<Session | null>(null)
   useEffect(() => {
+    if (frontendPreview) {
+      const previewSession = { access_token: 'local-preview-token', refresh_token: 'local-preview-refresh', expires_in: 3600, token_type: 'bearer', user: { id: 'preview-user', email: 'preview@example.test', user_metadata: { username: 'preview_guest' } } } as unknown as Session
+      sessionRef.current = previewSession
+      setSession(previewSession)
+      setLoaded(true)
+      return
+    }
     if (!supabase) { setLoaded(true); return }
     let active = true
     void supabase.auth.getSession().then(({ data }) => {
@@ -29,7 +37,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const value = useMemo<AuthContextValue>(() => ({
     loaded, session,
     getToken,
-    signOut: async () => { if (supabase) await supabase.auth.signOut() },
+    signOut: async () => { if (!frontendPreview && supabase) await supabase.auth.signOut() },
   }), [loaded, session, getToken])
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

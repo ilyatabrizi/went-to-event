@@ -3,9 +3,10 @@ import { createRoot } from 'react-dom/client'
 import { App } from './App'
 import { PrivacyPolicy } from './PrivacyPolicy'
 import { CookieConsent } from './CookieConsent'
-import { AuthProvider } from './auth'
+import { AuthProvider, frontendPreview } from './auth'
 import { languageOptions, type Language } from './i18n'
 import './styles.css'
+import { resetPreviewState } from './preview'
 
 function Root() {
   if (window.location.pathname === '/privacy' || window.location.pathname === '/privacy-policy') {
@@ -20,6 +21,7 @@ function Root() {
   const setAppTheme = (nextTheme: 'dark' | 'light') => { setTheme(nextTheme); localStorage.setItem('wte.theme.v1', nextTheme) }
   return (
     <AuthProvider>
+      {frontendPreview && <aside className="frontend-preview-banner" role="status"><span><strong>Frontend preview</strong> · Demo data stays in this browser</span><button type="button" onClick={resetPreviewState}>Reset preview</button></aside>}
       <App language={language} onLanguageChange={setLanguage} theme={theme} onThemeChange={setAppTheme} />
       <CookieConsent />
     </AuthProvider>

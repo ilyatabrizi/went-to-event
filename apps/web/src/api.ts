@@ -4,6 +4,7 @@ export type { TicketCheckInResult } from './contracts/bookings'
 import type { Event, EventResponse, EventsResponse } from './contracts/events'
 export type { Event } from './contracts/events'
 export type { Booking } from './contracts/bookings'
+import { previewEvents, previewRequest } from './preview'
 
 export type { UserProfile } from './contracts/auth'
 
@@ -21,6 +22,7 @@ export type CreateEventInput = { category: string; title: string; description: s
 export type EventAttendee = { id: string; displayName: string; username: string | null; avatarUrl: string | null }
 
 const apiBaseUrl = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '') ?? ''
+const frontendPreview = import.meta.env.DEV && import.meta.env.MODE === 'preview'
 const apiPath = (path: string) => apiBaseUrl ? `${apiBaseUrl}${path}` : `/api${path}`
 // Send bookings through the web origin so Safari and privacy-focused browsers
 // don't have to make a cross-origin authenticated POST.
@@ -29,6 +31,7 @@ export type AuthTokenProvider = () => Promise<string | null>
 const eventsCacheKey = 'wte.events.cache.v1'
 
 export async function getCachedEvents(): Promise<Event[] | null> {
+  if (frontendPreview) return previewEvents
   try {
     const cached = JSON.parse(localStorage.getItem(eventsCacheKey) ?? 'null') as { data?: Event[] } | null
     return Array.isArray(cached?.data) ? cached.data : null
@@ -36,6 +39,7 @@ export async function getCachedEvents(): Promise<Event[] | null> {
 }
 
 async function request<T>(path: string): Promise<T> {
+  if (frontendPreview) return previewRequest(path) as T
   const response = await fetch(apiPath(path))
 
   if (!response.ok) {
@@ -60,6 +64,7 @@ export function getEventAttendees(getToken: AuthTokenProvider, eventId: string) 
 }
 
 export async function createBooking(getToken: AuthTokenProvider, input: CreateBookingInput) {
+  if (frontendPreview) return previewRequest('/bookings', { method: 'POST', body: JSON.stringify(input) }) as { data: Booking }
   let tokenTimeout: number | undefined
   const token = await Promise.race([
     getToken(),
@@ -97,6 +102,7 @@ export async function createBooking(getToken: AuthTokenProvider, input: CreateBo
 }
 
 export async function getBookings(getToken: AuthTokenProvider) {
+  if (frontendPreview) return previewRequest('/bookings') as { data: Booking[] }
   const token = await getToken()
   if (!token) throw new Error('Authentication required')
   const response = await fetch(apiPath('/bookings'), {
@@ -123,6 +129,7 @@ export function verifyTicket(getToken: AuthTokenProvider, qrCode: string) {
 }
 
 async function authenticatedRequest<T>(getToken: AuthTokenProvider, path: string, options: RequestInit = {}) {
+  if (frontendPreview) return previewRequest(path, options) as T
   const token = await getToken()
   if (!token) throw new Error('Authentication required')
   const headers = new Headers(options.headers)
@@ -183,6 +190,7 @@ export function getAdminVerificationRequests(getToken: AuthTokenProvider) {
 }
 
 export async function downloadBusinessLeadsCsv(getToken: AuthTokenProvider) {
+  if (frontendPreview) return { blob: new Blob(['Preview mode does not contain business leads.']), filename: 'preview.csv' }
   const token = await getToken()
   if (!token) throw new Error('Authentication required')
   const response = await fetch(apiPath('/admin-business-leads/export.csv'), {
@@ -255,6 +263,7 @@ export function enablePushNotifications(getToken: AuthTokenProvider) {
 }
 
 async function subscribeToPush(getToken: AuthTokenProvider) {
+  if (frontendPreview) return { subscribed: true }
   if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) throw new Error('Notifications are not supported on this device.')
   const publicKey = import.meta.env.VITE_VAPID_PUBLIC_KEY as string | undefined
   if (!publicKey) throw new Error('Notifications are not configured yet.')
