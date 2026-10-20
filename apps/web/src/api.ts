@@ -275,3 +275,16 @@ function decodeVapidKey(value: string) {
   const raw = window.atob(base64)
   return Uint8Array.from(raw, (character) => character.charCodeAt(0))
 }
+
+export type HostDashboardData = {
+  events: Array<{ id: string; title: string; startsAt: string; endsAt: string }>
+  registrations: Array<{
+    id: string; eventId: string; attendeeId: string; displayName: string; username: string | null
+    status: 'pending' | 'confirmed' | 'cancelled'; totalCents: number; quantity: number
+    createdAt: string; checkedIn: number; ticketNames: string[]
+  }>
+}
+
+export function getHostDashboard(getToken: AuthTokenProvider) {
+  return authenticatedRequest<{ data: HostDashboardData }>(getToken, '/host-dashboard')
+}

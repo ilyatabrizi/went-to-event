@@ -1,3 +1,5 @@
+import { hostDashboardRoutes } from './routes/host-dashboard.js'
+import { createHostDashboardService, type HostDashboardService } from './bookings/host-dashboard.js'
 import Fastify from 'fastify'
 import cors from '@fastify/cors'
 import type { IncomingMessage, ServerResponse } from 'node:http'
@@ -26,6 +28,7 @@ export function buildApp(
   verificationService: AccountVerificationService | null = createAccountVerificationService(),
   businessLeadService: BusinessLeadService | null = createBusinessLeadService(),
   emailService: EmailService | null = createEmailService(),
+  hostDashboardService: HostDashboardService | null = createHostDashboardService(),
 ) {
   const app = Fastify({
     logger: process.env.NODE_ENV !== 'test',
@@ -57,6 +60,7 @@ export function buildApp(
 
   app.register(eventsRoutes, { repository, authService, verificationService })
   app.register(meRoutes, { authService })
+  app.register(hostDashboardRoutes, { authService, verificationService, hostDashboardService })
   app.register(bookingRoutes, { authService, bookingService, emailService })
   app.register(socialRoutes, { authService, socialService })
   app.register(verificationRoutes, { authService, verificationService })

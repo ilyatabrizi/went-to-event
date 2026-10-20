@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase, useAuth } from './auth'
 import QRCode from 'qrcode'
-import { cancelBooking, createBooking, getBookings, getCachedEvents, getEvent, getEventAttendees, getEvents, getProfile, updateAccount, updateProfile, uploadProfilePicture, type Booking, type Event, type EventAttendee, type UserProfile, type VerificationStatus } from './api'
+import { cancelBooking, createBooking, getBookings, getCachedEvents, getEvent, getEventAttendees, getEvents, getProfile, getVerificationStatus, updateAccount, updateProfile, uploadProfilePicture, type Booking, type Event, type EventAttendee, type UserProfile, type VerificationStatus } from './api'
 import { AuthPanel } from './AuthPanel'
 import { ChatPreviewPanel, SocialPanel } from './SocialPanel'
+import { HostDashboard } from './HostDashboard'
 import { CheckInPanel } from './CheckInPanel'
 import { VerificationPanel } from './VerificationPanel'
 import { EventCreationPanel } from './EventCreationPanel'
@@ -290,6 +291,7 @@ function ProductApp({ language, onLanguageChange, theme, onThemeChange }: { lang
     && ['localhost', '127.0.0.1'].includes(window.location.hostname)
     && new URLSearchParams(window.location.search).get('preview') === 'chat'
   const [showCheckIn, setShowCheckIn] = useState(false)
+  const [showHostDashboard, setShowHostDashboard] = useState(false)
   const [savedIds, setSavedIds] = useState<string[]>([])
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [usernameSetupStatus, setUsernameSetupStatus] = useState<'idle' | 'checking' | 'required' | 'complete' | 'error'>('idle')
@@ -401,6 +403,16 @@ function ProductApp({ language, onLanguageChange, theme, onThemeChange }: { lang
       .finally(() => { if (!cancelled) setProfileLoading(false) })
     return () => { cancelled = true }
   }, [authToken, isSignedIn, profileRetry])
+
+  useEffect(() => {
+    if (!isSignedIn) { setVerificationStatus(null); return }
+    if (!showProfile) return
+    let cancelled = false
+    getVerificationStatus(authToken)
+      .then((state) => { if (!cancelled) setVerificationStatus(state.status) })
+      .catch(() => { if (!cancelled) setVerificationStatus(null) })
+    return () => { cancelled = true }
+  }, [authToken, isSignedIn, showProfile])
 
   useEffect(() => {
     if (!showProfile || !isSignedIn) return
@@ -839,6 +851,13 @@ function ProductApp({ language, onLanguageChange, theme, onThemeChange }: { lang
     return <CheckInPanel getToken={authToken} onBack={() => { setShowCheckIn(false); setShowProfile(true) }} language={language} navigation={<Navigation onHome={() => { setShowCheckIn(false); setSelectedId(null) }} onBookings={openBookings} onExplore={openExplore} onProfile={openProfile} onChat={openSocial} active="profile" language={language} />} />
   }
 
+  if (showHostDashboard && session) {
+    return <HostDashboard getToken={authToken} language={language}
+      onBack={() => { setShowHostDashboard(false); setShowProfile(true) }}
+      onCreate={() => { setShowHostDashboard(false); openEventPublisher() }}
+      onCheckIn={() => { setShowHostDashboard(false); openCheckIn() }} />
+  }
+
   if (showEventCreation && session) {
     return <EventCreationPanel
       getToken={authToken}
@@ -908,6 +927,9 @@ function ProductApp({ language, onLanguageChange, theme, onThemeChange }: { lang
             </svg>
           </button>
         </section>
+        {verificationStatus === 'verified' && <button className="host-dashboard-entry" data-testid="host-dashboard-entry" onClick={() => { setShowProfile(false); setShowHostDashboard(true) }}>
+          <span className="host-entry-icon" aria-hidden="true">▥</span><span><strong>{t('Hosting dashboard')}</strong><small>{t('Revenue, tickets, and your guest list')}</small></span><span aria-hidden="true">↗</span>
+        </button>}
         <button className="checkin-entry-button" onClick={openCheckIn}><span aria-hidden="true">⌾</span><span><strong>{t('Check in guests')}</strong><small>{t('Scan tickets for an event you host')}</small></span><span aria-hidden="true">→</span></button>
         {verificationStatus && verificationStatus !== 'verified' && <button className="profile-membership-card" onClick={() => setProfileTab('account')}>
           <span className="profile-membership-icon" aria-hidden="true">✦</span>
