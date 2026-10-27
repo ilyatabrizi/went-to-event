@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { buildApp } from '../src/app.js'
+import { events } from '../src/data/events.js'
 import { InMemoryEventRepository } from '../src/repositories/events.js'
 
 describe('API CORS', () => {
@@ -14,7 +15,7 @@ describe('API CORS', () => {
 
     expect(response.statusCode).toBe(200)
     expect(response.headers['access-control-allow-origin']).toBe('https://web-sigma-roan-83.vercel.app')
-    expect(response.json().total).toBe(5)
+    expect(response.json().total).toBe(events.filter((event) => new Date(event.endsAt).getTime() > Date.now()).length)
   })
 
   it('allows the custom production web domains', async () => {

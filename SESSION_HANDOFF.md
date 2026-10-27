@@ -1,15 +1,239 @@
 # Went To Event — Session Handoff
 
-**Updated:** October 13, 2026
+## English catalogue production deployment — October 27, 2026
+
+The user authorized deployment. The English web update and API are live:
+
+- Web: `https://wenttoevent.com`, deployment `dpl_AA9WLoDChgBtwD2vaxTcMCpgpL7M`.
+- API: `https://api-orcin-one-49.vercel.app`, deployment `dpl_FQhyZfSHL4BeRXioFWbgSaAMoTAK`.
+- Added five approved fictional November events (`demo-nov-2026-1` through `-5`),
+  their venues, coordinates, and ticket tiers using the existing server-side
+  Supabase client. Existing data was preserved; attendance starts at zero.
+- Demo events belong to the existing verified admin profile. Discovery excludes
+  records with no host_user_id; the SQL seeds now also bind the admin owner when
+  available and repair only these demo IDs if previously seeded without an owner.
+- The initial Vercel authorization error cleared after verifying the existing
+  login and retrying. Supabase CLI database connectivity failed; publication
+  succeeded through the configured service-role client without a schema change.
+- Live checks passed: all five November events appear through the direct API
+  and web proxy; a fresh Chromium session opens in English/LTR and can navigate
+  from Explore into AFTERHOURS event details. Screenshot:
+  `/tmp/wte-english-production.png`.
+- No commit or Git push performed. This supersedes the local-only status below.
+
+## English presentation catalogue — October 27, 2026
+
+- English is now the web default (LTR), including HTML title, social metadata,
+  and PWA language. Explicit saved language choices are preserved; a device
+  already set to Persian can switch in Profile → Account → Account language.
+- Added five fictional November 2026 events to the API fallback catalogue and
+  Supabase seed, spanning nightlife, wellness, food, arts, and community.
+  Existing events are preserved. Demo attendance starts at zero.
+- `infra/supabase/demo-november-2026.sql` is an additive, transactional,
+  idempotent seed for databases migrated through 023. It creates approved sample
+  listings with illustrative coordinates and preserves existing data on reruns.
+- No database changes, deployment, commit, or push performed. Supabase-backed
+  environments need the demo seed applied before the new listings appear;
+  deploy only when explicitly requested, per the existing instruction.
+
+## Moderation production deployment — October 24, 2026
+
+The user explicitly authorized applying the migration and deploying this update.
+Migration `023_event_moderation.sql` is now applied to Supabase project
+`legyknewpiwcxwdccbjd` and recorded as version `023` in migration history.
+All 10 pre-existing events were preserved as approved.
+
+- API production: `https://api-orcin-one-49.vercel.app`, deployment
+  `dpl_3yBunGwFeYq9QuySABZvmAUL3Tje` (`api-ipqdx9elk-samshahverdi78-3858.vercel.app`).
+- Web production: `https://wenttoevent.com`, deployment
+  `dpl_HMWkaRT8hA3gBLborySbHoz9SHXN` (`web-n4j6l8ims-samshahverdi78-3858.vercel.app`).
+- Both were built with production configuration using `--skip-domain`, then
+  promoted after the migration. A temporary database trigger paused event
+  insertions during cutover; that trigger/function were removed successfully.
+  Event submissions are open and default to pending approval.
+- Live checks passed with the real admin session: admin sign-in, user directory,
+  event review queue, anonymous denial, ordinary-member denial, direct user
+  verification, admin grant, delegated access, and revoke (access then denied).
+- Created a temporary event through the live API: confirmed pending status,
+  public detail 404, exclusion from discovery, and database booking rejection.
+  Admin approval persisted reviewer identity; a repeat review returned 409.
+  Synthetic event was moved into the past before approval to keep it out of
+  discovery. All temporary user/event/ticket-tier/venue records were removed.
+- Live website bundle verified to contain the new admin panel and admin username
+  alias. Both live admin routes (direct API and web proxy) return 401 with
+  private/no-store caching for anonymous requests.
+- Admin login remains username `admin` (or `admin@wenttoevent.com`) with the
+  generated password in `/tmp/wte-admin-credentials.txt`, mode 0600. No password
+  reset or account reprovisioning was performed in this deployment turn.
+- No commit or push performed. The deployment includes the current local
+  implementation. The October 23 notes below describe the earlier pre-deploy
+  state and are superseded by this section.
+
+## Event moderation and admin management — October 23, 2026
+
+Implemented the user's requested event approval system locally. This update has
+NOT been deployed and migration `023_event_moderation.sql` has NOT been applied
+to production. The prior October 22 host dashboard deployment remains live.
+Respect the earlier instruction to deploy production only on an explicit request.
+
+- New events default to pending; existing events are backfilled as approved.
+  Public API list/detail queries exclude pending/rejected events, including with
+  the service-role client. RLS restricts direct public reads of events, venues,
+  and ticket tiers. A booking insert trigger blocks unapproved events.
+- Admins can review events (approve/publish or reject, optional notes), browse
+  paginated users, directly verify users, and grant/revoke delegated admin access.
+  All admins can delegate per the new request. Primary configured admins and
+  the acting admin's own access cannot be revoked through these endpoints.
+- The panel is in Profile → Account → Admin panel, with English/Persian UI.
+  Hosts submit for approval, then land in their dashboard showing review status
+  and notes; submissions are not inserted into the public frontend event list.
+- Production Supabase account `admin@wenttoevent.com`, username `admin`, WAS
+  created with a generated password, a verified profile, and an app_admins row.
+  Real password sign-in succeeded. Credentials are in the local mode-0600 file
+  `/tmp/wte-admin-credentials.txt`; do not recreate the account or expose its
+  password in source control. The user requested password `admin`, but it was
+  below the existing eight-character form requirement. An optional password
+  preference question received no answer, so a generated password was used
+  after stating that assumption. Username alias login is in the new web code;
+  the existing live web UI can use the email address until deployment.
+- Reusable provisioning script: `apps/api/scripts/provision-admin.mjs`; it
+  refuses to overwrite an existing admin profile or credential file.
+- Validation: API and web builds pass; 27 focused backend/database tests and
+  10 moderation/host browser tests pass. PostgreSQL-compatible PGlite tests
+  execute real migration SQL, RLS checks, booking constraints, and review
+  conflict handling. Persian mobile/admin screenshots visually inspected.
+- Broader browser events suite: 6 pass / 6 fail, identical to unchanged HEAD
+  in `/tmp/wte-moderation-baseline-hi4veztj` (cookie overlay interception,
+  outdated install guidance, booking-removal expectation, and custom-select
+  test interaction). Existing API catalogue/CORS tests still expect five seed
+  events rather than one; previously documented baseline failures. The verified
+  event creation test was updated to include required coordinates, and the
+  admin delegation expectations were updated for the requested behavior.
+- Next activation step after deployment authorization: coordinate a maintenance
+  window with submissions paused, apply migration 023, deploy API and web, and
+  verify real admin review and host submission. Old API code does not filter
+  the new publication status, so avoid accepting submissions during cutover.
+  See `apps/api/README.md` for details. No commit or push performed.
+
+## Deployment update — October 22, 2026
+
+The user requested deployment of the host panel. Deployed local commit
+`e545a80` directly through the authenticated Vercel CLI to the existing
+production projects; no Git push was performed.
+
+- Web: `https://wenttoevent.com`, deployment `dpl_6Dm7e9PBPRnqWi6nxu72zPYDq6dD`.
+- API: `https://api-orcin-one-49.vercel.app`, deployment `dpl_ArFxZqtpK3CkG1YNZ8ZihQ8nbazN`.
+- Both builds passed; all 7 host dashboard API tests and all 5 dashboard
+  Playwright tests passed.
+- Live checks: website and API `/health` returned 200; `/host-dashboard`
+  returned 401 with `Cache-Control: private, no-store`, both directly and via
+  `https://wenttoevent.com/api/host-dashboard`.
+- Authenticated production analytics were not tested with a real host session.
+  No database migrations or account migrations were performed.
+- Access the panel through Profile → Hosting dashboard with a verified account.
+
+The older push/deployment status below is historical. This handoff already had
+uncommitted edits before this deployment; those edits were preserved.
+
+**Updated:** October 21, 2026
 
 **Branch:** `develop`
 
-**Latest code commit:** `8ef024c` (`fix(ios)`), committed October 5, 2026; working tree was clean when this handoff was updated
+**Latest code commit:** `e545a80` — `feat: add verified host analytics dashboard`
 
-> **Read this first.** The sections below this current snapshot include older
-> notes from September 30–October 1, 2026. They are useful as product history,
-> but some URLs, auth descriptions, and setup instructions are obsolete. The
-> October 13 notes below supersede the October 6 snapshot where they conflict.
+**Push status:** Commit exists locally. `git push origin develop` failed because
+GitHub HTTPS credentials are unavailable (`could not read Username for
+'https://github.com': Device not configured`). `gh` is not installed. Authenticate
+Git and retry `git push origin develop`; do not assume this commit is on GitHub
+or deployed. The code working tree was clean after the commit; this handoff
+update is a subsequent, uncommitted documentation change.
+
+> **Read this first.** The October 21 snapshot below supersedes older notes.
+> In particular, historical Clerk instructions do not describe the current
+> web authentication implementation, which uses Supabase Auth. Treat old
+> deployment URLs and infrastructure notes as historical until verified.
+
+## Current session handoff — October 21, 2026
+
+### Completed: verified host dashboard
+
+The user requested a professional hosting dashboard reachable from a verified
+host's profile, showing revenue, booked tickets, and registered guests.
+
+- Added a **Hosting dashboard** entry to verified profiles, with responsive
+  desktop/mobile layouts and Persian translations/RTL support.
+- Verification now loads automatically on the profile; previously, status only
+  loaded when the Account tab mounted `VerificationPanel`, hiding verified
+  actions on the initial profile visit.
+- Added revenue and ticket activity charts, confirmed ticket totals, unique
+  confirmed booker counts, check-in totals, event performance tables, event and
+  booking-period filters, and searchable/paginated registration lists with
+  booking status and ticket names. Added loading, retry, and first-event states,
+  plus links to event creation and guest check-in.
+- Added authenticated `GET /host-dashboard`. The server requires verified
+  status and scopes both events and bookings to the authenticated host through
+  `events.host_user_id`. Responses use `Cache-Control: private, no-store`.
+  Guest data contains display names/usernames and booking details, without
+  ticket QR secrets. Supabase queries paginate to avoid silently truncating
+  analytics at the response limit.
+- Dashboard values use real booking records. Pending/cancelled bookings appear
+  in registration management but are excluded from confirmed revenue and ticket
+  totals. Registered guests counts unique booking accounts, not individual
+  identities for every ticket in a group booking.
+- **Payment limitation:** There is no payment collection, refund, or payout
+  ledger in the current implementation. The dashboard explicitly labels money
+  as **Booked revenue**, based on confirmed booking value in USD; it must not
+  be represented as collected payments or settled host payouts. Payment
+  integration remains future work.
+- No new database migration was needed; the dashboard uses existing events,
+  bookings, booking_items, ticket_tiers, ticket_codes, and profiles tables.
+- Browser test dev-server configuration now sets `VITE_API_URL` to an empty
+  string so local tests use the local API proxy rather than the deployed API
+  configured in `.env.local`.
+
+### Main implementation files
+
+- `apps/web/src/HostDashboard.tsx`: dashboard and client-side analytics.
+- `apps/web/src/App.tsx`: verified profile entry and dashboard navigation.
+- `apps/web/src/api.ts`: dashboard response type and authenticated request.
+- `apps/web/src/styles.css`, `apps/web/src/i18n.ts`: styling and Persian copy.
+- `apps/api/src/bookings/host-dashboard.ts`: owner-scoped Supabase data service.
+- `apps/api/src/routes/host-dashboard.ts`, `apps/api/src/app.ts`: API route and
+  service registration.
+- `apps/api/tests/host-dashboard.test.ts`: 7 authorization/data tests.
+- `apps/web/tests/host-dashboard.spec.ts`: 5 browser tests.
+- `apps/web/playwright.config.ts`: local API setting for browser tests.
+
+### Validation and known baseline failures
+
+- `npm --prefix apps/web run build`: passed (existing Vite large-chunk warning).
+- `npm --prefix apps/api run build`: passed.
+- Dashboard Playwright suite: all 5 tests passed, covering totals, date/event
+  filters, guest search/status filters, verified entry visibility, empty state,
+  retry, navigation, and Persian mobile width.
+- Visually inspected desktop and Persian mobile screenshots. Temporary captures
+  were saved at `/tmp/wte-host-desktop.png` and `/tmp/wte-host-mobile.png`.
+- New API tests: all 7 passed, including unauthorized/unverified denial,
+  authenticated owner scoping, no-store responses, and omission of QR secrets.
+- Full API suite: 32 passed, 3 failed. Re-ran the original HEAD source/tests
+  in an isolated temporary directory and confirmed the same 3 failures on the
+  unchanged baseline: `events.test.ts` and `cors.test.ts` expect 5 catalogue
+  events but receive 1; `verification.test.ts` expects event creation status
+  200 but receives 400. These failures were not introduced by the dashboard.
+- `git diff --check`: passed before the code commit.
+- Browser tests use mocked authenticated API responses. A live hosted database
+  integration check and deployment were not performed in this session.
+
+### Current state and next action
+
+The user requested committing and pushing the dashboard to `develop`. Commit
+`e545a80` contains all 11 implementation/test/config files. The push failed
+because GitHub credentials were unavailable, and the user was informed.
+
+The final user request was to update this session handoff and exit. This file
+was updated after the code commit and remains uncommitted. No additional
+implementation or deployment is pending within the current request. When the
+user resumes publishing work, authenticate GitHub and push `develop`.
 
 ## Current session handoff — October 13, 2026
 

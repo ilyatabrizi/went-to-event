@@ -105,7 +105,7 @@ export function EventCreationPanel({ getToken, onCreated, onCancel, language }: 
       <header className="event-creation-header">
         <p className="eyebrow">{t('Verified account')}</p>
         <h1>{t('Create an event')}</h1>
-        <p className="lede">{t('Event access enabled')}</p>
+        <p className="lede">{t('Every event is reviewed by an admin before it goes live.')}</p>
       </header>
       <section className="profile-settings verification-event-section" aria-label={t('Create an event')}>
         <div className="event-create-layout">
@@ -160,7 +160,7 @@ export function EventCreationPanel({ getToken, onCreated, onCancel, language }: 
             {error && <p className="error" role="alert">{error}</p>}
             <div className="event-create-actions">
               {step > 0 && <button className="quiet-button" type="button" disabled={busy} onClick={() => { setError(null); setStep((current) => current - 1) }}>{t('Back')}</button>}
-              <button className="primary-button" type="submit" disabled={busy || !stepIsValid(step)}>{busy ? t('Publishing…') : step === steps.length - 1 ? t('Publish event') : t('Continue')}</button>
+              <button className="primary-button" type="submit" disabled={busy || !stepIsValid(step)}>{busy ? t('Submitting…') : step === steps.length - 1 ? t('Submit for approval') : t('Continue')}</button>
               <button className="quiet-button" type="button" disabled={busy} onClick={onCancel}>{t('Cancel')}</button>
             </div>
           </form>
@@ -179,7 +179,7 @@ export function EventCreationPanel({ getToken, onCreated, onCancel, language }: 
                 <strong>{!form.paid || !Number(form.price) ? t('Free') : `${t('From')} $${Number(form.price).toFixed(2)}`}</strong>
               </div>
             </article>
-            <p className="event-preview-note">{t('Your event will appear in Explore after publishing.')}</p>
+            <p className="event-preview-note">{t('Your event will appear in Explore after an admin approves it.')}</p>
           </aside>
         </div>
       </section>

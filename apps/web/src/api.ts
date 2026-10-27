@@ -277,7 +277,7 @@ function decodeVapidKey(value: string) {
 }
 
 export type HostDashboardData = {
-  events: Array<{ id: string; title: string; startsAt: string; endsAt: string }>
+  events: Array<{ id: string; title: string; startsAt: string; endsAt: string; publicationStatus?: string; reviewNote?: string | null }>
   registrations: Array<{
     id: string; eventId: string; attendeeId: string; displayName: string; username: string | null
     status: 'pending' | 'confirmed' | 'cancelled'; totalCents: number; quantity: number
@@ -287,4 +287,19 @@ export type HostDashboardData = {
 
 export function getHostDashboard(getToken: AuthTokenProvider) {
   return authenticatedRequest<{ data: HostDashboardData }>(getToken, '/host-dashboard')
+}
+
+export type AdminMember = { userId: string; username: string | null; displayName: string | null; verificationStatus: VerificationStatus; isAdmin: boolean; isPrimaryAdmin: boolean }
+export type ReviewEvent = { id: string; title: string; description: string; category: string; startsAt: string; endsAt: string; hostName: string; hostUserId: string | null; publicationStatus: 'pending' | 'approved' | 'rejected'; reviewNote: string | null; reviewedAt: string | null; venue: { name: string; address: string }; ticketTiers: Array<{ name: string; priceCents: number }> }
+export function getAdminMembers(getToken: AuthTokenProvider, query: string, page: number) {
+  return authenticatedRequest<{ users: AdminMember[]; total: number }>(getToken, `/admin-members?q=${encodeURIComponent(query)}&page=${page}`)
+}
+export function verifyMember(getToken: AuthTokenProvider, userId: string) {
+  return authenticatedRequest<{ verified: boolean }>(getToken, '/admin-members', { method: 'PATCH', body: JSON.stringify({ userId }) })
+}
+export function getReviewEvents(getToken: AuthTokenProvider, status: string, page: number) {
+  return authenticatedRequest<{ events: ReviewEvent[]; total: number }>(getToken, `/admin-events?status=${status}&page=${page}`)
+}
+export function reviewEvent(getToken: AuthTokenProvider, eventId: string, decision: 'approve' | 'reject', note: string) {
+  return authenticatedRequest<{ reviewed: boolean }>(getToken, '/admin-events', { method: 'PATCH', body: JSON.stringify({ eventId, decision, note }) })
 }

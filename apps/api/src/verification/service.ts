@@ -188,6 +188,65 @@ export class AccountVerificationService {
     })
   }
 
+  async members(query: string, page: number, configuredIds: string[]) {
+    const term = query.trim().replace(/[^\p{L}\p{N}_\s-]/gu, '').slice(0, 50)
+    let request = this.database.from('profiles').select('id, username, display_name, verification_status', { count: 'exact' })
+    if (term) request = request.or(`username.ilike.%${term}%,display_name.ilike.%${term}%`)
+    const { data, error, count } = await request.order('id').range(page * 20, page * 20 + 19)
+    if (error) throw error
+    const profileIds = (data ?? []).map((profile) => profile.id)
+    if (!profileIds.length) return { users: [], total: count ?? 0 }
+    const [identities, legacyIdentities] = await Promise.all([
+      this.database.from('auth_user_identities').select('auth_user_id, database_user_id').in('database_user_id', profileIds),
+      this.database.from('user_identities').select('clerk_user_id, database_user_id').in('database_user_id', profileIds),
+    ])
+    if (identities.error) throw identities.error
+    if (legacyIdentities.error) throw legacyIdentities.error
+    const idsByProfile = new Map<string, string[]>(profileIds.map((id) => [id, [id]]))
+    for (const identity of identities.data ?? []) idsByProfile.get(identity.database_user_id)?.push(identity.auth_user_id)
+    for (const identity of legacyIdentities.data ?? []) idsByProfile.get(identity.database_user_id)?.push(identity.clerk_user_id)
+    const authIds = [...new Set([...idsByProfile.values()].flat())]
+    const { data: admins, error: adminError } = await this.database.from('app_admins').select('clerk_user_id').in('clerk_user_id', authIds)
+    if (adminError) throw adminError
+    const adminIds = new Set((admins ?? []).map((admin) => admin.clerk_user_id))
+    const users = (data ?? []).map((profile) => {
+      const ids = idsByProfile.get(profile.id) ?? []
+      const primary = ids.some((id) => configuredIds.includes(id))
+      return { userId: profile.id, username: profile.username, displayName: profile.display_name,
+        verificationStatus: profile.verification_status, isAdmin: primary || ids.some((id) => adminIds.has(id)),
+        isPrimaryAdmin: primary }
+    })
+    return { users, total: count ?? 0 }
+  }
+
+  async verifyMember(userId: string, actorId: string) {
+    const { error } = await this.database.rpc('admin_verify_user', { p_user_id: userId, p_reviewer_id: actorId })
+    if (error?.code === 'P0002') throw new VerificationError('User not found', 404)
+    if (error) throw error
+    return { verified: true }
+  }
+
+  async eventsForReview(status: string, page: number) {
+    let query = this.database.from('events').select('id, title, description, category, starts_at, ends_at, host_name, host_user_id, publication_status, review_note, reviewed_at, venue:venues(name, address), ticket_tiers(name, price_cents)', { count: 'exact' })
+    if (status !== 'all') query = query.eq('publication_status', status)
+    const { data, error, count } = await query.order('starts_at').order('id').range(page * 20, page * 20 + 19)
+    if (error) throw error
+    return { events: (data ?? []).map((row) => ({ id: row.id, title: row.title, description: row.description,
+      category: row.category, startsAt: row.starts_at, endsAt: row.ends_at, hostName: row.host_name,
+      hostUserId: row.host_user_id, publicationStatus: row.publication_status, reviewNote: row.review_note,
+      reviewedAt: row.reviewed_at, venue: Array.isArray(row.venue) ? row.venue[0] : row.venue,
+      ticketTiers: row.ticket_tiers.map((tier) => ({ name: tier.name, priceCents: tier.price_cents })) })), total: count ?? 0 }
+  }
+
+  async reviewEvent(eventId: string, actorId: string, decision: VerificationDecision, note: string | null) {
+    const { error } = await this.database.rpc('review_event', {
+      p_event_id: eventId, p_reviewer_id: actorId, p_approved: decision === 'approve', p_note: note,
+    })
+    if (error?.code === 'P0001') throw new VerificationError('Event is no longer pending. Refresh the queue.', 409)
+    if (error) throw error
+    return { reviewed: true }
+  }
+
   async searchAdminCandidates(query: string): Promise<AdminCandidate[]> {
     const term = query.trim().replace(/[^\p{L}\p{N}_\s-]/gu, '').slice(0, 50)
     if (term.length < 2) return []
@@ -210,18 +269,22 @@ export class AccountVerificationService {
     if (identityError) throw identityError
     const authUserId = identity?.auth_user_id ?? (/^[0-9a-f-]{36}$/i.test(databaseUserId) ? databaseUserId : null)
     if (!authUserId) throw new VerificationError('User must be linked to a Supabase Auth account before admin access can be granted.', 409)
+    const { data: account, error: accountError } = await this.database.auth.admin.getUserById(authUserId)
+    if (accountError || !account.user) throw new VerificationError('User account not found.', 404)
     const { error } = await this.database.from('app_admins').upsert({ clerk_user_id: authUserId, added_by: actorId }, { onConflict: 'clerk_user_id', ignoreDuplicates: true })
     if (error) throw error
     return { added: true }
   }
 
-  async revokeAdmin(databaseUserId: string) {
+  async revokeAdmin(databaseUserId: string, configuredIds: string[] = []) {
     const { data: identity, error: identityError } = await this.database.from('auth_user_identities')
       .select('auth_user_id').eq('database_user_id', databaseUserId).maybeSingle()
     if (identityError) throw identityError
     const authUserId = identity?.auth_user_id ?? (/^[0-9a-f-]{36}$/i.test(databaseUserId) ? databaseUserId : null)
     if (!authUserId) throw new VerificationError('User must be linked to a Supabase Auth account before admin access can be changed.', 409)
-    const { error } = await this.database.from('app_admins').delete().eq('clerk_user_id', authUserId)
+    if (await this.isPrimaryAdmin(authUserId, configuredIds)) throw new VerificationError('Primary admin access cannot be removed.', 409)
+    const legacyIds = await this.legacyAuthIdsForDatabaseUser(databaseUserId)
+    const { error } = await this.database.from('app_admins').delete().in('clerk_user_id', [authUserId, ...legacyIds])
     if (error) throw error
     return { removed: true }
   }

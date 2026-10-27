@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { supabase } from './auth'
 import { translate, type Language } from './i18n'
 
+const loginEmail = (value: string) => value.trim().toLowerCase() === 'admin' ? 'admin@wenttoevent.com' : value.trim().toLowerCase()
+
 const hobbyOptions = ['Music', 'Food', 'Art', 'Sports', 'Travel', 'Talks']
 
 export function AuthPanel({ language, onAuthenticated }: { language: Language; onAuthenticated: () => void }) {
@@ -27,7 +29,7 @@ export function AuthPanel({ language, onAuthenticated }: { language: Language; o
         if (data.session) onAuthenticated()
         else setMessage(t('Check your email to confirm your account, then sign in.'))
       } else {
-        const { error } = await supabase.auth.signInWithPassword({ email: email.trim().toLowerCase(), password })
+        const { error } = await supabase.auth.signInWithPassword({ email: loginEmail(email), password })
         if (error) throw error
         onAuthenticated()
       }
@@ -38,7 +40,7 @@ export function AuthPanel({ language, onAuthenticated }: { language: Language; o
   async function resetPassword() {
     if (!supabase || !email) { setMessage(t('Enter your email address first.')); return }
     setBusy(true); setMessage('')
-    try { const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin }); if (error) throw error; setMessage(t('Password reset instructions sent.')) }
+    try { const { error } = await supabase.auth.resetPasswordForEmail(loginEmail(email), { redirectTo: window.location.origin }); if (error) throw error; setMessage(t('Password reset instructions sent.')) }
     catch (error) { setMessage(error instanceof Error ? error.message : t('Could not send password reset email')) }
     finally { setBusy(false) }
   }
@@ -56,8 +58,8 @@ export function AuthPanel({ language, onAuthenticated }: { language: Language; o
           <label>{t('Phone number')} <span className="auth-optional">{t('Optional')}</span><input type="tel" autoComplete="tel" value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} /></label>
           <fieldset className="auth-hobbies"><legend>{t('What are you into?')} <span className="auth-optional">{t('Optional')}</span></legend><div className="auth-hobby-options">{hobbyOptions.map((hobby) => { const selected = hobbies.includes(hobby); return <button type="button" key={hobby} className={selected ? 'auth-hobby auth-hobby-selected' : 'auth-hobby'} onClick={() => setHobbies((items) => selected ? items.filter((item) => item !== hobby) : [...items, hobby])} aria-pressed={selected}>{t(hobby)}</button> })}</div></fieldset>
         </>}
-        <label>{t('Email address')}<input type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} /></label>
-        <label>{t('Password')}<input type="password" autoComplete={mode === 'sign-in' ? 'current-password' : 'new-password'} minLength={8} required value={password} onChange={(e) => setPassword(e.target.value)} /></label>
+        <label>{t(mode === 'sign-in' ? 'Email address or admin username' : 'Email address')}<input type={mode === 'sign-in' ? 'text' : 'email'} autoComplete={mode === 'sign-in' ? 'username' : 'email'} required value={email} onChange={(e) => setEmail(e.target.value)} /></label>
+        <label>{t('Password')}<input type="password" autoComplete={mode === 'sign-in' ? 'current-password' : 'new-password'} minLength={mode === 'sign-up' ? 8 : undefined} required value={password} onChange={(e) => setPassword(e.target.value)} /></label>
         {message && <p className="error" role="alert">{message}</p>}
         <button className="primary-button" disabled={busy || (mode === 'sign-up' && !validUsername)}>{busy ? t('Loading…') : mode === 'sign-in' ? t('Sign in') : t('Create account')}</button>
       </form>

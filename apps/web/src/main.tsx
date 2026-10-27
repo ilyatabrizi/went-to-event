@@ -13,7 +13,7 @@ function Root() {
   }
   const [language, setLanguage] = useState<Language>(() => {
     const savedLanguage = localStorage.getItem('wte.language.v2')
-    return languageOptions.some((option) => option.value === savedLanguage) ? savedLanguage as Language : 'fa'
+    return languageOptions.some((option) => option.value === savedLanguage) ? savedLanguage as Language : 'en'
   })
   const [theme, setTheme] = useState<'dark' | 'light'>(() => localStorage.getItem('wte.theme.v1') === 'light' ? 'light' : 'dark')
   document.documentElement.dataset.theme = theme

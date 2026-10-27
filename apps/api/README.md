@@ -90,9 +90,10 @@ Account verification and verified-user event publishing use migrations
 `007_account_verification.sql`, `008_verified_event_creation.sql`, and
 `009_admin_delegation.sql`. Apply these migrations before enabling the flow.
 Set `ADMIN_AUTH_USER_IDS` to the primary Supabase Auth user UUID(s). Those primary
-admins can manage additional admins from the profile screen; delegated admins
-are stored in `app_admins` and can review verification requests but cannot
-delegate admin access. Every event create request is checked against the
+admins and delegated admins can manage users, grant admin access, and review
+account verification requests from Profile → Account → Admin panel. Delegated
+admins are stored in `app_admins`. Configured primary admins cannot be revoked
+through the panel, and admins cannot revoke their own access. Every event create request is checked against the
 account's database verification status on the API and again in the database
 function.
 
@@ -155,3 +156,42 @@ details are not accidentally committed. You can pass a different output path:
 ```bash
 npm run export:business-leads -- /path/to/business-leads.csv
 ```
+
+## Event approval and admin users
+
+Apply `infra/supabase/migrations/023_event_moderation.sql` before running this
+version of the API. Coordinate migration and API/web rollout in a maintenance
+window with event submissions paused: the previous API does not filter the new
+publication status. Existing events are retained as approved; new events default
+to pending. The new API filters public lists and direct event reads, while RLS
+restricts direct database reads and a database trigger prevents bookings for
+pending or rejected events.
+
+The admin panel is under **Profile → Account → Admin panel**. All admins can:
+
+- Browse/search users, verify them directly, and grant admin access.
+- Browse pending, approved, and rejected events; approve or reject pending events
+  with an optional note. Only the first review of a pending event takes effect.
+
+Hosts see publication status and review notes in their hosting dashboard. Event
+approval can take up to the existing public cache refresh interval to appear in
+Explore. Rejected events remain private; hosts can submit a corrected new event.
+
+`node apps/api/scripts/provision-admin.mjs` provisions the initial username
+`admin`, backed by the Supabase Auth email `admin@wenttoevent.com`. It generates
+an initial password and writes it to `/tmp/wte-admin-credentials.txt` with mode
+0600, or uses `BOOTSTRAP_ADMIN_PASSWORD` and `BOOTSTRAP_ADMIN_CREDENTIAL_FILE`.
+It refuses to overwrite an existing `admin` profile or credential file. The web
+sign-in accepts `admin` as an alias for that email and still authenticates through
+Supabase; privileges come from `app_admins`, never the username or client state.
+Do not rerun provisioning after the account is created. Credentials are not
+stored in source control. Passwords can be changed in Account security.
+
+Moderation checks run with:
+
+```bash
+npm test -- tests/moderation.test.ts tests/moderation-database.test.ts tests/moderation-repository.test.ts
+```
+
+The database tests execute the migration in an isolated PostgreSQL-compatible
+PGlite instance, including RLS, review conflicts, verification, and booking rules.

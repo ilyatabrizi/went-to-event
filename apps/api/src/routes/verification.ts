@@ -20,7 +20,7 @@ async function canManageAdmins(userId: string | undefined, service: AccountVerif
   if (!userId) return false
   const configuredIds = primaryAdminIds()
   if (configuredIds.includes(userId)) return true
-  return Boolean(service?.isPrimaryAdmin && await service.isPrimaryAdmin(userId, configuredIds))
+  return Boolean(service && ((service.isPrimaryAdmin && await service.isPrimaryAdmin(userId, configuredIds)) || await service.isAdmin(userId)))
 }
 
 async function canReviewVerifications(userId: string | undefined, service: AccountVerificationService) {
@@ -31,6 +31,9 @@ export async function verificationRoutes(
   app: FastifyInstance,
   options: { authService: AuthService | null; verificationService: AccountVerificationService | null },
 ) {
+  app.addHook('onRequest', async (request, reply) => {
+    if (request.url.startsWith('/admin-')) reply.header('Cache-Control', 'private, no-store')
+  })
   app.get('/verification', async (request, reply) => {
     const user = await currentUser(request, options.authService)
     if (!user) return reply.code(401).send({ error: 'Authentication required' })
@@ -94,10 +97,59 @@ export async function verificationRoutes(
     }
   })
 
+  app.get<{ Querystring: { q?: string; page?: string } }>('/admin-members', async (request, reply) => {
+    const user = await currentUser(request, options.authService)
+    if (!user) return reply.code(401).send({ error: 'Authentication required' })
+    if (!options.verificationService) return reply.code(503).send({ error: 'Verification is not configured' })
+    const page = Number(request.query.page ?? 0)
+    if (!Number.isInteger(page) || page < 0 || page > 100000) return reply.code(400).send({ error: 'Invalid page' })
+    try {
+      if (!await canManageAdmins(user.authId, options.verificationService)) return reply.code(403).send({ error: 'Admin access required' })
+      return await options.verificationService.members(request.query.q ?? '', page, primaryAdminIds())
+    } catch (error) { return handleVerificationError(reply, error) }
+  })
+
+  app.patch<{ Body: { userId?: string } }>('/admin-members', async (request, reply) => {
+    const user = await currentUser(request, options.authService)
+    if (!user) return reply.code(401).send({ error: 'Authentication required' })
+    if (!options.verificationService) return reply.code(503).send({ error: 'Verification is not configured' })
+    if (typeof request.body?.userId !== 'string' || !request.body.userId || request.body.userId.length > 200) return reply.code(400).send({ error: 'A valid userId is required.' })
+    try {
+      if (!await canManageAdmins(user.authId, options.verificationService)) return reply.code(403).send({ error: 'Admin access required' })
+      return await options.verificationService.verifyMember(request.body.userId, user.authId!)
+    } catch (error) { return handleVerificationError(reply, error) }
+  })
+
+  app.get<{ Querystring: { status?: string; page?: string } }>('/admin-events', async (request, reply) => {
+    const user = await currentUser(request, options.authService)
+    if (!user) return reply.code(401).send({ error: 'Authentication required' })
+    if (!options.verificationService) return reply.code(503).send({ error: 'Verification is not configured' })
+    const status = request.query.status ?? 'pending'
+    const page = Number(request.query.page ?? 0)
+    if (!['pending', 'approved', 'rejected', 'all'].includes(status) || !Number.isInteger(page) || page < 0 || page > 100000) return reply.code(400).send({ error: 'Invalid event filter' })
+    try {
+      if (!await canManageAdmins(user.authId, options.verificationService)) return reply.code(403).send({ error: 'Admin access required' })
+      return await options.verificationService.eventsForReview(status, page)
+    } catch (error) { return handleVerificationError(reply, error) }
+  })
+
+  app.patch<{ Body: { eventId?: string; decision?: string; note?: string } }>('/admin-events', async (request, reply) => {
+    const user = await currentUser(request, options.authService)
+    if (!user) return reply.code(401).send({ error: 'Authentication required' })
+    if (!options.verificationService) return reply.code(503).send({ error: 'Verification is not configured' })
+    const { eventId, decision, note } = request.body ?? {}
+    if (typeof eventId !== 'string' || !eventId || eventId.length > 200 || !['approve', 'reject'].includes(decision ?? '')
+      || (note !== undefined && (typeof note !== 'string' || note.length > 500))) return reply.code(400).send({ error: 'Provide an event, decision, and a note of at most 500 characters.' })
+    try {
+      if (!await canManageAdmins(user.authId, options.verificationService)) return reply.code(403).send({ error: 'Admin access required' })
+      return await options.verificationService.reviewEvent(eventId, user.authId!, decision as 'approve' | 'reject', note?.trim() || null)
+    } catch (error) { return handleVerificationError(reply, error) }
+  })
+
   app.get<{ Querystring: { q?: string } }>('/admin-users/search', async (request, reply) => {
     const user = await currentUser(request, options.authService)
     if (!user) return reply.code(401).send({ error: 'Authentication required' })
-    if (!await canManageAdmins(user.authId, options.verificationService)) return reply.code(403).send({ error: 'Primary admin access required' })
+    if (!await canManageAdmins(user.authId, options.verificationService)) return reply.code(403).send({ error: 'Admin access required' })
     if (!options.verificationService) return reply.code(503).send({ error: 'Verification is not configured' })
     try {
       return { users: await options.verificationService.searchAdminCandidates(request.query.q ?? '') }
@@ -109,7 +161,7 @@ export async function verificationRoutes(
   app.get('/admin-users', async (request, reply) => {
     const user = await currentUser(request, options.authService)
     if (!user) return reply.code(401).send({ error: 'Authentication required' })
-    if (!await canManageAdmins(user.authId, options.verificationService)) return reply.code(403).send({ error: 'Primary admin access required' })
+    if (!await canManageAdmins(user.authId, options.verificationService)) return reply.code(403).send({ error: 'Admin access required' })
     if (!options.verificationService) return reply.code(503).send({ error: 'Verification is not configured' })
     try {
       return { admins: await options.verificationService.listAdmins() }
@@ -121,9 +173,9 @@ export async function verificationRoutes(
   app.post<{ Body: { userId?: string } }>('/admin-users', async (request, reply) => {
     const user = await currentUser(request, options.authService)
     if (!user) return reply.code(401).send({ error: 'Authentication required' })
-    if (!await canManageAdmins(user.authId, options.verificationService)) return reply.code(403).send({ error: 'Primary admin access required' })
+    if (!await canManageAdmins(user.authId, options.verificationService)) return reply.code(403).send({ error: 'Admin access required' })
     if (!options.verificationService) return reply.code(503).send({ error: 'Verification is not configured' })
-    if (typeof request.body?.userId !== 'string' || request.body.userId.length > 200) return reply.code(400).send({ error: 'A valid userId is required.' })
+    if (typeof request.body?.userId !== 'string' || !request.body.userId || request.body.userId.length > 200) return reply.code(400).send({ error: 'A valid userId is required.' })
     try {
       return await options.verificationService.grantAdmin(request.body.userId, user.authId!)
     } catch (error) {
@@ -134,11 +186,12 @@ export async function verificationRoutes(
   app.delete<{ Params: { userId: string } }>('/admin-users/:userId', async (request, reply) => {
     const user = await currentUser(request, options.authService)
     if (!user) return reply.code(401).send({ error: 'Authentication required' })
-    if (!await canManageAdmins(user.authId, options.verificationService)) return reply.code(403).send({ error: 'Primary admin access required' })
+    if (!await canManageAdmins(user.authId, options.verificationService)) return reply.code(403).send({ error: 'Admin access required' })
     if (!options.verificationService) return reply.code(503).send({ error: 'Verification is not configured' })
     if (request.params.userId.length > 200) return reply.code(400).send({ error: 'A valid userId is required.' })
     try {
-      return await options.verificationService.revokeAdmin(request.params.userId)
+      if (request.params.userId === user.id) return reply.code(409).send({ error: 'You cannot remove your own admin access.' })
+      return await options.verificationService.revokeAdmin(request.params.userId, primaryAdminIds())
     } catch (error) {
       return handleVerificationError(reply, error)
     }

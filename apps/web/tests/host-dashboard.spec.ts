@@ -40,7 +40,7 @@ async function signIn(page: Page, options: { verified?: boolean; empty?: boolean
   const isFa = options.language === 'fa'
   await page.getByRole('button', { name: isFa ? 'پروفایل' : 'Profile', exact: true }).click()
   await page.getByTestId('profile-sign-in').click()
-  await page.locator('input[type="email"]').fill('host@example.test')
+  await page.locator('input[autocomplete="username"]').fill('host@example.test')
   await page.locator('input[type="password"]').fill('password-test')
   await page.locator('.profile-form button.primary-button').click()
   await expect(page.getByTestId('profile-card')).toContainText('@host_one')

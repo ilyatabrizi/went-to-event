@@ -1005,3 +1005,26 @@ html[dir='rtl'] .social-send:active, html[dir='rtl'] .social-send:disabled { tra
 .host-dashboard .ghost-button:disabled { opacity: .4; cursor: default; }
 .host-dashboard select:focus-visible, .host-dashboard input:focus-visible { outline: 2px solid var(--ember); outline-offset: 2px; }
 html[data-theme="light"] .host-status-confirmed, html[data-theme="light"] .host-verified { color: #237d64; }
+
+/* Admin review workspace */
+.moderation-panel { min-width: 0; }
+.moderation-tabs { display: flex; gap: 8px; margin: 16px 0; }
+.moderation-tabs button { flex: 1; padding: 12px; border: 1px solid #ffffff26; border-radius: 12px; background: transparent; color: inherit; }
+.moderation-tabs button[aria-selected="true"] { background: #f4f1ec; color: #0b0a0c; }
+.moderation-filter { display: grid; gap: 8px; margin-bottom: 20px; }
+.moderation-filter select { width: 100%; background: #171619; color: #f4f1ec; border: 1px solid #ffffff26; border-radius: 10px; padding: 12px; }
+.moderation-user, .moderation-event { border-top: 1px solid #ffffff1c; padding: 20px 0; overflow-wrap: anywhere; }
+.moderation-user { display: flex; gap: 16px; justify-content: space-between; align-items: center; }
+.moderation-user span, .moderation-user small, .host-publication-status { display: block; margin-top: 5px; color: #a6a2ab; }
+.moderation-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.moderation-event-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.moderation-event-heading h3 { margin: 0; }
+.moderation-badge { font-size: 12px; padding: 5px 8px; border: 1px solid #ffffff30; border-radius: 20px; flex-shrink: 0; }
+.moderation-pending { color: #f4f1ec; }
+.moderation-description { white-space: pre-wrap; }
+.moderation-event dl > div { display: grid; grid-template-columns: 70px 1fr; gap: 12px; margin: 8px 0; }
+.moderation-event dt { color: #a6a2ab; }
+.moderation-event dd { margin: 0; }
+.moderation-notice { border-inline-start: 2px solid #f4f1ec; padding-inline-start: 12px; }
+@media (max-width: 600px) { .moderation-user, .moderation-event-heading { align-items: flex-start; flex-direction: column; } }
+.moderation-panel textarea { width: 100%; box-sizing: border-box; resize: vertical; font: inherit; font-size: 16px; color: inherit; background: #ffffff06; border: 1px solid #ffffff26; border-radius: 10px; padding: 12px; }

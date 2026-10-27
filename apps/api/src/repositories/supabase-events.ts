@@ -2,6 +2,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import type { CreateEventInput, Event, EventRepository } from '../contracts/events.js'
 
 type EventRow = {
+  publication_status: 'pending' | 'approved' | 'rejected'
   id: string
   category: string
   title: string
@@ -28,6 +29,7 @@ function toEvent(row: EventRow): Event {
 
   return {
     id: row.id,
+    publicationStatus: row.publication_status,
     category: row.category,
     title: row.title,
     description: row.description,
@@ -75,9 +77,10 @@ export class SupabaseEventRepository implements EventRepository {
   private async loadList(): Promise<Event[]> {
     const { data, error } = await this.client
       .from('events')
-      .select('id, category, title, description, starts_at, ends_at, host_name, going_count, venue:venues(name, address, latitude, longitude), ticketTiers:ticket_tiers(id, name, description, price_cents)')
+      .select('id, publication_status, category, title, description, starts_at, ends_at, host_name, going_count, venue:venues(name, address, latitude, longitude), ticketTiers:ticket_tiers(id, name, description, price_cents)')
       // Discovery contains only live events from verified hosts. Keep ended
       // events addressable through getById so existing passes remain usable.
+      .eq('publication_status', 'approved')
       .gt('ends_at', new Date().toISOString())
       .not('host_user_id', 'is', null)
       .order('starts_at', { ascending: true })
@@ -103,12 +106,12 @@ export class SupabaseEventRepository implements EventRepository {
     return request
   }
 
-  private async loadById(id: string): Promise<Event | null> {
-    const { data, error } = await this.client
-      .from('events')
-      .select('id, category, title, description, starts_at, ends_at, host_name, going_count, venue:venues(name, address, latitude, longitude), ticketTiers:ticket_tiers(id, name, description, price_cents)')
+  private async loadById(id: string, includeUnpublished = false): Promise<Event | null> {
+    let query = this.client.from('events')
+      .select('id, publication_status, category, title, description, starts_at, ends_at, host_name, going_count, venue:venues(name, address, latitude, longitude), ticketTiers:ticket_tiers(id, name, description, price_cents)')
       .eq('id', id)
-      .maybeSingle()
+    if (!includeUnpublished) query = query.eq('publication_status', 'approved')
+    const { data, error } = await query.maybeSingle()
 
     if (error) throw error
     return data ? toEvent(data as EventRow) : null
@@ -133,7 +136,7 @@ export class SupabaseEventRepository implements EventRepository {
       })),
     })
     if (error) throw error
-    const created = await this.getById(eventId as string)
+    const created = await this.loadById(eventId as string, true)
     if (!created) throw new Error('Created event could not be loaded')
     this.listCache = null
     this.eventCache.delete(created.id)

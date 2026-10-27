@@ -73,7 +73,7 @@ test('an installed launch opens the app directly instead of the install guide', 
   await expect(page.getByRole('heading', { name: 'Keep the app one tap away.' })).toHaveCount(0)
 })
 
-test('demo page shows Farsi install guidance once, then opens the app', async ({ page }) => {
+test('first visit shows English install guidance, then opens the app', async ({ page }) => {
   await page.addInitScript(() => {
     if (!sessionStorage.getItem('test.install-guide-initialized')) {
       localStorage.removeItem('wte.language.v2')
@@ -81,19 +81,20 @@ test('demo page shows Farsi install guidance once, then opens the app', async ({
       sessionStorage.setItem('test.install-guide-initialized', '1')
     }
   })
-  await page.goto('/demo')
+  await page.goto('/')
 
-  await expect(page.getByRole('heading', { name: 'برنامه را همیشه در دسترس داشته باشید.' })).toBeVisible()
-  await page.getByRole('button', { name: 'ادامه در مرورگر' }).click()
+  await expect(page.getByRole('heading', { name: 'Keep the app one tap away.' })).toBeVisible()
+  await page.getByRole('button', { name: 'Essential only' }).click()
+  await page.getByRole('button', { name: 'Continue in browser' }).click()
   await expect(page).toHaveURL(/\/demo$/)
-  await expect(page.locator('html')).toHaveAttribute('lang', 'fa')
-  await expect(page.locator('html')).toHaveAttribute('dir', 'rtl')
-  await expect(page.getByRole('heading', { name: 'چه خبره؟' })).toBeVisible()
+  await expect(page.locator('html')).toHaveAttribute('lang', 'en')
+  await expect(page.locator('html')).toHaveAttribute('dir', 'ltr')
+  await expect(page.getByRole('heading', { name: 'What’s happening?' })).toBeVisible()
   await page.reload()
-  await expect(page.getByRole('heading', { name: 'چه خبره؟' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'What’s happening?' })).toBeVisible()
 })
 
-test('defaults to Farsi and right-to-left layout', async ({ page }) => {
+test('defaults to English and left-to-right layout', async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.removeItem('wte.language.v2')
     localStorage.setItem('wte.language', 'en')
@@ -101,12 +102,12 @@ test('defaults to Farsi and right-to-left layout', async ({ page }) => {
   })
   await page.goto('/demo')
 
-  await expect(page.locator('html')).toHaveAttribute('lang', 'fa')
-  await expect(page.locator('html')).toHaveAttribute('dir', 'rtl')
-  await expect(page.getByRole('navigation', { name: 'پیمایش اصلی' })).toBeVisible()
-  await expect(page.getByRole('heading', { name: 'چه خبره؟' })).toBeVisible()
+  await expect(page.locator('html')).toHaveAttribute('lang', 'en')
+  await expect(page.locator('html')).toHaveAttribute('dir', 'ltr')
+  await expect(page.getByRole('navigation', { name: 'Main navigation' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'What’s happening?' })).toBeVisible()
   await page.reload()
-  await expect(page.getByRole('heading', { name: 'چه خبره؟' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'What’s happening?' })).toBeVisible()
 })
 
 test('browse events and open event detail', async ({ page }) => {
@@ -250,7 +251,7 @@ test('signs in a simulated account and keeps auth, username, avatar, bookings, a
   await page.goto('/demo')
   await page.getByRole('button', { name: 'Profile' }).click()
   await page.getByTestId('profile-sign-in').click()
-  await page.getByLabel('Email address').fill('simulated@example.test')
+  await page.getByLabel(/Email address/).fill('simulated@example.test')
   await page.getByLabel('Password').fill('simulated-password')
   await page.locator('.profile-form button.primary-button').click()
 

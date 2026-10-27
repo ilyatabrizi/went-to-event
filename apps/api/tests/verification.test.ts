@@ -7,6 +7,7 @@ import type { AccountVerificationService } from '../src/verification/service.js'
 
 const event: Event = {
   id: 'event-created',
+  publicationStatus: 'pending',
   category: 'Community',
   title: 'A community event',
   description: 'An event description that is long enough for validation.',
@@ -58,7 +59,7 @@ describe('account verification authorization', () => {
     delete process.env.ADMIN_CLERK_USER_IDS
   })
 
-  it('requires authentication and verified account status to publish events', async () => {
+  it('requires authentication and verified account status to submit events', async () => {
     const input = {
       category: 'Community',
       title: 'A community event',
@@ -67,6 +68,7 @@ describe('account verification authorization', () => {
       endsAt: '2027-02-10T20:00:00.000Z',
       venueName: 'The Hall',
       venueAddress: '12 Main Street',
+      latitude: 35.7, longitude: 51.4,
       ticketTiers: [{ name: 'General', description: 'Entry', priceCents: 0 }],
     }
 
@@ -87,13 +89,13 @@ describe('account verification authorization', () => {
     expect(denied.statusCode).toBe(403)
   })
 
-  it('allows only the primary admin to manage admin accounts', async () => {
+  it('allows delegated and primary admins to manage admin accounts', async () => {
     const delegatedQueue = await app.inject({ method: 'GET', url: '/admin-verification', headers: { authorization: 'Bearer delegate' } })
     expect(delegatedQueue.statusCode).toBe(200)
-    expect(delegatedQueue.json().canManageAdmins).toBe(false)
+    expect(delegatedQueue.json().canManageAdmins).toBe(true)
 
     const delegatedGrant = await app.inject({ method: 'POST', url: '/admin-users', headers: { authorization: 'Bearer delegate' }, payload: { userId: 'member-1' } })
-    expect(delegatedGrant.statusCode).toBe(403)
+    expect(delegatedGrant.statusCode).toBe(200)
 
     const primaryGrant = await app.inject({ method: 'POST', url: '/admin-users', headers: { authorization: 'Bearer admin' }, payload: { userId: 'member-1' } })
     expect(primaryGrant.statusCode).toBe(200)

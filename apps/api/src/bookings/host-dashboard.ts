@@ -1,7 +1,7 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 
 export type HostDashboard = {
-  events: Array<{ id: string; title: string; startsAt: string; endsAt: string }>
+  events: Array<{ id: string; title: string; startsAt: string; endsAt: string; publicationStatus?: string; reviewNote?: string | null }>
   registrations: Array<{
     id: string; eventId: string; attendeeId: string; displayName: string; username: string | null
     status: 'pending' | 'confirmed' | 'cancelled'; totalCents: number; quantity: number
@@ -25,7 +25,7 @@ export class SupabaseHostDashboardService implements HostDashboardService {
   constructor(private readonly client: SupabaseClient) {}
   async overview(userId: string): Promise<HostDashboard> {
     const events = await allRows((from, to) => this.client.from('events')
-      .select('id, title, starts_at, ends_at').eq('host_user_id', userId).order('id').range(from, to))
+      .select('id, title, starts_at, ends_at, publication_status, review_note').eq('host_user_id', userId).order('id').range(from, to))
     if (!events.length) return { events: [], registrations: [] }
     // Ownership is enforced in the database query, never taken from request input.
     const bookings = await allRows((from, to) => this.client.from('bookings')
@@ -39,7 +39,7 @@ export class SupabaseHostDashboardService implements HostDashboardService {
       rows.forEach((row) => profiles.set(row.id, row))
     }
     return {
-      events: events.map((row) => ({ id: row.id, title: row.title, startsAt: row.starts_at, endsAt: row.ends_at })),
+      events: events.map((row) => ({ id: row.id, title: row.title, startsAt: row.starts_at, endsAt: row.ends_at, publicationStatus: row.publication_status, reviewNote: row.review_note })),
       registrations: bookings.map((row) => {
         const profile = profiles.get(row.user_id)
         return {

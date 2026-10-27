@@ -6,6 +6,7 @@ export type TicketTier = {
 }
 
 export type Event = {
+  publicationStatus?: 'pending' | 'approved' | 'rejected'
   id: string
   category: string
   title: string

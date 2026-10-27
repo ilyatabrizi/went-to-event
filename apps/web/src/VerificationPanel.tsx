@@ -1,18 +1,12 @@
+import { AdminPanel } from './AdminPanel'
 import { useEffect, useState, type FormEvent } from 'react'
 import {
-  addAdminAccount,
   downloadBusinessLeadsCsv,
-  getAdminAccounts,
   getAdminVerificationRequests,
   getVerificationStatus,
-  removeAdminAccount,
   requestAccountVerification,
   reviewAccountVerification,
-  searchAdminCandidates,
-  type AdminAccount,
-  type AdminCandidate,
   type AuthTokenProvider,
-  type Event,
   type VerificationReviewRequest,
   type VerificationState,
 } from './api'
@@ -31,13 +25,7 @@ export function VerificationPanel({ getToken, onPublishEvent, onStatusChange, la
   const [message, setMessage] = useState('')
   const [referenceUrl, setReferenceUrl] = useState('')
   const [isAdmin, setIsAdmin] = useState(false)
-  const [canManageAdmins, setCanManageAdmins] = useState(false)
   const [adminRequests, setAdminRequests] = useState<VerificationReviewRequest[]>([])
-  const [admins, setAdmins] = useState<AdminAccount[]>([])
-  const [adminSearch, setAdminSearch] = useState('')
-  const [adminCandidates, setAdminCandidates] = useState<AdminCandidate[]>([])
-  const [adminSearchComplete, setAdminSearchComplete] = useState(false)
-  const [adminSearchBusy, setAdminSearchBusy] = useState(false)
   const [reviewNotes, setReviewNotes] = useState<Record<string, string>>({})
   const [exportingLeads, setExportingLeads] = useState(false)
 
@@ -48,15 +36,11 @@ export function VerificationPanel({ getToken, onPublishEvent, onStatusChange, la
       .catch((failure) => { if (!cancelled) setError(failure instanceof Error ? failure.message : t('Could not load verification status.')) })
       .finally(() => { if (!cancelled) setLoading(false) })
     getAdminVerificationRequests(getToken)
-      .then(async ({ requests, canManageAdmins: canManage }) => {
+      .then(({ requests }) => {
         if (cancelled) return
         setIsAdmin(true)
         setAdminRequests(requests)
-        setCanManageAdmins(canManage)
-        if (canManage) {
-          const { admins: currentAdmins } = await getAdminAccounts(getToken)
-          if (!cancelled) setAdmins(currentAdmins)
-        }
+
       })
     .catch((failure) => {
       // Every signed-in user loads this panel, but only admins can see the review queue.
@@ -92,50 +76,6 @@ export function VerificationPanel({ getToken, onPublishEvent, onStatusChange, la
       setAdminRequests((current) => current.filter((request) => request.id !== requestId))
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : t('Could not review this request.'))
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  async function searchForAdmins(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    setAdminSearchBusy(true)
-    setError(null)
-    try {
-      const { users } = await searchAdminCandidates(getToken, adminSearch.trim())
-      setAdminCandidates(users.filter((candidate) => !admins.some((admin) => admin.userId === candidate.userId)))
-      setAdminSearchComplete(true)
-    } catch (failure) {
-      setError(failure instanceof Error ? failure.message : t('Could not search for users.'))
-    } finally {
-      setAdminSearchBusy(false)
-    }
-  }
-
-  async function grantAdmin(candidate: AdminCandidate) {
-    setBusy(true)
-    setError(null)
-    try {
-      await addAdminAccount(getToken, candidate.userId)
-      const { admins: currentAdmins } = await getAdminAccounts(getToken)
-      setAdmins(currentAdmins)
-      setAdminCandidates((current) => current.filter((user) => user.userId !== candidate.userId))
-    } catch (failure) {
-      setError(failure instanceof Error ? failure.message : t('Could not add this admin.'))
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  async function revokeAdmin(admin: AdminAccount) {
-    if (!window.confirm(`${t('Remove admin access from')} ${admin.displayName || admin.username || t('this account')}?`)) return
-    setBusy(true)
-    setError(null)
-    try {
-      await removeAdminAccount(getToken, admin.userId)
-      setAdmins((current) => current.filter((currentAdmin) => currentAdmin.userId !== admin.userId))
-    } catch (failure) {
-      setError(failure instanceof Error ? failure.message : t('Could not remove this admin.'))
     } finally {
       setBusy(false)
     }
@@ -182,6 +122,10 @@ export function VerificationPanel({ getToken, onPublishEvent, onStatusChange, la
         </>}
         {error && <p className="error" role="alert">{error}</p>}
       </section>
+      {isAdmin && <AdminPanel getToken={getToken} language={language} onUserVerified={() => {
+        void getAdminVerificationRequests(getToken).then(({ requests }) => setAdminRequests(requests)).catch(() => {})
+        void getVerificationStatus(getToken).then((next) => { setState(next); onStatusChange(next.status) }).catch(() => {})
+      }} />}
       {isAdmin && <section className="profile-settings verification-admin" aria-label={t('Admin review queue')}>
         <div className="settings-heading"><span className="label">{t('Admin review queue')}</span><span>{adminRequests.length} {t('pending')}</span></div>
         {adminRequests.length ? adminRequests.map((request) => (
@@ -207,26 +151,7 @@ export function VerificationPanel({ getToken, onPublishEvent, onStatusChange, la
         <p className="social-muted">{t('Download submitted company contact details as a CSV file. This export is available only to admins.')}</p>
         <button className="primary-button" type="button" disabled={exportingLeads} onClick={exportBusinessLeads}>{exportingLeads ? t('Preparing CSV…') : t('Download CSV')}</button>
       </section>}
-      {canManageAdmins && <section className="profile-settings verification-admin" aria-label={t('Admin account management')}>
-        <div className="settings-heading"><span className="label">{t('Manage admins')}</span><span>{admins.length} {t('added')}</span></div>
-        <p className="social-muted">{t('Your primary admin account can grant or remove admin access. Search by a member’s name or username.')}</p>
-        <form className="admin-search-form" onSubmit={searchForAdmins}>
-          <input aria-label={t('Search members to make admins')} minLength={2} value={adminSearch} onChange={(event) => setAdminSearch(event.target.value)} placeholder={t('Search name or username')} />
-          <button className="primary-button" disabled={adminSearchBusy || adminSearch.trim().length < 2}>{adminSearchBusy ? t('Searching…') : t('Search')}</button>
-        </form>
-        {adminCandidates.map((candidate) => <article className="admin-account-row" key={candidate.userId}>
-          <div><strong>{candidate.displayName || candidate.username || 'Went To Event member'}</strong>{candidate.username && <span>@{candidate.username}</span>}</div>
-          <button className="quiet-button" disabled={busy} onClick={() => grantAdmin(candidate)}>{t('Make admin')}</button>
-        </article>)}
-        {adminSearchComplete && adminCandidates.length === 0 && <p className="social-muted">{t('No available members found.')}</p>}
-        <div className="admin-account-list">
-          {admins.map((admin) => <article className="admin-account-row" key={admin.userId}>
-            <div><strong>{admin.displayName || admin.username || 'Went To Event member'}</strong>{admin.username && <span>@{admin.username}</span>}</div>
-            <button className="quiet-button" disabled={busy} onClick={() => revokeAdmin(admin)}>{t('Remove admin')}</button>
-          </article>)}
-          {!admins.length && <p className="social-muted">{t('No additional admins yet.')}</p>}
-        </div>
-      </section>}
+
     </>
   )
 }

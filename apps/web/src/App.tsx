@@ -863,19 +863,11 @@ function ProductApp({ language, onLanguageChange, theme, onThemeChange }: { lang
       getToken={authToken}
       language={language}
       onCancel={() => { setShowEventCreation(false); setShowProfile(true) }}
-      onCreated={(createdEvent) => {
-        setEvents((current) => [createdEvent, ...current.filter((event) => event.id !== createdEvent.id)].sort((left, right) => left.startsAt.localeCompare(right.startsAt)))
+      onCreated={() => {
         setShowEventCreation(false)
-        // The publish response already contains the complete event. Use it
-        // immediately so the host can open and book the new event without
-        // waiting for a public cache or a second GET request to catch up.
-        setSelected(createdEvent)
-        setSelectedTierId(createdEvent.ticketTiers[0]?.id ?? null)
-        setQuantity(1)
-        setBooking(null)
-        setBookingError(null)
-        setShowAttendance(true)
-        setSelectedId(createdEvent.id)
+        setSelectedId(null)
+        setShowProfile(false)
+        setShowHostDashboard(true)
       }}
     />
   }
